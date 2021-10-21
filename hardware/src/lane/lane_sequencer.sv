@@ -132,6 +132,8 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
     endcase
   endfunction : vfu_ready
 
+  logic alu_vinsn_done_d, mfpu_vinsn_done_d;
+
   always_comb begin: sequencer
     // Running loops
     vinsn_running_d = vinsn_running_q & pe_vinsn_running_i;
@@ -141,8 +143,8 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
 
     // Loops that finished execution
     vinsn_done_d         = alu_vinsn_done_i | mfpu_vinsn_done_i;
-    alu_vinsn_done_o     = |alu_vinsn_done_i;
-    mfpu_vinsn_done_o    = |mfpu_vinsn_done_i;
+    alu_vinsn_done_d     = |alu_vinsn_done_i;
+    mfpu_vinsn_done_d    = |mfpu_vinsn_done_i;
     pe_resp_o.vinsn_done = vinsn_done_q;
 
     // Make no requests to the operand requester
@@ -630,12 +632,18 @@ module lane_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::
 
       vfu_operation_o       <= '0;
       vfu_operation_valid_o <= 1'b0;
+
+      alu_vinsn_done_o <= 1'b0;
+      mfpu_vinsn_done_o <= 1'b0;
     end else begin
       vinsn_done_q    <= vinsn_done_d;
       vinsn_running_q <= vinsn_running_d;
 
       vfu_operation_o       <= vfu_operation_d;
       vfu_operation_valid_o <= vfu_operation_valid_d;
+
+      alu_vinsn_done_o <= alu_vinsn_done_d;
+      mfpu_vinsn_done_o <= mfpu_vinsn_done_d;
     end
   end
 
