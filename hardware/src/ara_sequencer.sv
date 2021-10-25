@@ -28,7 +28,7 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
     output pe_req_t                 pe_req_o,
     output logic                    pe_req_valid_o,
     output logic      [NrVInsn-1:0] pe_vinsn_running_o,
-    input  logic      [NrLanes-1:0] pe_req_ready_i,
+    input  logic        [NrPEs-1:0] pe_req_ready_i,
     input  pe_resp_t    [NrPEs-1:0] pe_resp_i,
     input  logic                    alu_vinsn_done_i,
     input  logic                    mfpu_vinsn_done_i,
