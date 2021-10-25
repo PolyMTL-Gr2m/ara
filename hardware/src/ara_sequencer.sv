@@ -52,6 +52,12 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
   vid_t               vinsn_id_n;
   logic               vinsn_running_full;
 
+  // NrLanes bits that indicate if the sequencer must stall because of a lane desynchronization.
+  logic [NrVInsn-1:0] stall_lanes_desynch_vec;
+  logic               stall_lanes_desynch;
+  // Transpose the matrix, as vertical slices are not allowed in System Verilog
+  logic [NrVInsn-1:0][NrPEs-1:0] pe_vinsn_running_q_trns;
+
   // Ara is idle if no instruction is currently running on it.
   assign ara_idle_o = !(|vinsn_running_q);
 
@@ -77,6 +83,20 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
   end
 
   assign pe_vinsn_running_o = vinsn_running_q;
+
+  // Transpose the matrix
+  for (genvar r = 0; r < NrVInsn; r++)
+    for (genvar c = 0; c < NrPEs; c++)
+      assign pe_vinsn_running_q_trns[r][c] = pe_vinsn_running_q[c][r];
+
+  // Stall the sequencer if the lanes get de-synchronized
+  // and lane 0 is no more the last lane to finish the operation.
+  // This is because the instruction counters for ALU and MFPU refers
+  // to lane 0. If lane 0 finishes before the other lanes, the counter
+  // is not reflecting the real lane situations anymore.
+  for (genvar i = 0; i < NrVInsn; i++)
+    assign stall_lanes_desynch_vec[i] = ~pe_vinsn_running_q[0][i] & |pe_vinsn_running_q_trns[i][NrLanes-1:1];
+  assign stall_lanes_desynch = |stall_lanes_desynch_vec;
 
   /////////////////
   //  Sequencer  //
@@ -228,7 +248,7 @@ module ara_sequencer import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::i
         end else if (ara_req_valid_i) begin
           // The target PE is ready, and we can handle another running vector instruction
 		  // Let instructions with priority pass be issued
-          if ((|vinsn_queue_ready || |priority_pass) && !vinsn_running_full) begin
+          if ((|vinsn_queue_ready || |priority_pass) && !stall_lanes_desynch && !vinsn_running_full) begin
             ///////////////
             //  Hazards  //
             ///////////////
