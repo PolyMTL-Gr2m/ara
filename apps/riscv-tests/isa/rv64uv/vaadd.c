@@ -45,11 +45,7 @@ void TEST_CASE4(void) {
   VLOAD_32(v0, 0xA, 0x0, 0x0, 0x0);
   VCLEAR(v3);
   __asm__ volatile("vaadd.vx v3, v1, %[A], v0.t" ::[A] "r"(scalar));
-<<<<<<< HEAD
   VCMP_U32(4, v3, 0, 3, 0, 5);
-=======
-  VCMP_U32(4, v3, 0, 2, 0, 1);
->>>>>>> 248b603 (:sparkles: Adding support for fixed-point vector instructions)
 }
 
 int main(void) {

@@ -363,10 +363,16 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
   //  SIMD Vector ALU  //
   ///////////////////////
 
+<<<<<<< HEAD
   elen_t  valu_result;
   vxsat_t alu_vxsat, alu_vxsat_q, alu_vxsat_d;
 
   assign alu_vxsat_d = alu_vxsat;
+=======
+  elen_t valu_result;
+  logic  valu_valid;
+  alu_vxsat_t alu_vxsat;
+>>>>>>> a49a1ed (:sparkles: Adding support for fixed-point vector instructions)
 
   simd_alu #(
     .FixPtSupport      (FixPtSupport                                                    )
@@ -380,8 +386,11 @@ module valu import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg::idx_width;
     .op_i              (vinsn_issue_q.op                                                ),
     .vew_i             (vinsn_issue_q.vtype.vsew                                        ),
     .vxsat_o           (alu_vxsat                                                       ),
+<<<<<<< HEAD
     .vxrm_i            (alu_vxrm_i                                                      ),
     .rm                (r                                                               ),
+=======
+>>>>>>> a49a1ed (:sparkles: Adding support for fixed-point vector instructions)
     .result_o          (valu_result                                                     )
   );
 
