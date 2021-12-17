@@ -134,7 +134,9 @@ package ara_pkg;
     // Load instructions
     VLE, VLSE, VLXE,
     // Store instructions
-    VSE, VSSE, VSXE
+    VSE, VSSE, VSXE,
+    // Popcount instruction
+    VPOPCNT
   } ara_op_e;
 
   // Return true if op is a load operation
