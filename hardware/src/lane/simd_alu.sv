@@ -86,6 +86,21 @@ module simd_alu import ara_pkg::*; import rvv_pkg::*; #(
     end
   end : p_comparison
 
+  ///////////////////////
+  //  Popcount  Module //
+  ///////////////////////
+  logic [0:0][63:0] popcnt_res_w64;
+  logic [1:0][31:0] popcnt_res_w32;
+  logic [3:0][15:0] popcnt_res_w16;
+  logic [7:0][ 7:0] popcnt_res_w8;
+
+  ara_popcnt i_ara_popcnt (
+    .in_i         ( operand_a_i    ),
+    .result_o_w64 ( popcnt_res_w64 ),
+    .result_o_w32 ( popcnt_res_w32 ),
+    .result_o_w16 ( popcnt_res_w16 ),
+    .result_o_w8  ( popcnt_res_w8  )
+  );
   ///////////
   //  ALU  //
   ///////////
@@ -245,7 +260,12 @@ module simd_alu import ara_pkg::*; import rvv_pkg::*; #(
             EW64: for (int b = 0; b < 1; b++) res.w64[b][1:0] =
                 {mask_i[8*b], (less[8*b] || equal[8*b]) ^ (op_i inside {VMSGT, VMSGTU})};
           endcase
-
+        VPOPCNT: unique case (vew_i)
+            EW8 : for (int b = 0; b < 8; b++) res.w8 [b] = popcnt_res_w8;
+            EW16: for (int b = 0; b < 4; b++) res.w16[b] = popcnt_res_w16;
+            EW32: for (int b = 0; b < 2; b++) res.w32[b] = popcnt_res_w32;
+            EW64: for (int b = 0; b < 1; b++) res.w64[b] = popcnt_res_w64;
+      endcase
         default:;
       endcase
   end : p_alu
