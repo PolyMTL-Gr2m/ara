@@ -100,6 +100,8 @@ package ara_pkg;
     VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR,
     // Shifts,
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
+    // Popcount instruction
+    VPOPCNT,
     // Merge
     VMERGE,
     // Mul/Mul-Add
@@ -123,9 +125,7 @@ package ara_pkg;
     // Load instructions
     VLE, VLSE, VLXE,
     // Store instructions
-    VSE, VSSE, VSXE,
-    // Popcount instruction
-    VPOPCNT
+    VSE, VSSE, VSXE
   } ara_op_e;
 
   // Return true if op is a load operation
