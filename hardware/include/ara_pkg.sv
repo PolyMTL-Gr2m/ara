@@ -118,6 +118,8 @@ package ara_pkg;
     VSADDU, VSADD, VSSUBU, VSSUB, VAADDU, VAADD, VASUBU, VASUB, VSSRL, VSSRA, VNCLIP, VNCLIPU,
     // Shifts,
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
+    // Popcount instruction
+    VPOPCNT,
     // Merge
     VMERGE,
     // Scalar moves to VRF
@@ -151,9 +153,7 @@ package ara_pkg;
     // Load instructions
     VLE, VLSE, VLXE,
     // Store instructions
-    VSE, VSSE, VSXE,
-    // Popcount instruction
-    VPOPCNT
+    VSE, VSSE, VSXE
   } ara_op_e;
 
   // Return true if op is a load operation
