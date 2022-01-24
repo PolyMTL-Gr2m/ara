@@ -440,6 +440,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 // Decode based on the func6 field
                 unique case (insn.varith_type.func6)
                   6'b000000: ara_req_d.op = ara_pkg::VADD;
+                  6'b000001: ara_req_d.op = ara_pkg::VPOPCNT;
                   6'b000010: ara_req_d.op = ara_pkg::VSUB;
                   6'b000100: ara_req_d.op = ara_pkg::VMINU;
                   6'b000101: ara_req_d.op = ara_pkg::VMIN;
