@@ -15,10 +15,12 @@ void bitserial_matmul_init() {
 }
 
 // given the input arrays with bit precision prec in bitpack format, this function
-// calculates the Matmul of the two Matrix and returns the resulting Matrix.
+// calculates the dot product of the two vector and returns the result.
 // NOTE: a and b must have the same length. 
-// NOTE: a and b must be in bit packed format, the retuning matrix is in normal format.
-// c[64x64] = a[64]*b[64]
+// c = a[64x64]*b[64x64]
+// a: [[ 1, 0, 1] , [0, 0, 1]] , prec=2: [2,0,3]
+// b: [[ 0, 1, 1] , [0, 0, 1]] , prec=2: [0,2,3]
+// res = [9]
 void bitserial_matmul_64(uint64_t* c, uint64_t* a, uint64_t* b, int aprec, int bprec) {
     uint64_t vl=0;
     // Original pointers
@@ -37,7 +39,7 @@ void bitserial_matmul_64(uint64_t* c, uint64_t* a, uint64_t* b, int aprec, int b
                 // load b
                 asm volatile("vle64.v v1, (%[A])" : : [A] "r" (b));
                 // broadcast one row to the vector
-                asm volatile("vrgather.vx v4, v1, %0" : : "r" (row));
+                // asm volatile("vrgather.vx v4, v1, %0" : : "r" (row));
                 // v4 = v0 & v4
                 asm volatile("vand.vv v4, v0, v1" ::);
                 // v8 = vpopcnt(v4) 
