@@ -25,6 +25,7 @@
 
 void  __printb(void *value, size_t size);
 void print_matrix(uint64_t *mat, int num_rows, int num_columns, int bin_print_format);
+<<<<<<< HEAD
 const uint64_t vshift[64] = {  0,  1,  2,  3,  4,  5,  6,  7, 
                                8,  9, 10, 11, 12, 13, 14, 15,
                               16, 17, 18, 19, 20, 21, 22, 23,
@@ -41,3 +42,5 @@ const uint64_t vmask[64] = { 1, 1, 1, 1, 1, 1, 1, 1,
                              1, 1, 1, 1, 1, 1, 1, 1,
                              1, 1, 1, 1, 1, 1, 1, 1,
                              1, 1, 1, 1, 1, 1, 1, 1};
+=======
+>>>>>>> 742aaeb (naive implmenetation of bitpack kernel)
