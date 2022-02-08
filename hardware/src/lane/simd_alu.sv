@@ -261,10 +261,10 @@ module simd_alu import ara_pkg::*; import rvv_pkg::*; #(
                 {mask_i[8*b], (less[8*b] || equal[8*b]) ^ (op_i inside {VMSGT, VMSGTU})};
           endcase
         VPOPCNT: unique case (vew_i)
-            EW8 : for (int b = 0; b < 8; b++) res.w8 [b] = popcnt_res_w8;
-            EW16: for (int b = 0; b < 4; b++) res.w16[b] = popcnt_res_w16;
-            EW32: for (int b = 0; b < 2; b++) res.w32[b] = popcnt_res_w32;
-            EW64: for (int b = 0; b < 1; b++) res.w64[b] = popcnt_res_w64;
+            EW8 : for (int b = 0; b < 8; b++) res.w8 [b] = popcnt_res_w8[b];
+            EW16: for (int b = 0; b < 4; b++) res.w16[b] = popcnt_res_w16[b];
+            EW32: for (int b = 0; b < 2; b++) res.w32[b] = popcnt_res_w32[b];
+            EW64: for (int b = 0; b < 1; b++) res.w64[b] = popcnt_res_w64[b];
       endcase
         default:;
       endcase
