@@ -99,11 +99,12 @@ void print_matrix(int64_t const *matrix, uint64_t num_rows,
 }
 int main() {
   printf("\n");
-  printf("============\n");
-  printf("=  CONV2D  =\n");
-  printf("============\n");
+  printf("========================\n");
+  printf("=  CONV2D for tensors  =\n");
+  printf("========================\n");
   printf("\n");
   printf("\n");
+
   
 
   // Call the main kernel, and measure cycles
@@ -128,7 +129,6 @@ int main() {
   int error = verify_tensor(o, golden_o, M, N, K);
   if (error != 0) {
     printf("Fail.\n");
-    print_tensor(o, M, N , K);
   } else {
     printf("Passed.\n");
   } 
