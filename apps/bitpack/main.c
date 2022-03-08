@@ -3,6 +3,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <riscv_vector.h>
 
 #include "util.h"
 #include "printf.h"
@@ -56,19 +57,25 @@ void bitpack_init() {
 
 // Vectorized implementation of bit packing
 void bitpack_vectorized(uint64_t* matrix, uint64_t* packed_data, int DATA_WIDTH, int dlen, int bitprec){
-    // Packed data pointer
-    uint64_t p_ptr = 0;
     // Initialize vector RF
-    // bitpack_init();
-    for (int i=0; i<dlen; i+=DATA_WIDTH){
-        for (int el=0; el<DATA_WIDTH; el++){
-            for (int bit_pos=0; bit_pos<bitprec; bit_pos++){
-                int bit_idx = p_ptr+bit_pos;
-                uint64_t data = (matrix[i+el] >> bit_pos) & 0x1;
-                packed_data[bit_idx] <<= 1;
-                packed_data[bit_idx] = (packed_data[bit_idx] | data);
-            }
-        }   
+    bitpack_init();
+    size_t vl=0;
+    uint64_t *p_ptr = matrix;
+    // Load shift values into v0
+    asm volatile("vle64.v v0, (%[A])" : : [A] "r" (vshift));
+    // Load mask values into v1
+    asm volatile("vle64.v v1, (%[A])" : : [A] "r" (vmask));
+    for (size_t c_n_count=dlen; c_n_count; c_n_count -= vl){
+        vl = vsetvl_e64m1(c_n_count);
+        asm volatile("vle64.v v2, (%[A])" : : [A] "r" (matrix));
+        asm volatile("vand.vv v3, v2, v1" ::);
+        for (int bit_pos=0; bit_pos<bitprec; bit_pos++){
+
+            int bit_idx = p_ptr+bit_pos;
+            uint64_t data = (matrix[i+el] >> bit_pos) & 0x1;
+            packed_data[bit_idx] <<= 1;
+            packed_data[bit_idx] = (packed_data[bit_idx] | data);
+        }
         p_ptr += bitprec;
     }
 }
