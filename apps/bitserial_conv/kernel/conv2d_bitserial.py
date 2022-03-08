@@ -74,6 +74,10 @@ def im2col_get_pixel(im,  height,  width, row, col, channel, pad):
          return 0
     return im[col + width*(row + height*channel)]
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 855f49a (python model for bitserial convolution)
 def im2col(data_im, channels, height, width, ksize, stride, pad):
     c,h,w = 0,0,0
     height_col = int((height + 2*pad - ksize) / stride + 1)
@@ -95,6 +99,7 @@ def im2col(data_im, channels, height, width, ksize, stride, pad):
 def popcnt(a):
     return bin(a).count("1")
 
+<<<<<<< HEAD
 def bitserial_gemm(inputs, weights, packed_row_len, wprec, aprec, oshape, wshape, DATA_WIDTH):
     '''
         Example: 
@@ -151,6 +156,52 @@ def bitserial_gemm(inputs, weights, packed_row_len, wprec, aprec, oshape, wshape
                 +---+---------------+-----------------+------------------+
     '''
     
+=======
+
+#  [0. 0. 0. 0. 0. 3. 0. 3. 3.]
+#  [0. 0. 0. 0. 3. 1. 3. 3. 3.]
+#  [0. 0. 0. 3. 1. 0. 3. 3. 3.]
+#  [0. 0. 0. 1. 0. 0. 3. 3. 0.]
+#  [0. 0. 3. 0. 3. 3. 0. 1. 3.]
+#  [0. 3. 1. 3. 3. 3. 1. 3. 1.]
+#  [3. 1. 0. 3. 3. 3. 3. 1. 2.]
+#  [1. 0. 0. 3. 3. 0. 1. 2. 0.]
+#  [0. 3. 3. 0. 1. 3. 0. 0. 3.]
+#  [3. 3. 3. 1. 3. 1. 0. 3. 2.]
+#  [3. 3. 3. 3. 1. 2. 3. 2. 0.]
+#  [3. 3. 0. 1. 2. 0. 2. 0. 0.]
+#  [0. 1. 3. 0. 0. 3. 0. 0. 0.]
+#  [1. 3. 1. 0. 3. 2. 0. 0. 0.]
+#  [3. 1. 2. 3. 2. 0. 0. 0. 0.]
+#  [1. 2. 0. 2. 0. 0. 0. 0. 0.]
+
+#  [0. 0. 2. 1. 2. 3. 3. 2. 0.]
+#  [0. 0. 0. 0. 3. 1. 3. 3. 3.]
+# = 6+3+9+6
+
+# k |    INPUT      |   WEIGHT        |
+#---+---------------+-----------------+
+# 0 | [   0]: 0000  |   [   0]: 0001  | 0
+# 1 | [   1]: 0000  |   [   1]: 0010  |
+
+# 2 | [   2]: 0101  |   [   2]: 0110  | 1+4+2+8 = 15
+# 3 | [   3]: 0101  |   [   3]: 1111  |
+
+# 4 | [   4]: 1000  |   [   4]: 0000  | 0
+# 5 | [   5]: 1000  |   [   5]: 0000  |
+
+#   | [   6]: 0111  |   [   0]: 0001  | 5
+#   | [   7]: 0101  |   [   1]: 0010  | 
+
+#   | [   8]: 1100  |   [   2]: 0110  | 1 + 4 + 2 + 8 = 15
+#   | [   9]: 1100  |   [   3]: 1111  | 
+
+#   | [  10]: 0110  |   [   4]: 0000  | 0
+#   | [  11]: 0100  |   [   5]: 0000  |
+
+
+def bitserial_gemm(inputs, weights, packed_row_len, wprec, aprec, oshape, wshape, DATA_WIDTH):
+>>>>>>> 855f49a (python model for bitserial convolution)
     out_ch,ow,oh = oshape
     _, in_ch, ksize, ksize = wshape
     output = np.zeros(out_ch*ow*oh)
@@ -220,8 +271,13 @@ if __name__ == '__main__':
     padding = 1
     groups = 1
     dilation = 1
+<<<<<<< HEAD
     prec = 4
     DATA_WIDTH = 8
+=======
+    prec = 2
+    DATA_WIDTH = 64
+>>>>>>> 855f49a (python model for bitserial convolution)
     VLEN = 1
     aprec = prec
     wprec = prec
@@ -240,7 +296,11 @@ if __name__ == '__main__':
     inputs_im2col = im2col(inputs_flatten, in_ch, ih, iw, ksize, stride, padding)
     inputs_im2col = inputs_im2col.reshape(in_ch*ksize*ksize,iw*ih)
     weights_mat = weights.reshape(out_ch,in_ch*ksize*ksize)
+<<<<<<< HEAD
     output_im2col = np.dot(weights_mat, inputs_im2col)
+=======
+    output_im2col = np.dot(weights_mat, inputs_im2col.reshape(in_ch*ksize*ksize,iw*ih))
+>>>>>>> 855f49a (python model for bitserial convolution)
     num_mul = np.prod(output_im2col.shape) * weights_mat.shape[1]
     num_add = np.prod(output_im2col.shape) * weights_mat.shape[1]
     im2col_stats = [num_mul, num_add, 0, 0, "?"]
@@ -296,9 +356,12 @@ if __name__ == '__main__':
         print("bitserial conv matches pytorch conv")
     else:
         print("bitserial conv does not match pytorch conv")
+<<<<<<< HEAD
     #================================================================
     # Printing Results:
     #================================================================
+=======
+>>>>>>> 855f49a (python model for bitserial convolution)
     print("Computation cost for:")
     print("\t Input Shape: {}x{}x{}".format(in_ch, iw, ih))
     print("\t Weight Shape: {}x{}x{}x{}".format(out_ch, in_ch, ksize, ksize))
@@ -307,4 +370,7 @@ if __name__ == '__main__':
     print("\t aprec: {}".format(aprec))
     print("\t wprec: {}".format(wprec))
     print(t.draw())
+<<<<<<< HEAD
 
+=======
+>>>>>>> 855f49a (python model for bitserial convolution)
