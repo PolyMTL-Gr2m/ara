@@ -74,7 +74,6 @@ def im2col_get_pixel(im,  height,  width, row, col, channel, pad):
          return 0
     return im[col + width*(row + height*channel)]
 
-
 def im2col(data_im, channels, height, width, ksize, stride, pad):
     c,h,w = 0,0,0
     height_col = int((height + 2*pad - ksize) / stride + 1)
@@ -96,50 +95,62 @@ def im2col(data_im, channels, height, width, ksize, stride, pad):
 def popcnt(a):
     return bin(a).count("1")
 
-
-#  [0. 0. 0. 0. 0. 3. 0. 3. 3.]
-#  [0. 0. 0. 0. 3. 1. 3. 3. 3.]
-#  [0. 0. 0. 3. 1. 0. 3. 3. 3.]
-#  [0. 0. 0. 1. 0. 0. 3. 3. 0.]
-#  [0. 0. 3. 0. 3. 3. 0. 1. 3.]
-#  [0. 3. 1. 3. 3. 3. 1. 3. 1.]
-#  [3. 1. 0. 3. 3. 3. 3. 1. 2.]
-#  [1. 0. 0. 3. 3. 0. 1. 2. 0.]
-#  [0. 3. 3. 0. 1. 3. 0. 0. 3.]
-#  [3. 3. 3. 1. 3. 1. 0. 3. 2.]
-#  [3. 3. 3. 3. 1. 2. 3. 2. 0.]
-#  [3. 3. 0. 1. 2. 0. 2. 0. 0.]
-#  [0. 1. 3. 0. 0. 3. 0. 0. 0.]
-#  [1. 3. 1. 0. 3. 2. 0. 0. 0.]
-#  [3. 1. 2. 3. 2. 0. 0. 0. 0.]
-#  [1. 2. 0. 2. 0. 0. 0. 0. 0.]
-
-#  [0. 0. 2. 1. 2. 3. 3. 2. 0.]
-#  [0. 0. 0. 0. 3. 1. 3. 3. 3.]
-# = 6+3+9+6
-
-# k |    INPUT      |   WEIGHT        |
-#---+---------------+-----------------+
-# 0 | [   0]: 0000  |   [   0]: 0001  | 0
-# 1 | [   1]: 0000  |   [   1]: 0010  |
-
-# 2 | [   2]: 0101  |   [   2]: 0110  | 1+4+2+8 = 15
-# 3 | [   3]: 0101  |   [   3]: 1111  |
-
-# 4 | [   4]: 1000  |   [   4]: 0000  | 0
-# 5 | [   5]: 1000  |   [   5]: 0000  |
-
-#   | [   6]: 0111  |   [   0]: 0001  | 5
-#   | [   7]: 0101  |   [   1]: 0010  | 
-
-#   | [   8]: 1100  |   [   2]: 0110  | 1 + 4 + 2 + 8 = 15
-#   | [   9]: 1100  |   [   3]: 1111  | 
-
-#   | [  10]: 0110  |   [   4]: 0000  | 0
-#   | [  11]: 0100  |   [   5]: 0000  |
-
-
 def bitserial_gemm(inputs, weights, packed_row_len, wprec, aprec, oshape, wshape, DATA_WIDTH):
+    '''
+        Example: 
+            - activation:[16x9]
+            - weight: [1x9]
+            - DATA_WIDTH: 4
+            - aprec: 2
+            - wprec: 2
+        Weight: 
+            [0. 0. 2. 1. 2. 3. 3. 2. 0.]
+        Activation:
+            [0. 0. 0. 0. 0. 3. 0. 3. 3.]
+            [0. 0. 0. 0. 3. 1. 3. 3. 3.]
+            [0. 0. 0. 3. 1. 0. 3. 3. 3.]
+            [0. 0. 0. 1. 0. 0. 3. 3. 0.]
+            [0. 0. 3. 0. 3. 3. 0. 1. 3.]
+            [0. 3. 1. 3. 3. 3. 1. 3. 1.]
+            [3. 1. 0. 3. 3. 3. 3. 1. 2.]
+            [1. 0. 0. 3. 3. 0. 1. 2. 0.]
+            [0. 3. 3. 0. 1. 3. 0. 0. 3.]
+            [3. 3. 3. 1. 3. 1. 0. 3. 2.]
+            [3. 3. 3. 3. 1. 2. 3. 2. 0.]
+            [3. 3. 0. 1. 2. 0. 2. 0. 0.]
+            [0. 1. 3. 0. 0. 3. 0. 0. 0.]
+            [1. 3. 1. 0. 3. 2. 0. 0. 0.]
+            [3. 1. 2. 3. 2. 0. 0. 0. 0.]
+            [1. 2. 0. 2. 0. 0. 0. 0. 0.]
+        - First output element:
+            - Using GEMM:
+                [0. 0. 2. 1. 2. 3. 3. 2. 0.]
+                [0. 0. 0. 0. 3. 1. 3. 3. 3.]
+                = 6+3+9+6
+            - Using bit serial:
+                +---+---------------+-----------------+------------------+
+                |idx|    INPUT      |   WEIGHT        | Partial Result   |
+                +---+---------------+-----------------+------------------+
+                | 0 | [   0]: 0000  |   [   0]: 0001  | 0                |
+                | 1 | [   1]: 0000  |   [   1]: 0010  |                  |
+                +---+---------------+-----------------+------------------+
+                | 2 | [   2]: 0101  |   [   2]: 0110  | 1+4+2+8 = 15     |
+                | 3 | [   3]: 0101  |   [   3]: 1111  |                  |
+                +---+---------------+-----------------+------------------+
+                | 4 | [   4]: 1000  |   [   4]: 0000  | 0                |
+                | 5 | [   5]: 1000  |   [   5]: 0000  |                  |
+                +---+---------------+-----------------+------------------+
+                | 6 | [   6]: 0111  |   [   0]: 0001  | 5                |
+                | 7 | [   7]: 0101  |   [   1]: 0010  |                  |
+                +---+---------------+-----------------+------------------+
+                | 8 | [   8]: 1100  |   [   2]: 0110  | 1+4+2+8=15       |
+                | 9 | [   9]: 1100  |   [   3]: 1111  |                  |
+                +---+---------------+-----------------+------------------+
+                |10 | [  10]: 0110  |   [   4]: 0000  | 0                |
+                |11 | [  11]: 0100  |   [   5]: 0000  |                  |
+                +---+---------------+-----------------+------------------+
+    '''
+    
     out_ch,ow,oh = oshape
     _, in_ch, ksize, ksize = wshape
     output = np.zeros(out_ch*ow*oh)
@@ -209,8 +220,8 @@ if __name__ == '__main__':
     padding = 1
     groups = 1
     dilation = 1
-    prec = 2
-    DATA_WIDTH = 64
+    prec = 4
+    DATA_WIDTH = 8
     VLEN = 1
     aprec = prec
     wprec = prec
@@ -229,7 +240,7 @@ if __name__ == '__main__':
     inputs_im2col = im2col(inputs_flatten, in_ch, ih, iw, ksize, stride, padding)
     inputs_im2col = inputs_im2col.reshape(in_ch*ksize*ksize,iw*ih)
     weights_mat = weights.reshape(out_ch,in_ch*ksize*ksize)
-    output_im2col = np.dot(weights_mat, inputs_im2col.reshape(in_ch*ksize*ksize,iw*ih))
+    output_im2col = np.dot(weights_mat, inputs_im2col)
     num_mul = np.prod(output_im2col.shape) * weights_mat.shape[1]
     num_add = np.prod(output_im2col.shape) * weights_mat.shape[1]
     im2col_stats = [num_mul, num_add, 0, 0, "?"]
@@ -285,6 +296,9 @@ if __name__ == '__main__':
         print("bitserial conv matches pytorch conv")
     else:
         print("bitserial conv does not match pytorch conv")
+    #================================================================
+    # Printing Results:
+    #================================================================
     print("Computation cost for:")
     print("\t Input Shape: {}x{}x{}".format(in_ch, iw, ih))
     print("\t Weight Shape: {}x{}x{}x{}".format(out_ch, in_ch, ksize, ksize))
@@ -293,3 +307,4 @@ if __name__ == '__main__':
     print("\t aprec: {}".format(aprec))
     print("\t wprec: {}".format(wprec))
     print(t.draw())
+
