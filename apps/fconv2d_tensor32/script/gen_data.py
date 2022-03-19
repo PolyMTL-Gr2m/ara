@@ -42,8 +42,8 @@ else:
 	num_filter = 1
 
 # Input image
-M = 224
-N = 224
+M = 32
+N = 32
 L = 3
 padding = int(filter_size/2)
 M_pad = M + 2*padding

@@ -38,12 +38,12 @@ if len(sys.argv) > 1:
 	# Filter size must be odd
 	assert(filter_size % 2 == 1), "The filter size must be an odd integer number"
 else:
-	filter_size = 3
+	filter_size = 5
 	num_filter = 1
 
 # Input image
-M = 100
-N = 100
+M = 16
+N = 16
 L = 3
 padding = int(filter_size/2)
 M_pad = M + 2*padding
@@ -54,11 +54,11 @@ assert(N % 4 == 0), "Output image dimension must be divisible by 4, pad the inpu
 #assert(L / filter_size != 1), "Depth of tensor must be same depth as the filter"
 
 # Generate a random int64 input padded image
-tensor = np.around(rand_tensor(1, L_pad, M_pad, N_pad,1)).astype(np.uint8)>>4
+tensor = np.around(rand_tensor(1, L_pad, M_pad, N_pad,1)).astype(np.uint8)>>6
 np.random.shuffle(tensor.flat)
 
 # Generate a random int64 filter
-gen_filter = np.around(rand_tensor(num_filter, L, filter_size, filter_size, 0)).astype(np.uint8)>>4
+gen_filter = np.around(rand_tensor(num_filter, L, filter_size, filter_size, 0)).astype(np.uint8)>>6
 np.random.shuffle(gen_filter.flat)
 
 # Create the empty o matrix

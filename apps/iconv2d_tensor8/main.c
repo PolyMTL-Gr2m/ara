@@ -15,12 +15,13 @@
 // limitations under the License.
 
 // Author: Matteo Perotti
+//	- Modified by Théo Dupuis - Polytechnique Montréal (2022)
 
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "iconv2d_tensor.h"
+#include "iconv2d_tensor8.h"
 
 #ifndef SPIKE
 #include "printf.h"
@@ -108,9 +109,9 @@ void print_8btensor(uint8_t const *tensor, uint64_t num_rows,
 
 int main() {
   printf("\n");
-  printf("========================\n");
-  printf("=  CONV2D for tensors  =\n");
-  printf("========================\n");
+  printf("================\n");
+  printf("=  CONV2D int8 =\n");
+  printf("================\n");
   printf("\n");
   printf("\n");
   
@@ -118,7 +119,7 @@ int main() {
   // Call the main kernel, and measure cycles
   start_timer();
   //if (F == 3)
-    iconv2d_tensor_3x3(o, i, f, M, N, L, F, K);
+    iconv2d_tensor8_3x3(o, i, f, M, N, L, F, K);
   /*else if (F == 5)
     conv2d_5x5(o, i, f, M, N, F);
   else if (F == 7)

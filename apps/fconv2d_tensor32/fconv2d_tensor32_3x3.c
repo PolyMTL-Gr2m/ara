@@ -1,4 +1,4 @@
-#include "iconv2d_tensor.h"
+#include "fconv2d_tensor32.h"
 #include <stdio.h>
 
 
@@ -23,7 +23,7 @@
 // F  : size of the kernel/filter tensor FxF
 // k  : number of kernel/filter tensor to convolve with the input tensor
 
-void iconv2d_tensor_3x3(float *o, float *i, float *f, int64_t R, int64_t C, int64_t W,
+void fconv2d_tensor32_3x3(float *o, float *i, float *f, int64_t R, int64_t C, int64_t W,
                 int64_t F, int64_t K) {
   // We work on 4 rows of the output matrix at once
   int64_t block_size_o = 4;
@@ -45,11 +45,11 @@ void iconv2d_tensor_3x3(float *o, float *i, float *f, int64_t R, int64_t C, int6
 	  // For simplicity, compute over the padding rows as well
 	  //conv2d_vec_4xC_slice_init_3x3(o_, C);
 	  // Preload the first two input rows -> This is not needed in the other rounds
-	  iconv2d_tensor_vec_4xC_slice_preload_3x3(i_, C, F);
+	  fconv2d_tensor32_vec_4xC_slice_preload_3x3(i_, C, F);
 	  // The first F-1 rows have already been loaded by
 	  // conv2d_vec_4xC_slice_preload_3x3()
 	  float *i__ = i_ + (F - 1) * (C + F - 1);
-	  iconv2d_tensor_vec_4xC_3x3(o_, i__, f_, C, W, F);
+	  fconv2d_tensor32_vec_4xC_3x3(o_, i__, f_, C, W, F);
 	  
 	  // Re-use some of the already-loaded input rows
 	  //conv2d_vec_4xC_slice_move_3x3(C, F);
@@ -63,7 +63,7 @@ void iconv2d_tensor_3x3(float *o, float *i, float *f, int64_t R, int64_t C, int6
 		 //conv2d_vec_4xC_slice_init_3x3(o_, C);
 		 // The first F-1 rows have already been loaded by
 		 i__ = i_ + (F - 1) * (C + F - 1);
-		 iconv2d_tensor_vec_4xC_3x3(o_, i__, f_, C, W, F);
+		 fconv2d_tensor32_vec_4xC_3x3(o_, i__, f_, C, W, F);
 		 
 		 // Re-use some of the already-loaded input rows
 		 //conv2d_vec_4xC_slice_move_3x3(C, F);
@@ -72,7 +72,7 @@ void iconv2d_tensor_3x3(float *o, float *i, float *f, int64_t R, int64_t C, int6
 }
 
 // Load 4 rows of the output matrix
-/*void iconv2d_tensor_vec_4xC_slice_init_3x3(int64_t *o, int64_t C) {
+/*void fconv2d_tensor32_vec_4xC_slice_init_3x3(int64_t *o, int64_t C) {
   // Helper variables
   int64_t ldo = C << 3;
 
@@ -86,7 +86,7 @@ void iconv2d_tensor_3x3(float *o, float *i, float *f, int64_t R, int64_t C, int6
 }*/
 
 // Load 4 rows of the output matrix
-void iconv2d_tensor_vec_4xC_slice_preload_3x3(float *i, int64_t C, int64_t F) {
+void fconv2d_tensor32_vec_4xC_slice_preload_3x3(float *i, int64_t C, int64_t F) {
   // Helper variables
   int64_t ldi = (C + F - 1) << 2;
   int64_t next_plane = (C + F - 2)*ldi;
@@ -106,7 +106,7 @@ void iconv2d_tensor_vec_4xC_slice_preload_3x3(float *i, int64_t C, int64_t F) {
 }
 
 // Calculate 4 output matrix rows
-void iconv2d_tensor_vec_4xC_3x3(float *o, float *i, float *f, int64_t C, int64_t W,
+void fconv2d_tensor32_vec_4xC_3x3(float *o, float *i, float *f, int64_t C, int64_t W,
                         int64_t F) {
 
   // Temporary variables
@@ -418,7 +418,7 @@ void iconv2d_tensor_vec_4xC_3x3(float *o, float *i, float *f, int64_t C, int64_t
   
 }
 
-/*void iconv2d_tensor_vec_4xC_slice_move_3x3(int64_t C, int64_t F) { //could be implemented direclty in main convolution function conv2d_vec
+/*void fconv2d_tensor32_vec_4xC_slice_move_3x3(int64_t C, int64_t F) { //could be implemented direclty in main convolution function conv2d_vec
   // Move C+F-1 elements
   asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"(C + F - 1));
   
