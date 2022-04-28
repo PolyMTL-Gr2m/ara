@@ -27,13 +27,17 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
     input  elen_t    [NrLanes-1:0] sldu_operand_i,
     input  target_fu_e [NrLanes-1:0] sldu_operand_target_fu_i,
     input  logic     [NrLanes-1:0] sldu_operand_valid_i,
-    output logic                   sldu_operand_ready_o,
+    output logic     [NrLanes-1:0] sldu_operand_ready_o,
     output logic     [NrLanes-1:0] sldu_result_req_o,
     output vid_t     [NrLanes-1:0] sldu_result_id_o,
     output vaddr_t   [NrLanes-1:0] sldu_result_addr_o,
     output elen_t    [NrLanes-1:0] sldu_result_wdata_o,
     output strb_t    [NrLanes-1:0] sldu_result_be_o,
     input  logic     [NrLanes-1:0] sldu_result_gnt_i,
+    input  logic     [NrLanes-1:0] sldu_result_final_gnt_i,
+    // Support for reductions
+    output sldu_mux_e              sldu_mux_sel_o,
+    output logic     [NrLanes-1:0] sldu_red_valid_o,
     // Interface with the Mask Unit
     input  strb_t    [NrLanes-1:0] mask_i,
     input  logic     [NrLanes-1:0] mask_valid_i,
@@ -124,6 +128,10 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
   logic     [idx_width(ResultQueueDepth)-1:0]   result_queue_read_pnt_d, result_queue_read_pnt_q;
   // We need to count how many valid elements are there in this result queue.
   logic     [idx_width(ResultQueueDepth):0]     result_queue_cnt_d, result_queue_cnt_q;
+  // Vector to register the final grants from the operand requesters, which indicate
+  // that the result was actually written in the VRF (while the normal grant just says
+  // that the result was accepted by the operand requester stage
+  logic     [NrLanes-1:0]                       result_final_gnt_d, result_final_gnt_q;
 
   // Is the result queue full?
   logic result_queue_full;
@@ -145,6 +153,23 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
       result_queue_write_pnt_q <= result_queue_write_pnt_d;
       result_queue_read_pnt_q  <= result_queue_read_pnt_d;
       result_queue_cnt_q       <= result_queue_cnt_d;
+    end
+  end
+
+  //////////////////
+  //  Reductions  //
+  //////////////////
+
+  // Inter-lane reductions are performed with a logarithmic tree, and the result is
+  // accumulated in the last Lane. Then, in the end, the result is passed to the first
+  // lane for SIMD reduction
+  logic [idx_width(NrLanes)-1:0] red_stride_cnt_d, red_stride_cnt_q;
+  logic [idx_width(NrLanes):0] red_stride_cnt_d_wide;
+
+  always_comb begin
+    sldu_mux_sel_o = NO_RED;
+    if ((vinsn_issue_valid_q && vinsn_issue_q.vfu == VFU_Alu && !(vinsn_commit_valid && vinsn_commit.vfu != VFU_Alu)) || (vinsn_commit_valid && vinsn_commit.vfu == VFU_Alu)) begin
+      sldu_mux_sel_o = ALU_RED;
     end
   end
 
@@ -192,13 +217,17 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
     result_queue_write_pnt_d = result_queue_write_pnt_q;
     result_queue_cnt_d       = result_queue_cnt_q;
 
+    result_final_gnt_d = result_final_gnt_q;
+
     // Vector instructions currently running
     vinsn_running_d = vinsn_running_q & pe_vinsn_running_i;
 
     // We are not ready, by default
     pe_resp              = '0;
     mask_ready_o         = 1'b0;
-    sldu_operand_ready_o = 1'b0;
+    sldu_operand_ready_o = '0;
+
+    red_stride_cnt_d = red_stride_cnt_q;
 
     // Inform the main sequencer if we are idle
     pe_req_ready_o = !vinsn_queue_full;
@@ -213,15 +242,15 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
           state_d   = SLIDE_RUN;
           vrf_pnt_d = '0;
 
-          // Initialize counters
-          issue_cnt_d = vinsn_issue_q.vl << int'(vinsn_issue_q.vtype.vsew);
-
           unique case (vinsn_issue_q.op)
             VSLIDEUP: begin
               // vslideup starts reading the source operand from its beginning
               in_pnt_d  = '0;
               // vslideup starts writing the destination vector at the slide offset
               out_pnt_d = vinsn_issue_q.stride[idx_width(8*NrLanes)-1:0];
+
+              // Initialize counters
+              issue_cnt_d = vinsn_issue_q.vl << int'(vinsn_issue_q.vtype.vsew);
 
               // Trim vector elements which are not touched by the slide unit
               issue_cnt_d -= vinsn_issue_q.stride;
@@ -239,9 +268,22 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
               // vslidedown starts writing the destination vector at its beginning
               out_pnt_d = '0;
 
+              // Initialize counters
+              issue_cnt_d = vinsn_issue_q.vl << int'(vinsn_issue_q.vtype.vsew);
+
               // Trim the last element of vslide1down, which does not come from the VRF
               if (vinsn_issue_q.use_scalar_op)
                 issue_cnt_d -= 1 << int'(vinsn_issue_q.vtype.vsew);
+            end
+            // Reductions
+            default: begin
+              // Read from the beginning
+              in_pnt_d  = '0;
+              // Writes
+              out_pnt_d = {'0, red_stride_cnt_q, 3'b0};
+
+              // Initialize issue cnt. Pretend to move NrLanes 64-bit elements for (clog2(NrLanes) + 1) times.
+              issue_cnt_d  = (NrLanes * ($clog2(NrLanes) + 1)) << EW64;
             end
           endcase
         end
@@ -249,24 +291,25 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
 
       SLIDE_RUN, SLIDE_RUN_VSLIDE1UP_FIRST_WORD: begin
         // Are we ready?
-        if (&sldu_operand_valid_i && (sldu_operand_target_fu_i[0] == SLDU) && !result_queue_full && (vinsn_issue_q.vm || (|mask_valid_i)))
+        // During a reduction (vinsn_issue_q.vfu == VFU_Alu) don't wait for mask bits
+        if (&sldu_operand_valid_i && (sldu_operand_target_fu_i[0] == SLDU) && !result_queue_full && (vinsn_issue_q.vm || vinsn_issue_q.vfu == VFU_Alu || (|mask_valid_i)))
         begin
           // How many bytes are we copying from the operand to the destination, in this cycle?
           automatic int in_byte_count = NrLanes * 8 - in_pnt_q;
           automatic int out_byte_count = NrLanes * 8 - out_pnt_q;
-          automatic int byte_count = in_byte_count < out_byte_count ? in_byte_count : out_byte_count
-          ;
+          automatic int byte_count = in_byte_count < out_byte_count ? in_byte_count : out_byte_count;
 
           for (int b = 0; b < NrLanes*8; b++) begin
             // Input byte
             automatic int in_seq_byte = in_pnt_q + b;
-            automatic int in_byte  = shuffle_index(in_seq_byte, NrLanes, vinsn_issue_q.eew_vs2);
+            // A reduction always operates on the target vsew
+            automatic int in_byte  = shuffle_index(in_seq_byte, NrLanes, (vinsn_issue_q.vfu == VFU_Alu) ? vinsn_issue_q.vtype.vsew : vinsn_issue_q.eew_vs2);
             // Output byte
             automatic int out_seq_byte = out_pnt_q + b;
             automatic int out_byte = shuffle_index(out_seq_byte, NrLanes, vinsn_issue_q.vtype.vsew);
 
-            // Is this a valid byte?
-            if (b < issue_cnt_q && in_seq_byte < NrLanes * 8 && out_seq_byte < NrLanes * 8) begin
+            // Is this a valid byte? (Allow wrap-up only with reductions!)
+            if (b < issue_cnt_q && in_seq_byte < NrLanes * 8 && (vinsn_issue_q.vfu == VFU_Alu || out_seq_byte < NrLanes * 8)) begin
               // At which lane, and what is the offset in that lane, are the input and output bytes?
               automatic int src_lane        = in_byte[3 +: $clog2(NrLanes)];
               automatic int src_lane_offset = in_byte[2:0];
@@ -287,10 +330,10 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
               vaddr(vinsn_issue_q.vd, NrLanes) + vrf_pnt_q;
           end
 
-          // Bump pointers
-          in_pnt_d    = in_pnt_q + byte_count;
-          out_pnt_d   = out_pnt_q + byte_count;
-          issue_cnt_d = issue_cnt_q - byte_count;
+          // Bump pointers (reductions always finish in one shot)
+          in_pnt_d    = vinsn_issue_q.vfu == VFU_Alu ? NrLanes * 8                  : in_pnt_q  + byte_count;
+          out_pnt_d   = vinsn_issue_q.vfu == VFU_Alu ? NrLanes * 8                  : out_pnt_q + byte_count;
+          issue_cnt_d = vinsn_issue_q.vfu == VFU_Alu ? issue_cnt_q - (NrLanes * 8)  : issue_cnt_q - byte_count;
 
           // Jump to SLIDE_RUN
           state_d = SLIDE_RUN;
@@ -327,7 +370,12 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
           if (in_pnt_d == NrLanes * 8 || issue_cnt_q <= byte_count) begin
             // Reset the pointer and ask for a new operand
             in_pnt_d             = '0;
-            sldu_operand_ready_o = 1'b1;
+            sldu_operand_ready_o = '1;
+            // Left-rotate the logarithmic counter. Hacky way to write it, but it's to
+            // deal with the 2-lanes design without complaints from Verilator...
+            // wide signal to please the tool
+            red_stride_cnt_d_wide = {red_stride_cnt_q, red_stride_cnt_q[idx_width(NrLanes)-1]};
+            red_stride_cnt_d      = red_stride_cnt_d_wide[idx_width(NrLanes)-1:0];
             // We used all the bits of the mask
             if (vinsn_issue_q.op == VSLIDEUP)
               mask_ready_o = !vinsn_issue_q.vm;
@@ -336,7 +384,7 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
           // Filled up a word to the VRF or finished the instruction
           if (out_pnt_d == NrLanes * 8 || issue_cnt_q <= byte_count) begin
             // Reset the pointer
-            out_pnt_d = '0;
+            out_pnt_d = vinsn_issue_q.vfu == VFU_Alu ? {'0, red_stride_cnt_d, 3'b0} : '0;
             // We used all the bits of the mask
             if (vinsn_issue_q.op == VSLIDEDOWN)
               mask_ready_o = !vinsn_issue_q.vm;
@@ -353,9 +401,11 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
           end
 
           // Finished the operation
-          if (issue_cnt_q <= byte_count) begin
+          if (issue_cnt_q <= byte_count || (vinsn_issue_q.vfu == VFU_Alu && issue_cnt_q <= 8 * NrLanes)) begin
             // Back to idle
             state_d = SLIDE_IDLE;
+            // Reset the logarighmic counter
+            red_stride_cnt_d = 1;
 
             // If this is a vslide1down, fill up the last position with the scalar operand
             if (vinsn_issue_q.op == VSLIDEDOWN && vinsn_issue_q.use_scalar_op) begin
@@ -407,22 +457,31 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
     //////////////////////////////////
 
     for (int lane = 0; lane < NrLanes; lane++) begin: result_write
-      sldu_result_req_o[lane]   = result_queue_valid_q[result_queue_read_pnt_q][lane];
+      sldu_result_req_o[lane]   = result_queue_valid_q[result_queue_read_pnt_q][lane] & (vinsn_commit.vfu != VFU_Alu);
+      sldu_red_valid_o[lane]    = result_queue_valid_q[result_queue_read_pnt_q][lane] & (vinsn_commit.vfu == VFU_Alu);
       sldu_result_addr_o[lane]  = result_queue_q[result_queue_read_pnt_q][lane].addr;
       sldu_result_id_o[lane]    = result_queue_q[result_queue_read_pnt_q][lane].id;
       sldu_result_wdata_o[lane] = result_queue_q[result_queue_read_pnt_q][lane].wdata;
       sldu_result_be_o[lane]    = result_queue_q[result_queue_read_pnt_q][lane].be;
 
-      // Received a grant from the VRF.
+      // Update the final gnt vector
+      result_final_gnt_d[lane] |= sldu_result_final_gnt_i[lane];
+
+      // Received a grant from the VRF (slide) or from the FUs (reduction).
       // Deactivate the request, but do not bump the pointers for now.
-      if (sldu_result_req_o[lane] && sldu_result_gnt_i[lane]) begin
+      if (((vinsn_commit.vfu == VFU_Alu && sldu_red_valid_o) || sldu_result_req_o[lane]) && sldu_result_gnt_i[lane]) begin
         result_queue_valid_d[result_queue_read_pnt_q][lane] = 1'b0;
         result_queue_d[result_queue_read_pnt_q][lane]       = '0;
+        // Reset the final gnt vector since we are now waiting for another final gnt
+        result_final_gnt_d[lane] = 1'b0;
       end
     end: result_write
 
     // All lanes accepted the VRF request
-    if (!(|result_queue_valid_d[result_queue_read_pnt_q]))
+    // If this was the last request, wait for all the final grants!
+    // If this is a reduction, no need for the final grants
+    if (!(|result_queue_valid_d[result_queue_read_pnt_q]) &&
+      (vinsn_commit.vfu == VFU_Alu || (&result_final_gnt_d || commit_cnt_q > (NrLanes * 8))))
       // There is something waiting to be written
       if (!result_queue_empty) begin
         // Increment the read pointer
@@ -454,8 +513,9 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
 
       // Update the commit counter for the next instruction
       if (vinsn_queue_d.commit_cnt != '0) begin
-        commit_cnt_d = vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vl <<
-          int'(vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vtype.vsew);
+        commit_cnt_d = vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].op inside {VSLIDEUP, VSLIDEDOWN}
+                     ? vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vl << int'(vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].vtype.vsew)
+                     : (NrLanes * ($clog2(NrLanes) + 1)) << EW64;
 
         // Trim vector elements which are not written by the slide unit
         if (vinsn_queue_q.vinsn[vinsn_queue_d.commit_pnt].op == VSLIDEUP)
@@ -468,7 +528,7 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
     //////////////////////////////
 
     if (!vinsn_queue_full && pe_req_valid_i && !vinsn_running_q[pe_req_i.id] &&
-      pe_req_i.vfu == VFU_SlideUnit) begin
+      (pe_req_i.vfu == VFU_SlideUnit || pe_req_i.op inside {[VREDSUM:VWREDSUM]})) begin
       vinsn_queue_d.vinsn[vinsn_queue_q.accept_pnt] = pe_req_i;
       vinsn_running_d[pe_req_i.id]                  = 1'b1;
 
@@ -476,12 +536,19 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
       if (pe_req_i.op inside {VSLIDEUP, VSLIDEDOWN})
         vinsn_queue_d.vinsn[vinsn_queue_q.accept_pnt].stride = pe_req_i.stride <<
           int'(pe_req_i.vtype.vsew);
+      // Always move 64-bit packs of data from one lane to the other
+      if (pe_req_i.vfu == VFU_Alu)
+        vinsn_queue_d.vinsn[vinsn_queue_q.accept_pnt].vtype.vsew = EW64;
 
       // Initialize counters
       if (vinsn_queue_d.issue_cnt == '0)
-        issue_cnt_d = pe_req_i.vl << int'(pe_req_i.vtype.vsew);
+        issue_cnt_d  = pe_req_i.op inside {VSLIDEUP, VSLIDEDOWN}
+                     ? pe_req_i.vl << int'(pe_req_i.vtype.vsew)
+                     : (NrLanes * ($clog2(NrLanes) + 1)) << EW64;
       if (vinsn_queue_d.commit_cnt == '0)
-        commit_cnt_d = pe_req_i.vl << int'(pe_req_i.vtype.vsew);
+        commit_cnt_d = pe_req_i.op inside {VSLIDEUP, VSLIDEDOWN}
+                     ? pe_req_i.vl << int'(pe_req_i.vtype.vsew)
+                     : (NrLanes * ($clog2(NrLanes) + 1)) << EW64;
 
       // Trim vector elements which are not written by the slide unit
       if (pe_req_i.op == VSLIDEUP) begin
@@ -498,23 +565,27 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      vinsn_running_q <= '0;
-      issue_cnt_q     <= '0;
-      commit_cnt_q    <= '0;
-      in_pnt_q        <= '0;
-      out_pnt_q       <= '0;
-      vrf_pnt_q       <= '0;
-      state_q         <= SLIDE_IDLE;
-      pe_resp_o       <= '0;
+      vinsn_running_q    <= '0;
+      issue_cnt_q        <= '0;
+      commit_cnt_q       <= '0;
+      in_pnt_q           <= '0;
+      out_pnt_q          <= '0;
+      vrf_pnt_q          <= '0;
+      state_q            <= SLIDE_IDLE;
+      pe_resp_o          <= '0;
+      result_final_gnt_q <= '0;
+      red_stride_cnt_q   <= 1;
     end else begin
-      vinsn_running_q <= vinsn_running_d;
-      issue_cnt_q     <= issue_cnt_d;
-      commit_cnt_q    <= commit_cnt_d;
-      in_pnt_q        <= in_pnt_d;
-      out_pnt_q       <= out_pnt_d;
-      vrf_pnt_q       <= vrf_pnt_d;
-      state_q         <= state_d;
-      pe_resp_o       <= pe_resp;
+      vinsn_running_q    <= vinsn_running_d;
+      issue_cnt_q        <= issue_cnt_d;
+      commit_cnt_q       <= commit_cnt_d;
+      in_pnt_q           <= in_pnt_d;
+      out_pnt_q          <= out_pnt_d;
+      vrf_pnt_q          <= vrf_pnt_d;
+      state_q            <= state_d;
+      pe_resp_o          <= pe_resp;
+      result_final_gnt_q <= result_final_gnt_d;
+      red_stride_cnt_q   <= red_stride_cnt_d;
     end
   end
 
