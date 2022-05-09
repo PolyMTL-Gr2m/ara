@@ -28,6 +28,8 @@
 #include "runtime.h"
 #endif
 
+//#define NHWC
+
 // Define Tensor dimensions:
 // o = i ° f, with i=[MxNxL], f=[FxFxF], o=[MxNxL]
 // The filter is a cube tensor, and F is odd
@@ -113,22 +115,36 @@ int main() {
   printf("=  CONV2D int8 =\n");
   printf("================\n");
   printf("\n");
+  #ifdef NHWC
+  printf("Format is NHWC\n");
+  #else
+  printf("Format is NCHW\n");
+  #endif
   printf("\n");
-  
+  printf("----------------------------------------------------------------\n");
+  printf("Calculating convolution between \n");
+  printf("Input of [1 x %i x %i x %i] and Filters of [%i x %i x %i x %i]  \n", L, M, N, K, L, F, F);
+  printf("----------------------------------------------------------------\n");
 
   // Call the main kernel, and measure cycles
   start_timer();
-  //if (F == 3)
-    iconv2d_tensor8_3x3(o, i, f, M, N, L, F, K);
-  /*else if (F == 5)
-    conv2d_5x5(o, i, f, M, N, F);
-  else if (F == 7)
-    conv2d_7x7(o, i, f, M, N, F);
+  if ( F == 1 || F == 3 || F == 5 || F == 7){
+#ifndef NHWC 
+
+	iconv2d_tensor8(o, i, f, M, N, L, F, K);
+	
+#else
+
+	if (F == 1)
+		iconv2d_tensor8_1x1_NWHC(o, i, f, M, N, L, F, K);
+	else if (F == 3)
+		iconv2d_tensor8_3x3_NWHC(o, i, f, M, N, L, F, K);
+		
+#endif
+	}
   else
-    printf("Error: the filter size is different from 3 or 5 or 7.\n");
-  */stop_timer();
-  
-  //print_8btensor(o,M,N,1);
+    printf("Error: the filter size is different from 1 or 3 or 5 or 7.\n");	
+  stop_timer();
 	
   // Performance metrics
   int64_t runtime = get_timer();
@@ -142,7 +158,7 @@ int main() {
     printf("Fail.\n");
   } else {
     printf("Passed.\n");
-  } 
+  }
   
 
   

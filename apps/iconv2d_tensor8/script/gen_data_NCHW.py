@@ -38,13 +38,13 @@ if len(sys.argv) > 1:
 	# Filter size must be odd
 	assert(filter_size % 2 == 1), "The filter size must be an odd integer number"
 else:
-	filter_size = 5
+	filter_size = 3
 	num_filter = 1
 
 # Input image
-M = 16
-N = 16
-L = 3
+M = 32
+N = 64
+L = 2
 padding = int(filter_size/2)
 M_pad = M + 2*padding
 N_pad = N + 2*padding
@@ -58,51 +58,11 @@ tensor = np.around(rand_tensor(1, L_pad, M_pad, N_pad,1)).astype(np.uint8)>>6
 np.random.shuffle(tensor.flat)
 
 # Generate a random int64 filter
-gen_filter = np.around(rand_tensor(num_filter, L, filter_size, filter_size, 0)).astype(np.uint8)>>6
+gen_filter = np.around(rand_tensor(num_filter, L, filter_size, filter_size, 0)).astype(np.uint8)>>4
 np.random.shuffle(gen_filter.flat)
 
 # Create the empty o matrix
 empty_o = np.zeros((L, M, N)).astype(np.uint8)
-
-
-# TESTS#############################################################################
-#for num in range(num_filter):
-	#gen_filter[num,0,:,:] = np.ones((1, filter_size, filter_size)).astype(np.int64)
-	#gen_filter[num,1,:,:] = np.ones((1, filter_size, filter_size)).astype(np.int64)
-	#gen_filter[num,2,:,:] = np.ones((1, filter_size, filter_size)).astype(np.int64)
-	
-#gen_filter[0,0,:,:] = np.zeros((1, filter_size, filter_size)).astype(np.int64)
-#gen_filter[0,0,:,:] = np.zeros((1, filter_size, filter_size)).astype(np.int64)
-#gen_filter[0,2,:,:] = np.zeros((1, filter_size, filter_size)).astype(np.int64)
-	
-#for line in range(0, L ):
-	#gen_filter[0,0,line,:] = line*np.ones((1, L)).astype(np.int64)
-	#gen_filter[0,1,line,:] = line*np.ones((1, L)).astype(np.int64)
-	#gen_filter[0,2,line,:] = line*np.ones((1, L)).astype(np.int64)
-
-#tensor[0,0,0,:] = np.zeros((1, N_pad)).astype(np.int64)
-#tensor[0,0,1,:] = np.zeros((1, N_pad)).astype(np.int64)
-#tensor[0,0,2,:] = np.zeros((1, N_pad)).astype(np.int64)
-
-#tensor[0,1,0,:] = np.zeros((1, N_pad)).astype(np.int64)
-#tensor[0,1,1,:] = np.zeros((1, N_pad)).astype(np.int64)
-#tensor[0,1,2,:] = np.zeros((1, N_pad)).astype(np.int64)
-
-#tensor[0,2,0,:] = np.zeros((1, N_pad)).astype(np.int64)
-#tensor[0,2,1,:] = np.zeros((1, N_pad)).astype(np.int64)
-#tensor[0,2,2,:] = np.zeros((1, N_pad)).astype(np.int64)
-#tensor[0,2,:,:] = np.zeros((1, M_pad, N_pad)).astype(np.int64)
-#tensor[0,2,:,:] = np.zeros((1, M_pad, N_pad)).astype(np.int64)
-#for line in range(0,2):
-	#tensor[0,0,line,:] = np.zeros((1, N_pad)).astype(np.int64)
-	#tensor[0,1,line,:] = np.zeros((1, N_pad)).astype(np.int64)
-	#tensor[0,2,line,:] = np.zeros((1, N_pad)).astype(np.int64)
-	
-#for line in range(2,int(N_pad) ):
-	#tensor[0,0,line,:] = np.zeros((1, N_pad)).astype(np.int64)
-	#tensor[0,1,line,:] = np.zeros((1, N_pad)).astype(np.int64)
-	#tensor[0,2,line,:] = np.zeros((1, N_pad)).astype(np.int64)
-###################################################################################
 
 
 # Calculate the output matrix
@@ -114,9 +74,12 @@ for num in range(num_filter):
 # Calculate a checksum
 checksum = np.sum(result, dtype=np.uint8)
 
+original_stdout = sys.stdout
+sys.stdout = sys.stderr # Redirect the standard output to the standard error.
+
 # Print information on display
-vhex = np.vectorize(hex)
-print("Image: dim = 1 x {0} x {1} x {2} \n".format(filter_size, N_pad, M_pad))
+#vhex = np.vectorize(hex)
+print("Image: dim = 1 x {0} x {1} x {2} \n".format(L, N_pad, M_pad))
 print(tensor)
 print("\n")
 print("Filter: dim = {0} x {1} x {2} x {3}\n".format(num_filter, L_pad, filter_size, filter_size))
@@ -126,6 +89,8 @@ print("Results: dim = {0} x {1} x {2} \n".format(num_filter, M, N))
 print(result)
 print("\n")
 print(checksum)
+
+sys.stdout = original_stdout # Reset the standard output to its original value
 
 # Print information on file
 print(".section .data,\"aw\",@progbits")
