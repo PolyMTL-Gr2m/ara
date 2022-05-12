@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "NCWH_to_NWHC.h"
+#include "NCHW_to_NHWC.h"
 
 #ifndef SPIKE
 #include "printf.h"
@@ -125,28 +125,28 @@ int main() {
   // Call the transpose function, and measure cycles
   start_timer();
   
-  NCWH_to_NWHC_tensor8(o8, i8, M, N, L);
+  NCHW_to_NHWC_tensor8(o8, i8, M, N, L);
   stop_timer();
   int64_t runtime = get_timer();
   printf("The execution for 8b took %d cycles.\n", runtime);
   
   start_timer();
   
-  NCWH_to_NWHC_tensor16(o16, i16, M, N, L);
+  NCHW_to_NHWC_tensor16(o16, i16, M, N, L);
   stop_timer();
   runtime = get_timer();
   printf("The execution for 16b took %d cycles.\n", runtime);
   
   start_timer();
   
-  NCWH_to_NWHC_tensor32(o32, i32, M, N, L);
+  NCHW_to_NHWC_tensor32(o32, i32, M, N, L);
   stop_timer();
   runtime = get_timer();
   printf("The execution for 32b took %d cycles.\n", runtime);
   
   start_timer();
   
-  NCWH_to_NWHC_tensor64(o64, i64, M, N, L);
+  NCHW_to_NHWC_tensor64(o64, i64, M, N, L);
   stop_timer();
   runtime = get_timer();
   printf("The execution for 64b took %d cycles.\n", runtime);
