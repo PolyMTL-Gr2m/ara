@@ -98,7 +98,9 @@ module ara_tb;
       #ClockPeriod;
 
     // Initialize memories
-    void'($value$plusargs("PRELOAD=%s", binary));
+    binary = "/users/hemmat/MyRepos/PolyMTL/ara/apps/darknet/darknet";
+      // binary = "/users/hemmat/MyRepos/PolyMTL/ara/apps/bin/hello_world";
+      void'($value$plusargs("PRELOAD=%s", binary));
     if (binary != "") begin
       // Read ELF
       read_elf(binary);
@@ -123,7 +125,10 @@ module ara_tb;
             $display("Cannot initialize address %x, which doesn't fall into the L2 region.", address);
         end
       end
+    end else begin
+      $display("Unable to find binary %s.", binary);
     end
+
   end : dram_init
 
   /*********
