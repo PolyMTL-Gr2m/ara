@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "darknet",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/darknet",
+      "args": [],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for lldb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": true,
+      "externalConsole": false,
+      "cwd": "/Users/hossein/MyRepos/ara/apps/darknet",
+      "program": "/Users/hossein/MyRepos/ara/apps/darknet/build/Debug/outDebug",
+      "MIMode": "lldb"
+    }
+  ]
+}
