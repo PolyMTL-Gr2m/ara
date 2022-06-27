@@ -22,7 +22,7 @@ CC = $(RISCV_CC)
 OPTS=-Ofast
 LDFLAGS= -lm 
 COMMON= 
-CFLAGS=-nostdlib $(RISCV_FLAGS) $(DEFINES) $(RISCV_WARNINGS)
+CFLAGS=-nostdlib $(RISCV_FLAGS) $(DEFINES) $(RISCV_WARNINGS) -DDEFINE_MALLOC -DDEFINE_REALLOC -DDEFINE_FREE  -Werror-implicit-function-declaration -fno-math-errno
 else
 CC=gcc
 OBJDUMP=objdump
@@ -40,7 +40,8 @@ EXEC=darknet
 OBJDIR=./obj/
 
 # OBJ= tiny-malloc.o imagenet.o captcha.o writing.o nightmare.o coco.o dice.o yolo.o compare.o classifier.o swag.o rnn_vid.o demo.o tag.o art.o detection_conversion.o  crnn_layer.o  rnn_layer.o gru_layer.o rnn.o detection_layer.o box.o route_layer.o
-OBJ= malloc.o darknet.o gemm.o utils.o list.o im2col.o blas.o col2im.o image.o data.o matrix.o layer.o network.o shortcut_layer.o deconvolutional_layer.o convolutional_layer.o maxpool_layer.o softmax_layer.o connected_layer.o batchnorm_layer.o avgpool_layer.o activation_layer.o activations.o cost_layer.o normalization_layer.o local_layer.o parser.o option_list.o cifar.o crop_layer.o dropout_layer.o 
+# OBJ= malloc.o darknet.o gemm.o  im2col.o blas.o col2im.o image.o data.o matrix.o layer.o network.o shortcut_layer.o deconvolutional_layer.o convolutional_layer.o maxpool_layer.o softmax_layer.o connected_layer.o batchnorm_layer.o avgpool_layer.o activation_layer.o activations.o cost_layer.o normalization_layer.o local_layer.o parser.o option_list.o cifar.o crop_layer.o dropout_layer.o 
+OBJ  =  darknet.o tiny_malloc.o matrix.o utils.o list.o
 OBJS = $(addprefix $(OBJDIR), $(OBJ))
 DEPS = $(wildcard src/*.h)
 

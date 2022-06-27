@@ -36,7 +36,7 @@ void option_unused(list *l)
     while(n){
         kvp *p = (kvp *)n->val;
         if(!p->used){
-            fprintf(stderr, "Unused field: '%s = %s'\n", p->key, p->val);
+            printf("Unused field: '%s = %s'\n", p->key, p->val);
         }
         n = n->next;
     }
@@ -59,7 +59,7 @@ char *option_find_str(list *l, char *key, char *def)
 {
     char *v = option_find(l, key);
     if(v) return v;
-    if(def) fprintf(stderr, "%s: Using default '%s'\n", key, def);
+    if(def) printf("%s: Using default '%s'\n", key, def);
     return def;
 }
 
@@ -67,7 +67,7 @@ int option_find_int(list *l, char *key, int def)
 {
     char *v = option_find(l, key);
     if(v) return atoi(v);
-    fprintf(stderr, "%s: Using default '%d'\n", key, def);
+    printf("%s: Using default '%d'\n", key, def);
     return def;
 }
 
@@ -84,7 +84,7 @@ bool option_find_bool(list *l, char *key, const bool b_default)
     char *v = option_find(l, key);
     // if value is 1 than return true, otherwise false
     if(v) return (atoi(v) == 1 ? true : false);
-    fprintf(stderr, "%s: Using default 'false'\n", key );
+    printf("%s: Using default 'false'\n", key );
     return b_default;
 }
 
@@ -108,6 +108,6 @@ float option_find_float(list *l, char *key, float def)
 {
     char *v = option_find(l, key);
     if(v) return atof(v);
-    fprintf(stderr, "%s: Using default '%lf'\n", key, def);
+    printf("%s: Using default '%lf'\n", key, def);
     return def;
 }

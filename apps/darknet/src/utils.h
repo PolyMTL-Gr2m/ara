@@ -1,9 +1,10 @@
 #ifndef UTILS_H
 #define UTILS_H
-#include <stdio.h>
-#include <time.h>
-#include "list.h"
 #include <stdbool.h>
+#include <stdio.h>
+#include "list.h"
+#include "tiny_malloc.h"
+#include "string.h"
 
 #define SECRET_NUM -1234
 

@@ -315,7 +315,7 @@ void show_image_cv(image p, const char *name)
 
     char buff[256];
     //sprintf(buff, "%s (%d)", name, windows);
-    sprintf(buff, "%s", name);
+    // sprintf(buff, "%s", name);
 
     IplImage *disp = cvCreateImage(cvSize(p.w,p.h), IPL_DEPTH_8U, p.c);
     int step = disp->widthStep;
@@ -353,7 +353,7 @@ void show_image_cv(image p, const char *name)
 #ifdef OPENCV
         show_image_cv(p, name);
 #else
-        fprintf(stderr, "Not compiled with OpenCV, saving to %s.png instead\n", name);
+        printf("Not compiled with OpenCV, saving to %s.png instead\n", name);
         save_image(p, name);
 #endif
     }
@@ -362,7 +362,7 @@ void show_image_cv(image p, const char *name)
     {
         char buff[256];
         //sprintf(buff, "%s (%d)", name, windows);
-        sprintf(buff, "%s.png", name);
+        // sprintf(buff, "%s.png", name);
         unsigned char *data = calloc(im.w*im.h*im.c, sizeof(char));
         int i,k;
         for(k = 0; k < im.c; ++k){
@@ -370,9 +370,10 @@ void show_image_cv(image p, const char *name)
                 data[i*im.c+k] = (unsigned char) (255*im.data[i + k*im.w*im.h]);
             }
         }
-        int success = stbi_write_png(buff, im.w, im.h, im.c, data, im.w*im.c);
+        // int success = stbi_write_png(buff, im.w, im.h, im.c, data, im.w*im.c);
+        int success = 0;
         free(data);
-        if(!success) fprintf(stderr, "Failed to write image %s\n", buff);
+        if(!success) printf("Failed to write image %s\n", buff);
     }
 
 #ifdef OPENCV
@@ -394,7 +395,7 @@ void show_image_cv(image p, const char *name)
         int x,y,k;
 
         char buff[256];
-        sprintf(buff, "%s.jpg", name);
+        // sprintf(buff, "%s.jpg", name);
 
         IplImage *disp = cvCreateImage(cvSize(p.w,p.h), IPL_DEPTH_8U, p.c);
         int step = disp->widthStep;
@@ -416,7 +417,7 @@ void show_image_cv(image p, const char *name)
         int i;
         char buff[256];
         for(i = 0; i < p.c; ++i){
-            sprintf(buff, "%s - Layer %d", name, i);
+            // sprintf(buff, "%s - Layer %d", name, i);
             image layer = get_image_layer(p, i);
             show_image(layer, buff);
             free_image(layer);
@@ -869,57 +870,57 @@ image resize_image(image im, int w, int h)
 }
 
 
-void test_resize(char *filename)
-{
-    image im = load_image(filename, 0,0, 3);
-    float mag = mag_array(im.data, im.w*im.h*im.c);
-    printf("L2 Norm: %f\n", mag);
-    image gray = grayscale_image(im);
+// void test_resize(char *filename)
+// {
+//     image im = load_image(filename, 0,0, 3);
+//     float mag = mag_array(im.data, im.w*im.h*im.c);
+//     printf("L2 Norm: %f\n", mag);
+//     image gray = grayscale_image(im);
 
-    image sat2 = copy_image(im);
-    saturate_image(sat2, 2);
+//     image sat2 = copy_image(im);
+//     saturate_image(sat2, 2);
 
-    image sat5 = copy_image(im);
-    saturate_image(sat5, .5);
+//     image sat5 = copy_image(im);
+//     saturate_image(sat5, .5);
 
-    image exp2 = copy_image(im);
-    exposure_image(exp2, 2);
+//     image exp2 = copy_image(im);
+//     exposure_image(exp2, 2);
 
-    image exp5 = copy_image(im);
-    exposure_image(exp5, .5);
+//     image exp5 = copy_image(im);
+//     exposure_image(exp5, .5);
 
-    image bin = binarize_image(im);
+//     image bin = binarize_image(im);
 
-#ifdef GPU
-    image r = resize_image(im, im.w, im.h);
-    image black = make_image(im.w*2 + 3, im.h*2 + 3, 9);
-    image black2 = make_image(im.w, im.h, 3);
+// #ifdef GPU
+//     image r = resize_image(im, im.w, im.h);
+//     image black = make_image(im.w*2 + 3, im.h*2 + 3, 9);
+//     image black2 = make_image(im.w, im.h, 3);
 
-    float *r_gpu = cuda_make_array(r.data, r.w*r.h*r.c);
-    float *black_gpu = cuda_make_array(black.data, black.w*black.h*black.c);
-    float *black2_gpu = cuda_make_array(black2.data, black2.w*black2.h*black2.c);
-    shortcut_gpu(3, r.w, r.h, 1, r_gpu, black.w, black.h, 3, black_gpu);
-    //flip_image(r);
-    //shortcut_gpu(3, r.w, r.h, 1, r.data, black.w, black.h, 3, black.data);
+//     float *r_gpu = cuda_make_array(r.data, r.w*r.h*r.c);
+//     float *black_gpu = cuda_make_array(black.data, black.w*black.h*black.c);
+//     float *black2_gpu = cuda_make_array(black2.data, black2.w*black2.h*black2.c);
+//     shortcut_gpu(3, r.w, r.h, 1, r_gpu, black.w, black.h, 3, black_gpu);
+//     //flip_image(r);
+//     //shortcut_gpu(3, r.w, r.h, 1, r.data, black.w, black.h, 3, black.data);
 
-    shortcut_gpu(3, black.w, black.h, 3, black_gpu, black2.w, black2.h, 1, black2_gpu);
-    cuda_pull_array(black_gpu, black.data, black.w*black.h*black.c);
-    cuda_pull_array(black2_gpu, black2.data, black2.w*black2.h*black2.c);
-    show_image_layers(black, "Black");
-    show_image(black2, "Recreate");
-#endif
+//     shortcut_gpu(3, black.w, black.h, 3, black_gpu, black2.w, black2.h, 1, black2_gpu);
+//     cuda_pull_array(black_gpu, black.data, black.w*black.h*black.c);
+//     cuda_pull_array(black2_gpu, black2.data, black2.w*black2.h*black2.c);
+//     show_image_layers(black, "Black");
+//     show_image(black2, "Recreate");
+// #endif
 
-    show_image(im,   "Original");
-    show_image(bin,  "Binary");
-    show_image(gray, "Gray");
-    show_image(sat2, "Saturation-2");
-    show_image(sat5, "Saturation-.5");
-    show_image(exp2, "Exposure-2");
-    show_image(exp5, "Exposure-.5");
-#ifdef OPENCV
-    cvWaitKey(0);
-#endif
-}
+//     show_image(im,   "Original");
+//     show_image(bin,  "Binary");
+//     show_image(gray, "Gray");
+//     show_image(sat2, "Saturation-2");
+//     show_image(sat5, "Saturation-.5");
+//     show_image(exp2, "Exposure-2");
+//     show_image(exp5, "Exposure-.5");
+// #ifdef OPENCV
+//     cvWaitKey(0);
+// #endif
+// }
 
 #ifdef OPENCV
 image ipl_to_image(IplImage* src)
@@ -980,94 +981,94 @@ Mat image_to_Mat(image img, int w, int h, int depth, int c)
 }*/
 
 
-image load_image_cv(char *filename, int channels)
-{
-    IplImage* src = 0;
-    int flag = -1;
-    if (channels == 0) flag = -1;
-    else if (channels == 1) flag = 0;
-    else if (channels == 3) flag = 1;
-    else {
-        fprintf(stderr, "OpenCV can't force load with %d channels\n", channels);
-    }
+// image load_image_cv(char *filename, int channels)
+// {
+//     IplImage* src = 0;
+//     int flag = -1;
+//     if (channels == 0) flag = -1;
+//     else if (channels == 1) flag = 0;
+//     else if (channels == 3) flag = 1;
+//     else {
+//         fprintf(stderr, "OpenCV can't force load with %d channels\n", channels);
+//     }
 
-    //add debug
-    //printf("%s\n", filename);
-    //flag = 1;
+//     //add debug
+//     //printf("%s\n", filename);
+//     //flag = 1;
 
-    if( (src = cvLoadImage(filename, flag)) == 0 )
-    {
-        printf(" Cannot load image \"%s\"\n", filename);
-        //continue with dummy image
-        char buff[256];
-        sprintf(buff, "echo %s >> bad.list", filename);
-        system(buff);
-        return make_image(10,10,3);
-        //exit(0);
-    }
-    image out = ipl_to_image(src);
-    cvReleaseImage(&src);
-    rgbgr_image(out);
-    return out;
-}
+//     if( (src = cvLoadImage(filename, flag)) == 0 )
+//     {
+//         printf(" Cannot load image \"%s\"\n", filename);
+//         //continue with dummy image
+//         char buff[256];
+//         sprintf(buff, "echo %s >> bad.list", filename);
+//         system(buff);
+//         return make_image(10,10,3);
+//         //exit(0);
+//     }
+//     image out = ipl_to_image(src);
+//     cvReleaseImage(&src);
+//     rgbgr_image(out);
+//     return out;
+// }
 
 #endif
 
 
-image load_image_stb(char *filename, int channels)
-{
-    int w, h, c;
-    unsigned char *data = stbi_load(filename, &w, &h, &c, channels);
-    if (!data) {
-        fprintf(stderr, "Cannot load image \"%s\"\nSTB Reason: %s\n", filename, stbi_failure_reason());
-        exit(0);
-    }
-    if(channels) c = channels;
-    int i,j,k;
-    image im = make_image(w, h, c);
-    for(k = 0; k < c; ++k){
-        for(j = 0; j < h; ++j){
-            for(i = 0; i < w; ++i){
-                int dst_index = i + w*j + w*h*k;
-                int src_index = k + c*i + c*w*j;
-                im.data[dst_index] = (float)data[src_index]/255.;
-            }
-        }
-    }
-    free(data);
-    return im;
-}
+// image load_image_stb(char *filename, int channels)
+// {
+//     int w, h, c;
+//     unsigned char *data = stbi_load(filename, &w, &h, &c, channels);
+//     if (!data) {
+//         fprintf(stderr, "Cannot load image \"%s\"\nSTB Reason: %s\n", filename, stbi_failure_reason());
+//         exit(0);
+//     }
+//     if(channels) c = channels;
+//     int i,j,k;
+//     image im = make_image(w, h, c);
+//     for(k = 0; k < c; ++k){
+//         for(j = 0; j < h; ++j){
+//             for(i = 0; i < w; ++i){
+//                 int dst_index = i + w*j + w*h*k;
+//                 int src_index = k + c*i + c*w*j;
+//                 im.data[dst_index] = (float)data[src_index]/255.;
+//             }
+//         }
+//     }
+//     free(data);
+//     return im;
+// }
 
-image load_image(char *filename, int w, int h, int c)
-{
-#ifdef OPENCV
-    image out = load_image_cv(filename, c);
-#else
-    image out = load_image_stb(filename, c);
-#endif
+// image load_image(char *filename, int w, int h, int c)
+// {
+// #ifdef OPENCV
+//     image out = load_image_cv(filename, c);
+// #else
+//     image out = load_image_stb(filename, c);
+// #endif
 
-    if((h && w) && (h != out.h || w != out.w)){
-        image resized = resize_image(out, w, h);
-        free_image(out);
-        out = resized;
-    }
-    return out;
-}
+//     if((h && w) && (h != out.h || w != out.w)){
+//         image resized = resize_image(out, w, h);
+//         free_image(out);
+//         out = resized;
+//     }
+//     return out;
+// }
 
-image load_image_color(char *filename, int w, int h)
-{
-    return load_image(filename, w, h, 3);
-}
+// image load_image_color(char *filename, int w, int h)
+// {
+//     return load_image(filename, w, h, 3);
+// }
 
-image get_image_layer(image m, int l)
-{
-    image out = make_image(m.w, m.h, 1);
-    int i;
-    for(i = 0; i < m.h*m.w; ++i){
-        out.data[i] = m.data[i+l*m.h*m.w];
-    }
-    return out;
-}
+// image get_image_layer(image m, int l)
+// {
+//     image out = make_image(m.w, m.h, 1);
+//     int i;
+//     for(i = 0; i < m.h*m.w; ++i){
+//         out.data[i] = m.data[i+l*m.h*m.w];
+//     }
+//     return out;
+// }
 
 float get_pixel(image m, int x, int y, int c)
 {

@@ -1,6 +1,5 @@
-#include <ctype.h>
-#include <stdint.h>
-#include <string.h>
+#include "string.h"
+#include "ctype.h"
 
 void *memcpy(void *dest, const void *src, size_t len) {
   if ((((uintptr_t)dest | (uintptr_t)src | len) & (sizeof(uintptr_t) - 1)) ==

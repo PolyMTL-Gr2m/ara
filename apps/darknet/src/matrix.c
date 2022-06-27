@@ -1,10 +1,7 @@
 #include "matrix.h"
 #include "utils.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <math.h>
+#include "printf.h"
+#include "tiny_malloc.h"
 
 void free_matrix(matrix m)
 {
@@ -64,7 +61,11 @@ matrix resize_matrix(matrix m, int size)
 
 void matrix_add_matrix(matrix from, matrix to)
 {
-    assert(from.rows == to.rows && from.cols == to.cols);
+    if (from.rows == to.rows && from.cols == to.cols)
+    {
+        printf("matrix_add_matrix: matrix size mismatch\n");
+        return;
+    }
     int i,j;
     for(i = 0; i < from.rows; ++i){
         for(j = 0; j < from.cols; ++j){
@@ -113,47 +114,6 @@ float *pop_column(matrix *m, int c)
     }
     --m->cols;
     return col;
-}
-
-matrix csv_to_matrix(char *filename)
-{
-    FILE *fp = fopen(filename, "r");
-    if(!fp) file_error(filename);
-
-    matrix m;
-    m.cols = -1;
-
-    char *line;
-
-    int n = 0;
-    int size = 1024;
-    m.vals = calloc(size, sizeof(float*));
-    while((line = fgetl(fp))){
-        if(m.cols == -1) m.cols = count_fields(line);
-        if(n == size){
-            size *= 2;
-            m.vals = realloc(m.vals, size*sizeof(float*));
-        }
-        m.vals[n] = parse_fields(line, m.cols);
-        free(line);
-        ++n;
-    }
-    m.vals = realloc(m.vals, n*sizeof(float*));
-    m.rows = n;
-    return m;
-}
-
-void matrix_to_csv(matrix m)
-{
-    int i, j;
-
-    for(i = 0; i < m.rows; ++i){
-        for(j = 0; j < m.cols; ++j){
-            if(j > 0) printf(",");
-            printf("%.17g", m.vals[i][j]);
-        }
-        printf("\n");
-    }
 }
 
 void print_matrix(matrix m)
