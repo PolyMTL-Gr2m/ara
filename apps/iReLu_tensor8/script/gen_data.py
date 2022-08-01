@@ -35,8 +35,8 @@ def emit_64b(name, array, alignment='3'):
 
 
 # Input image
-M = 512
-N = 512
+M = 32
+N = 32
 L = 3
 
 #assert(M % 8 == 0), "Output image dimension must be divisible by 4, pad the input image accordingly"

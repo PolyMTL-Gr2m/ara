@@ -10,6 +10,8 @@
 #include "runtime.h"
 #endif
 
+#define I_MAX 32
+
 // Define Tensor dimensions:
 // o = i ° f, with i=[MxNxL], f=[FxFxF], o=[MxNxL]
 // The filter is a cube tensor, and F is odd
@@ -58,40 +60,67 @@ int main() {
   printf("=  ReLu   int8 =\n");
   printf("================\n");
   printf("\n");
-  printf("------------------------------------------------\n");
-  printf("Calculating activation (ReLu) of \n");
-  printf("Input of [1 x %i x %i x %i]  \n", L, M, N);
-  printf("------------------------------------------------\n");
 	
-  start_timer();
-  iReLu_tensor8(o, i, M, N, L);
-  stop_timer();
-	
-  // Performance metrics
-  #ifndef SPIKE
-  int64_t runtime = get_timer();
-  float performance = 1.0 * L * M * N / runtime;
-  float utilization = 100 * performance / (8 * 2.0 * NR_LANES);
+  for(int size = 8 ; size <= I_MAX ; size = size * 2){
+	  
+	  printf("----------------------------------------------------------------\n");
+	  printf("Calculating pooling between \n");
+	  printf("Input of [1 x %i x %i x %i] \n", L, size, size);
+	  printf("Result (8b) is an output of [1 x %i x %i x %i] \n", L, size, size);
+	  printf("----------------------------------------------------------------\n");
+	  
+	  	int channels = L;
+		int width = size;
+		int height = size;  
+		  
+		int8_t input[width * height * channels];
+		int8_t output[width * height * channels]; // keep empty space at max size (just for the test)
+		int8_t golden_output[width * height  * channels];
+		
+		///////////////////////////////////////
+		// INPUT AND EXPECTED OUTPUT SLICING //
+		///////////////////////////////////////
 
-  
-  printf("The execution took %d cycles.\n", runtime);
-  printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
-  #endif
-    
-  
-   // Verify correctness
-  printf("Verifying result...\n");
+		for(int z = 0; z < channels ; z++)
+			for(int y = 0 ; y < height ; y++)
+				for(int x = 0 ; x < width ; x++){
+		  			input[x + width * (y + z * height)] = i[x + N * (y + z * M)];
+		  			golden_output[x + (width * (y + z * height ))] = golden_o[x + (N * (y + z * M ))];
+		  		}
+		  			
+	  
 
-  int error = verify_8btensor(o, golden_o, M, N, L);
+	  // Call the main kernel, and measure cycles
+	  
+	  printf("Computing result...\n");
+	  	start_timer();
+		iReLu_tensor8(output, input, height, width, channels);
+		stop_timer();
+		
+	  // Performance metrics
+	  #ifndef SPIKE
+	  int64_t runtime = get_timer();
+	  float performance = 1.0 * channels * height * width / runtime;
+	  float utilization = 100 * performance / (8 * 2.0 * NR_LANES);
+	  #endif
+	  
+	  // Verify correctness
+	  printf("Verifying result...\n");
 
-  if (error != 0) {
-    printf("Fail.\n");
-  } else {
-    printf("Passed.\n");
-  }
- 
-  
- //print_8btensor(o,M,N,L);
+	  int error = verify_8btensor(output, golden_output, width, height, channels);
+
+
+	  if (error != 0) {
+		 printf("Fail.\n");
+		 //return 0; //error;
+	  } else {
+		 printf("Passed.\n");
+		 #ifndef SPIKE  
+		 printf("The execution took %d cycles.\n", runtime);
+	  	 printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
+	  	 #endif
+	  }
+	}
   
 
   return 0; //error;
