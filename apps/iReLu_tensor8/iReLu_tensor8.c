@@ -12,44 +12,33 @@
 // W_in  : number of input column
 // C_in  : number of input channels
 
-void iReLu_tensor8(int8_t *o, int8_t *i, int64_t R, int64_t C, int64_t W) {
-
-  iReLu_tensor8_vec_8xC(o, i, R, C, W);
- 
-}
 
 // Calculate 2 output matrix rows
-void iReLu_tensor8_vec_8xC(int8_t *o, int8_t *i, int64_t R, int64_t C, int64_t W) {
-  
-  // Helper variables
-  int64_t const ld = TILE_SIZE; 					// increment adress on output stores and input loads
-  int64_t const size = C * R * W % TILE_SIZE; 	// check for tiling
+void iReLu_tensor8(int8_t *o, int8_t *i, int64_t H_in, int64_t W_in, int64_t C_in) {
 
-  // Compute on C elements
-  
-  asm volatile("vsetvli zero, %0, e8, m1, ta, ma" ::"r"(TILE_SIZE));
-  
-  for (int c = 0 ; c <= R * C * W - TILE_SIZE ; c+= TILE_SIZE){ // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
-			  
-	asm volatile("vle8.v v0,  (%0); add %0, %0, %1" : "+&r"(i) : "r"(ld));
-	asm volatile("vmax.vx v0,  v0,  zero");
-				  
-	// STORE THE ACTIVATED REGISTERS OUTPUT
+int64_t const size = H_in * W_in * C_in;
 
-	asm volatile("vse8.v  v0,  (%0); add %0, %0, %1" : "+&r"(o) : "r"(ld));
-			
-	}
+asm volatile("vsetvli zero, %0, e8, m8, ta, ma" ::"r"(TILE_SIZE));
+
+	for (int c = 0 ; c < size ; c += TILE_SIZE) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+	{
 	
-	if(size != 0){
-	
-		asm volatile("vsetvli zero, %0, e8, m1, ta, ma" ::"r"(size));
+	  int8_t *i_ = i + c;  // input pointer realtive to the tile (constant throughout the tile)
+	  int8_t *o_ = o + c;  // output pointer relative to the tile	
 		
-		asm volatile("vle8.v v0,  (%0)": "+&r"(i));
-		asm volatile("vmax.vx v0,  v0,  zero");
-		asm volatile("vse8.v  v0,  (%0)" : "+&r"(o));
-	}
+		
+	  if(c > size - TILE_SIZE) 	// if we are at the right border of the input
+				asm volatile("vsetvli zero, %0, e8, m8, ta, ma" ::"r"(size % TILE_SIZE));	
+	  
+	  
+	  asm volatile("vle8.v v16,  (%0)" : "+&r"(i_));
+	  
+	  asm volatile("vmax.vx v0,  v16,  zero");
+	  
+	  asm volatile("vse8.v  v0,  (%0)" : "+&r"(o_));
 	
-	// LAST GROUP
+	}
+
 }
 
 
