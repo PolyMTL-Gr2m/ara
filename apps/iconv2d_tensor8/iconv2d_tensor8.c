@@ -13,7 +13,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                           Description : Functions for cross-correlation between                             //		
 //                                                                                                             //
-//                      1 x Cin x Hin x Win  * Cout x Cin x F x F   =    Cout x Hout x Wout                      //			
+//                      1 x Cin x Hin x Win  * Cout x Cin x F x F   =    Cout x Hout x Wout                    //			
 //                          input              kernels                       output                            //	
 //																																					//
 //																																					//				
