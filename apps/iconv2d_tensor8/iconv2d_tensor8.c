@@ -102,7 +102,7 @@ void iconv2d_tensor8(int8_t *o, int8_t *i, int8_t *f, int64_t H_in, int64_t W_in
 void iconv2d_tensor8_vec_1xC_1x1(int8_t *o, int8_t *i, int8_t *f, int64_t R, int64_t C, int64_t W, int64_t F)
 {
 
-int64_t vlen;
+asm volatile("vsetvli zero, %0, e8, m8, ta, ma" ::"r"(TILE_SIZE_1x1));
 
 for (int c = 0 ; c < C * R ; c += TILE_SIZE_1x1) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
 {
@@ -113,16 +113,10 @@ for (int c = 0 ; c < C * R ; c += TILE_SIZE_1x1) // IF CONVOLUTION NEED TO BE TI
 	
 	
 	if(c > (C * R) - TILE_SIZE_1x1) 	// if we are at the right border of the input
-	{
-		vlen = (C * R) % TILE_SIZE_1x1;		 	// we set the vector length to fit the last inputs
-	}
-	else
-	{
-		vlen = TILE_SIZE_1x1;						// else we go full length
-	}
+		asm volatile("vsetvli zero, %0, e8, m8, ta, ma" ::"r"((C * R) % TILE_SIZE_1x1));
 	
 
-	asm volatile("vsetvli zero, %0, e8, m8, ta, ma" ::"r"(vlen));
+	
 	
 	asm volatile("vle8.v v16, (%0)" : "+&r"(i_));
 		
@@ -142,7 +136,7 @@ for (int c = 0 ; c < C * R ; c += TILE_SIZE_1x1) // IF CONVOLUTION NEED TO BE TI
 		}
 	
 	asm volatile("vse8.v v0,  (%0)" : "+&r"(o_));
-	o_ += vlen;
+	o_ += TILE_SIZE_1x1;
 
 	}
 }

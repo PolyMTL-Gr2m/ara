@@ -28,8 +28,10 @@
 #include "runtime.h"
 #endif
 
-#define F_MAX 1
+#define F_MAX 7
 #define I_MAX 32
+
+#define WIDE_ONLY
 
 
 // Define Tensor dimensions:
