@@ -14,3 +14,10 @@ for now the generated code *zanga.c*, *zanga.h* and *zanga_test_suit.h* can be u
 
 you also might need to remove timinig function since timekeeping need OS to work, emulating using verilator can does the cycle count for you.
 
+After using the both make command up there you can use:
+
+>make verilate
+
+this will copy the binary to the bin folder and then run verilator on the generated RISCV binary. Note that you need to have already ran throguht the ara installation first.
+
+
