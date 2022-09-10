@@ -12,7 +12,7 @@ void * Memcpy(void * dst,
 	        return dst;
 }
 
-
+/*
 void memset(void *s, int c,  unsigned int len)
 {
 	unsigned char* p=s;
@@ -20,3 +20,18 @@ void memset(void *s, int c,  unsigned int len)
          *p++ = (unsigned char)c; }
 	return s;
 }
+*/
+void memset_bare(void *s, int c,  unsigned int len)
+{
+	  int    i;
+	 unsigned char *p = s;
+	  i = 0;
+	  while(len > 0)
+	 {
+	  *p = c;
+	 p++;
+	len--; }
+	  return;
+}
+
+		  

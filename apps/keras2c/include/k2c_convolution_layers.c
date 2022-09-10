@@ -11,7 +11,7 @@ https://github.com/f0uriest/keras2c
 #include <stdio.h>
 #include <string.h>
 #include "k2c_include.h"
-
+#include "../../common/printf.h"
 
 /**
  * 1D (temporal) Padding.
@@ -188,7 +188,7 @@ void k2c_conv1d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
 void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* kernel,
                 const k2c_tensor* bias, const size_t * stride, const size_t * dilation,
                 k2c_activationType *activation) {
-
+	printf("starting conv2d\n");
     memset(output->array,0,output->numel*sizeof(output->array[0]));
 
     const size_t out_rows = output->shape[0];

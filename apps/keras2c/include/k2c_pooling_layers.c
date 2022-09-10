@@ -10,8 +10,7 @@ https://github.com/f0uriest/keras2c
 #include <math.h>
 #include <string.h>
 #include "k2c_include.h"
-
-
+#include "../../common/printf.h"
 /**
  * Global max pooling.
  * works for 1D, 2D, or 3D inputs.
@@ -93,7 +92,7 @@ void k2c_maxpool1d(k2c_tensor* output, const k2c_tensor* input, const size_t poo
 void k2c_maxpool2d(k2c_tensor* output, const k2c_tensor* input, const size_t * pool_size,
                    const size_t * stride) {
 
-
+	printf("starting maxpooling2d\n");
     const size_t channels = input->shape[2];
     // i,j,l output indices
     /// i, k, m input indices

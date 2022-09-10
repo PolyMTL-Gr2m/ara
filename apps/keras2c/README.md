@@ -20,4 +20,27 @@ After using the both make command up there you can use:
 
 this will copy the binary to the bin folder and then run verilator on the generated RISCV binary. Note that you need to have already ran throguht the ara installation first.
 
-
+##Running verilator on the source code
+------------------------------------------------
+Ubuntu 20.04.4 LTS
+Ara Dependencies:
+GCC=9.4.0
+CMake=3.16.3
+Clang=10
+Ninja=1.10.0
+texinfo
+flex
+bison
+autoconf
+libelf-dev
+gtkwave
+------------------------------------------------
+How to check waveform:
+Add "trace=1" on the Makefile of "hardware" file
+Then "make varilate"
+And "app=** make simv" again
+Final run"gtkwave **.fst"
+------------------------------------------------
+RISC-V "V" Vector Extension C Intrinsics can work
+on Ara.
+------------------------------------------------

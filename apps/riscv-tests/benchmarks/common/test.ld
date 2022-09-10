@@ -62,5 +62,14 @@ SECTIONS
 
   /* End of uninitalized data segement */
   _end = .;
+
+
+  eoc_address_reg        = 0xD0000000;
+  dram_start_address_reg = 0xD0000008;
+  dram_end_address_reg   = 0xD0000010;
+
+  fake_uart              = 0xC0000000;
+
+
 }
 
