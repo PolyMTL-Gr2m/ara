@@ -1,0 +1,209 @@
+.section .data,"aw",@progbits
+.global H_in
+.align 3
+H_in:
+    .word 0x00000008
+    .word 0x00000000
+.global W_in
+.align 3
+W_in:
+    .word 0x00000008
+    .word 0x00000000
+.global C_in
+.align 3
+C_in:
+    .word 0x00000008
+    .word 0x00000000
+.global K
+.align 3
+K:
+    .word 0x00000001
+    .word 0x00000000
+.global i
+.align NR_LANES*4
+i:
+    .word 0x00010101
+    .word 0x00000000
+    .word 0x01010100
+    .word 0x01010000
+    .word 0x01000100
+    .word 0x01000000
+    .word 0x01000001
+    .word 0x01010001
+    .word 0x01010101
+    .word 0x01000001
+    .word 0x00000101
+    .word 0x01010001
+    .word 0x00010101
+    .word 0x00000101
+    .word 0x01000101
+    .word 0x01010000
+    .word 0x00010001
+    .word 0x00000101
+    .word 0x01010101
+    .word 0x00000100
+    .word 0x01000101
+    .word 0x01010001
+    .word 0x01010000
+    .word 0x00010000
+    .word 0x00000000
+    .word 0x01010000
+    .word 0x01000001
+    .word 0x00010101
+    .word 0x00010001
+    .word 0x01000101
+    .word 0x00000001
+    .word 0x01000101
+    .word 0x01010000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000100
+    .word 0x01000100
+    .word 0x00010001
+    .word 0x00000101
+    .word 0x00010000
+    .word 0x00010101
+    .word 0x01010000
+    .word 0x01000001
+    .word 0x00010100
+    .word 0x01010001
+    .word 0x00010100
+    .word 0x01000001
+    .word 0x01000100
+    .word 0x00010100
+    .word 0x00000001
+    .word 0x01010100
+    .word 0x01010101
+    .word 0x01010100
+    .word 0x00000001
+    .word 0x00010000
+    .word 0x00000000
+    .word 0x01000101
+    .word 0x00010100
+    .word 0x01000100
+    .word 0x01010000
+    .word 0x01010001
+    .word 0x01010000
+    .word 0x01000101
+    .word 0x01010000
+    .word 0x00000000
+    .word 0x01010000
+    .word 0x01010100
+    .word 0x01010100
+    .word 0x01000100
+    .word 0x00000000
+    .word 0x00000001
+    .word 0x00010100
+    .word 0x01000001
+    .word 0x00000101
+    .word 0x01010001
+    .word 0x00010101
+    .word 0x00000000
+    .word 0x01000001
+    .word 0x00010100
+    .word 0x00000100
+    .word 0x01000000
+    .word 0x01000001
+    .word 0x01000100
+    .word 0x00000100
+    .word 0x00000101
+    .word 0x01000101
+    .word 0x00000001
+    .word 0x01000001
+    .word 0x01010101
+    .word 0x00010001
+    .word 0x01000100
+    .word 0x00000100
+    .word 0x01010001
+    .word 0x01010001
+    .word 0x00010001
+    .word 0x01000001
+    .word 0x00010000
+    .word 0x01000100
+    .word 0x01000000
+    .word 0x00000001
+    .word 0x01010100
+    .word 0x01010000
+    .word 0x00010101
+    .word 0x00000100
+    .word 0x00000001
+    .word 0x01010000
+    .word 0x00010001
+    .word 0x01010000
+    .word 0x01010000
+    .word 0x01010000
+    .word 0x01000000
+    .word 0x01000000
+    .word 0x01000000
+    .word 0x01010100
+    .word 0x01000000
+    .word 0x01000101
+    .word 0x01010001
+    .word 0x00010101
+    .word 0x01010001
+    .word 0x01000001
+    .word 0x01010000
+    .word 0x01010100
+    .word 0x01000100
+    .word 0x00010100
+    .word 0x01010000
+    .word 0x01000001
+    .word 0x01000101
+    .word 0x00000001
+.global f
+.align NR_LANES*4
+f:
+    .word 0x01010000
+    .word 0x01000000
+    .word 0x01010100
+    .word 0x01000100
+    .word 0x01000000
+    .word 0x00010101
+    .word 0x00010000
+    .word 0x00010100
+    .word 0x00000001
+    .word 0x00010000
+    .word 0x00010100
+    .word 0x00010001
+    .word 0x01000101
+    .word 0x01010000
+    .word 0x01010100
+    .word 0x01010001
+    .word 0x01010100
+    .word 0x00000001
+.global golden_o
+.align NR_LANES*4
+golden_o:
+    .word 0x1212140d
+    .word 0x13140e12
+    .word 0x10131712
+    .word 0x11121217
+    .word 0x13150d0f
+    .word 0x13111210
+    .word 0x100e1112
+    .word 0x130f1513
+    .word 0x15131216
+.global o
+.align NR_LANES*4
+o:
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+    .word 0x00000000
+.global o_checksum
+.align 3
+o_checksum:
+    .word 0x00000061
+    .word 0x00000000
