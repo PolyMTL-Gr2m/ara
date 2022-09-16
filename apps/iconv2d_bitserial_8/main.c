@@ -74,9 +74,9 @@ int main(){
     
     printf("Computing results...\n");
     
-    //start_timer();
-    conv2d_prec1(i, f, o, H_in, W_in, C_in, F);
-    //stop_timer();
+    start_timer();
+    conv2d_prec2(i, f, o, H_in, W_in, C_in, F);
+    stop_timer();
     
 	//////////////////
 	// VERIFICATION //

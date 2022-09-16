@@ -9,11 +9,11 @@
 #endif
 
 
-void conv2d(int64_t * i_ptr, int64_t *f_ptr, int64_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
+void conv2d_prec2(int64_t * i_ptr, int64_t *f_ptr, int64_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
 
 void conv2d_prec1(int64_t * i_ptr, int64_t *f_ptr, int64_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
 
-void conv2d_prec1_test(int64_t * i_ptr, int64_t *f_ptr, int64_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
+void conv2d_prec1_test_narrow(int64_t * i_ptr, int64_t *f_ptr, int64_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
 
 
 

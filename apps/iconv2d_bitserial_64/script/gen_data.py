@@ -25,8 +25,9 @@ def emit(name, array, alignment='3'):
 num_filter = 1
 
 # Input image
-M_pad = 8		#rows
-N_pad = 8		#column
+
+N_pad = 10		#column
+M_pad = 10		#rows
 L = 64			#channels
 
 prec = 1

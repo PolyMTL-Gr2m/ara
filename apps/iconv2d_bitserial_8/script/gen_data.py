@@ -25,11 +25,11 @@ def emit(name, array, alignment='3'):
 num_filter = 1
 
 # Input image
-M_pad = 8  	#rows
-N_pad = 8		#column
+M_pad = 512  	#rows
+N_pad = 512		#column
 L = 8				#channels
 
-prec = 1
+prec = 3
 
 
 M = M_pad
@@ -39,6 +39,8 @@ L_pad = L
 # Generate a random int64 input padded image
 tensor = np.around(rand_tensor(1, L_pad, M_pad, N_pad, 0)).astype(np.uint8) & prec
 np.random.shuffle(tensor.flat)
+
+tensor[:,1:,:,:] = 0;
 
 # Generate a random int64 filter
 gen_filter = np.around(rand_tensor(num_filter, L, 7, 7, 0)).astype(np.uint8) & prec
