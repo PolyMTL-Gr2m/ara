@@ -1,9 +1,9 @@
 #include "iconv2d_tensor2.h"
 #include <stdio.h>
 
-#define VEC_SIZE 512
+#define VEC_SIZE 1024
 
-#define DEBUG
+//#define DEBUG
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -446,7 +446,7 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 // TO BE RE-DONE TO FIT THE 1b PREC (rn isn't working properly)
 
 
-void conv2d_prec3(int8_t * i_ptr, int8_t *f_ptr, int8_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
+/*void conv2d_prec3(int8_t * i_ptr, int8_t *f_ptr, int8_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
 
 #ifdef DEBUG
 	uint64_t cycle_count = 0;
@@ -708,7 +708,7 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		printf("The execution took %d cycles.\n", cycle_count);
 	#endif
 
-}
+}*/
 
 
 
@@ -1082,7 +1082,7 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 
 
 
-/*void conv2d_prec3(int8_t * i_ptr, int8_t *f_ptr, int8_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
+void conv2d_prec2(int8_t * i_ptr, int8_t *f_ptr, int8_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
 
 #ifdef DEBUG
 	uint64_t cycle_count = 0;
@@ -1094,7 +1094,7 @@ int64_t W_in_tiled;
 
 int8_t * o_ = o_ptr;
 int8_t * i_ = i_ptr;
-int8_t f_packed[9];
+int8_t f_packed[18];
 
 int64_t ldo = W_in - 2;
 
@@ -1108,7 +1108,7 @@ else
 	W_in_tiled = W_in;
 	}
 
-bitpack_filter_1(f_ptr, f_packed, F*F);
+bitpack_filter(f_ptr, f_packed, F*F);
 
 int64_t nb_out;
 
@@ -1121,7 +1121,7 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		#ifdef DEBUG
 			start_timer();
 		#endif
-		vbitpack_1(i_, H_in * W_in_tiled); 
+		vbitpack(i_, H_in * W_in_tiled); 
 		#ifdef DEBUG
 			stop_timer();
 			cycle_count = get_timer();
@@ -1129,20 +1129,26 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		
 		
 		asm volatile("vslidedown.vx v2, v0, %0" :: "r"(W_in_tiled));
-		
 		asm volatile("vslidedown.vx v4, v0, %0" :: "r"(W_in_tiled << 1));
+		
+		asm volatile("vslidedown.vx v8, v6, %0" :: "r"(W_in_tiled));
+		asm volatile("vslidedown.vx v10, v6, %0" :: "r"(W_in_tiled << 1));
 		
 		nb_out = H_per_it - 2;
 		
-		}
+		}		
 		
-		asm volatile("vmv.v.v v6, v0");
 		
-		asm volatile("vslidedown.vx v6, v6, %0" :: "r"((H_per_it - 2) * W_in_tiled));
+		asm volatile("vmv.v.v v12, v0");
+		asm volatile("vmv.v.v v16, v6");
+		
+		asm volatile("vslidedown.vx v12, v12, %0" :: "r"((H_per_it - 2) * W_in_tiled));
+		asm volatile("vslidedown.vx v16, v16, %0" :: "r"((H_per_it - 2) * W_in_tiled));
 		
 		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(W_in_tiled << 1));
 		
-		asm volatile("vslidedown.vx v8, v6, %0" :: "r"(W_in_tiled));
+		asm volatile("vslidedown.vx v14, v12, %0" :: "r"(W_in_tiled));
+		asm volatile("vslidedown.vx v18, v16, %0" :: "r"(W_in_tiled));
 		
 	
 		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
@@ -1150,85 +1156,132 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		
 		i_ += H_per_it * W_in_tiled;
 	
-	
+	asm volatile("vmv.v.i v30, 0"); 
 		
-	// LSB
-	asm volatile("vand.vx v12, v0, %0" :: "r"(f_packed[0])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	asm volatile("vand.vx v14, v2, %0" :: "r"(f_packed[3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	asm volatile("vand.vx v16, v4, %0" :: "r"(f_packed[6])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	//Pre-compute
-	
-
-
+	for (int f_w = 0 ; f_w < F ; f_w ++) {
+		
+			// LSB
+			asm volatile("vand.vx v20, v0, %0" :: "r"(f_packed[f_w])); // ALL the input multiplied by the 1ST value of 1ST row kernel
 			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-	// v16 = popcount(v16)
-	asm volatile(".byte  0x57, 0x08, 0x08, 0x06");
-		
-		
-	asm volatile("vadd.vv v30, v12, v14");				
-	
-	asm volatile("vslidedown.vi v0, v0, 1");				
-	asm volatile("vslidedown.vi v2, v2, 1");				
-	asm volatile("vslidedown.vi v4, v4, 1");
-	
-	asm volatile("vadd.vv v30, v30, v16");
-	
-		
-	asm volatile("vand.vx v12, v0, %0" :: "r"(f_packed[1])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-		
-	asm volatile("vand.vx v14, v2, %0" :: "r"(f_packed[4])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-		
-	asm volatile("vand.vx v16, v4, %0" :: "r"(f_packed[7])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			asm volatile("vand.vx v22, v2, %0" :: "r"(f_packed[f_w + 3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v24, v4, %0" :: "r"(f_packed[f_w + 6])); // ALL the input multiplied by the 1ST value of 1ST row kernel
 			
 
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
 			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-	// v16 = popcount(v16)
-	asm volatile(".byte  0x57, 0x08, 0x08, 0x06");
-		
-	asm volatile("vadd.vv v12, v12, v14");
-	asm volatile("vadd.vv v30, v30, v16");	
-		
-	asm volatile("vslidedown.vi v0, v0, 1");				
-	asm volatile("vslidedown.vi v2, v2, 1");				
-	asm volatile("vslidedown.vi v4, v4, 1");
-							
-	asm volatile("vadd.vv v30, v30, v12");
-		
-		
-		
-		
-	asm volatile("vand.vx v12, v0, %0" :: "r"(f_packed[2])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	asm volatile("vand.vx v14, v2, %0" :: "r"(f_packed[5])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-		
-	asm volatile("vand.vx v16, v4, %0" :: "r"(f_packed[8])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
 			
+			// v24 = popcount(v24)
+			asm volatile(".byte  0x57, 0x0C, 0x0C, 0x06");
+			
+			
+			asm volatile("vadd.vv v20, v20, v22");
+			asm volatile("vadd.vv v30, v30, v20");
+			asm volatile("vadd.vv v30, v30, v24");
+			
+			
+			
+			// MSB
+			
+			asm volatile("vand.vx v20, v0, %0" :: "r"(f_packed[f_w + 9])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v22, v2, %0" :: "r"(f_packed[f_w + 12])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v24, v4, %0" :: "r"(f_packed[f_w + 15])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+			
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+			
+			// v24 = popcount(v24)
+			asm volatile(".byte  0x57, 0x0C, 0x0C, 0x06");
 
 			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-	// v16 = popcount(v16)
-	asm volatile(".byte  0x57, 0x08, 0x08, 0x06");
-		
-		
-	asm volatile("vadd.vv v30, v30, v16");
+			asm volatile("vsll.vi v20, v20, 1"); 
+			asm volatile("vsll.vi v22, v22, 1"); 
+			asm volatile("vsll.vi v24, v24, 1"); 
+			
+			asm volatile("vadd.vv v20, v20, v22");
+			asm volatile("vadd.vv v30, v30, v20");
+			asm volatile("vadd.vv v30, v30, v24");
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v0, v0, 1");
+				asm volatile("vslidedown.vi v2, v2, 1");
+				asm volatile("vslidedown.vi v4, v4, 1");
+			}
+			
+			
+			
+			// LSB
+			asm volatile("vand.vx v20, v6, %0" :: "r"(f_packed[f_w])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v22, v8, %0" :: "r"(f_packed[f_w + 3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v24, v10, %0" :: "r"(f_packed[f_w + 6])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
 
-	asm volatile("vadd.vv v12, v12, v14");
-	
-	asm volatile("vadd.vv v30, v30, v12");
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+			
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+			
+			// v24 = popcount(v24)
+			asm volatile(".byte  0x57, 0x0C, 0x0C, 0x06");
+			
+			
+			asm volatile("vsll.vi v20, v20, 1"); 
+			asm volatile("vsll.vi v22, v22, 1"); 
+			asm volatile("vsll.vi v24, v24, 1"); 
+			
+			asm volatile("vadd.vv v20, v20, v22");
+			asm volatile("vadd.vv v30, v30, v20");
+			asm volatile("vadd.vv v30, v30, v24");
+			
+			
+			
+			// MSB
+			
+			asm volatile("vand.vx v20, v6, %0" :: "r"(f_packed[f_w + 9])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v22, v8, %0" :: "r"(f_packed[f_w + 12])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v24, v10, %0" :: "r"(f_packed[f_w + 15])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+			
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+			
+			// v24 = popcount(v24)
+			asm volatile(".byte  0x57, 0x0C, 0x0C, 0x06");
+			
+
+			asm volatile("vsll.vi v20, v20, 2"); 
+			asm volatile("vsll.vi v22, v22, 2"); 
+			asm volatile("vsll.vi v24, v24, 2"); 
+
+
+			asm volatile("vadd.vv v20, v20, v22");
+			asm volatile("vadd.vv v30, v30, v20");
+			asm volatile("vadd.vv v30, v30, v24");
+			
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v6, v6, 1");
+				asm volatile("vslidedown.vi v8, v8, 1");
+				asm volatile("vslidedown.vi v10, v10, 1");
+			}
+			
+		
+	}
 	
 	
 	
@@ -1254,60 +1307,97 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	// for the tail
 	///////////////////////
 	
+	asm volatile("vmv.v.i v24, 0"); 
 	
-	asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(W_in_tiled << 1));
+	for (int f_w = 0 ; f_w < F ; f_w ++) {
 	
-	// LSB
-	asm volatile("vand.vx v12, v6, %0" :: "r"(f_packed[0])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	asm volatile("vand.vx v14, v8, %0" :: "r"(f_packed[3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(W_in_tiled << 1));
 			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-		
-		
-	asm volatile("vadd.vv v10, v12, v14");				
-	
-	asm volatile("vslidedown.vi v6, v6, 1");				
-	asm volatile("vslidedown.vi v8, v8, 1");				
-	
-		
-	asm volatile("vand.vx v12, v6, %0" :: "r"(f_packed[1])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-		
-	asm volatile("vand.vx v14, v8, %0" :: "r"(f_packed[4])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-		
+			// LSB
+			asm volatile("vand.vx v20, v12, %0" :: "r"(f_packed[f_w])); // ALL the input multiplied by the 1ST value of 1ST row kernel
 			
+			asm volatile("vand.vx v22, v14, %0" :: "r"(f_packed[f_w + 3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+			
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+	
+			asm volatile("vadd.vv v20, v20, v22");		
+			asm volatile("vadd.vv v24, v24, v20");	
+	
 
 			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-		
-	asm volatile("vadd.vv v12, v12, v14");
-		
-	asm volatile("vslidedown.vi v6, v6, 1");				
-	asm volatile("vslidedown.vi v8, v8, 1");				
-							
-	asm volatile("vadd.vv v10, v10, v12");
-		
-		
-	asm volatile("vand.vx v12, v6, %0" :: "r"(f_packed[2])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	asm volatile("vand.vx v14, v8, %0" :: "r"(f_packed[5])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			// MSB
+			asm volatile("vand.vx v20, v12, %0" :: "r"(f_packed[f_w + 9])); // ALL the input multiplied by the 1ST value of 1ST row kernel
 			
+			asm volatile("vand.vx v22, v14, %0" :: "r"(f_packed[f_w + 12])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+			
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+			
+			asm volatile("vsll.vi v20, v20, 1"); 
+			asm volatile("vsll.vi v22, v22, 1"); 
+	
+			asm volatile("vadd.vv v20, v20, v22");		
+			asm volatile("vadd.vv v24, v24, v20");	
+			
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v12, v12, 1");
+				asm volatile("vslidedown.vi v14, v14, 1");
+			}
+	
 
 			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-
-	asm volatile("vadd.vv v12, v12, v14");
+			
+			// LSB
+			asm volatile("vand.vx v20, v16, %0" :: "r"(f_packed[f_w])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v22, v18, %0" :: "r"(f_packed[f_w + 3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+			
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+			
+			asm volatile("vsll.vi v20, v20, 1"); 
+			asm volatile("vsll.vi v22, v22, 1"); 
+			
+			asm volatile("vadd.vv v20, v20, v22");		
+			asm volatile("vadd.vv v24, v24, v20");	
 	
-	asm volatile("vadd.vv v10, v10, v12");
+	
+			// MSB
+			asm volatile("vand.vx v20, v16, %0" :: "r"(f_packed[f_w + 9])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			asm volatile("vand.vx v22, v18, %0" :: "r"(f_packed[f_w + 12])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+			
+			// v20 = popcount(v20)
+			asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+			
+			// v22 = popcount(v22)
+			asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+			
+			asm volatile("vsll.vi v20, v20, 2"); 
+			asm volatile("vsll.vi v22, v22, 2"); 
+			
+			asm volatile("vadd.vv v20, v20, v22");		
+			asm volatile("vadd.vv v24, v24, v20");	
+
+	
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v16, v16, 1");
+				asm volatile("vslidedown.vi v18, v18, 1");
+			}
+		
+		}
+	
 			
 	//	complete the joint between the tail and the overhead
 		
@@ -1316,102 +1406,143 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		#ifdef DEBUG
 			start_timer();
 		#endif
-		vbitpack_1(i_, H_in * W_in_tiled); 
+		vbitpack(i_, H_in * W_in_tiled); 
 		#ifdef DEBUG
 			stop_timer();
 			sum_count = get_timer();
 			cycle_count += sum_count;
 		#endif
 		
-		asm volatile("vmv.v.i v6, 0");
-		
-		asm volatile("vmv.v.i v8, 0");
-		
+		asm volatile("vmv.v.i v12, 0");
+		asm volatile("vmv.v.i v14, 0");
+		asm volatile("vmv.v.i v16, 0");
+		asm volatile("vmv.v.i v18, 0");
+
 		
 		asm volatile("vslidedown.vx v2, v0, %0" :: "r"(W_in_tiled));
-		
 		asm volatile("vslidedown.vx v4, v0, %0" :: "r"(W_in_tiled << 1));
+		
+		asm volatile("vslidedown.vx v8, v6, %0" :: "r"(W_in_tiled));
+		asm volatile("vslidedown.vx v10, v6, %0" :: "r"(W_in_tiled << 1));
+		
+		
+		
 		
 		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(W_in_tiled << 1));
 		
-		asm volatile("vslideup.vx v6, v0, %0" :: "r"(W_in_tiled));
+		asm volatile("vslideup.vx v12, v0, %0" :: "r"(W_in_tiled));
+		asm volatile("vslideup.vx v16, v6, %0" :: "r"(W_in_tiled));
 		
-		asm volatile("vmv.v.v v8, v0");
+		asm volatile("vmv.v.v v14, v0");
+		asm volatile("vmv.v.v v18, v6");
 		
 		
 		//	complete the joint between the tail and the overhead
 
-			
+		for (int f_w = 0 ; f_w < F ; f_w ++) {
 		
+				asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(W_in_tiled << 1));
+				
+				// LSB
+				asm volatile("vand.vx v20, v12, %0" :: "r"(f_packed[f_w + 3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				asm volatile("vand.vx v22, v14, %0" :: "r"(f_packed[f_w + 6])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				// v20 = popcount(v20)
+				asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+				
+				// v22 = popcount(v22)
+				asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
 		
+				asm volatile("vadd.vv v20, v20, v22");		
+				asm volatile("vadd.vv v24, v24, v20");	
 		
-	asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(W_in_tiled << 1));
-	
-	// LSB
-	asm volatile("vand.vx v12, v6, %0" :: "r"(f_packed[3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	asm volatile("vand.vx v14, v8, %0" :: "r"(f_packed[6])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-		
-		
-	asm volatile("vadd.vv v12, v12, v14");				
-	
-	asm volatile("vslidedown.vi v6, v6, 1");				
-	asm volatile("vslidedown.vi v8, v8, 1");	
-	
-	asm volatile("vadd.vv v10, v10, v12");			
-	
-		
-	asm volatile("vand.vx v12, v6, %0" :: "r"(f_packed[4])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-		
-	asm volatile("vand.vx v14, v8, %0" :: "r"(f_packed[7])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
-		
-	asm volatile("vadd.vv v12, v12, v14");
-		
-	asm volatile("vslidedown.vi v6, v6, 1");				
-	asm volatile("vslidedown.vi v8, v8, 1");				
-							
-	asm volatile("vadd.vv v10, v10, v12");
-		
-		
-	asm volatile("vand.vx v12, v6, %0" :: "r"(f_packed[5])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-	
-	asm volatile("vand.vx v14, v8, %0" :: "r"(f_packed[8])); // ALL the input multiplied by the 1ST value of 1ST row kernel
-			
-			
-	// v12 = popcount(v12)
-	asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
-	// v14 = popcount(v14)
-	asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
 
-	asm volatile("vadd.vv v12, v12, v14");
-	
-	asm volatile("vadd.vv v10, v10, v12");
-	
-	asm volatile("vmv.v.i v6, 0");
+				
+				// MSB
+				asm volatile("vand.vx v20, v12, %0" :: "r"(f_packed[f_w + 12])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				asm volatile("vand.vx v22, v14, %0" :: "r"(f_packed[f_w + 15])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				// v20 = popcount(v20)
+				asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+				
+				// v22 = popcount(v22)
+				asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+				
+				asm volatile("vsll.vi v20, v20, 1"); 
+				asm volatile("vsll.vi v22, v22, 1"); 
 		
-	asm volatile("vmv.v.i v8, 0");
+				asm volatile("vadd.vv v20, v20, v22");		
+				asm volatile("vadd.vv v24, v24, v20");	
+				
+				
+				if(f_w < F - 1){
+					asm volatile("vslidedown.vi v12, v12, 1");
+					asm volatile("vslidedown.vi v14, v14, 1");
+				}
+		
+
+				
+				
+				// LSB
+				asm volatile("vand.vx v20, v16, %0" :: "r"(f_packed[f_w + 3])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				asm volatile("vand.vx v22, v18, %0" :: "r"(f_packed[f_w + 6])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				// v20 = popcount(v20)
+				asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+				
+				// v22 = popcount(v22)
+				asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+				
+				asm volatile("vsll.vi v20, v20, 1"); 
+				asm volatile("vsll.vi v22, v22, 1"); 
+				
+				asm volatile("vadd.vv v20, v20, v22");		
+				asm volatile("vadd.vv v24, v24, v20");	
+		
+		
+				// MSB
+				asm volatile("vand.vx v20, v16, %0" :: "r"(f_packed[f_w + 12])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				asm volatile("vand.vx v22, v18, %0" :: "r"(f_packed[f_w + 15])); // ALL the input multiplied by the 1ST value of 1ST row kernel
+				
+				// v20 = popcount(v20)
+				asm volatile(".byte  0x57, 0x0A, 0x0A, 0x06");
+				
+				// v22 = popcount(v22)
+				asm volatile(".byte  0x57, 0x0B, 0x0B, 0x06");
+				
+				asm volatile("vsll.vi v20, v20, 2"); 
+				asm volatile("vsll.vi v22, v22, 2"); 
+				
+				asm volatile("vadd.vv v20, v20, v22");		
+				asm volatile("vadd.vv v24, v24, v20");	
+
+		
+				if(f_w < F - 1){
+					asm volatile("vslidedown.vi v16, v16, 1");
+					asm volatile("vslidedown.vi v18, v18, 1");
+				}
+			
+			}
+			
+		asm volatile("vmv.v.i v12, 0");
+		asm volatile("vmv.v.i v14, 0");
+		asm volatile("vmv.v.i v16, 0");
+		asm volatile("vmv.v.i v18, 0");
 	
 	
 	for(int64_t h_i = 0 ; h_i < 2 ; h_i ++){
 		
 		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(ldo));
 		
-		asm volatile("vse8.v v10, (%0)" : "+&r"(o_));
+		asm volatile("vse8.v v24, (%0)" : "+&r"(o_));
 
 		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(W_in_tiled << 1));
 
-		asm volatile("vslidedown.vx v10, v10, %0" :: "r"(W_in_tiled));			
+		asm volatile("vslidedown.vx v24, v24, %0" :: "r"(W_in_tiled));			
 		
 		o_ += ldo;
 		
@@ -1427,4 +1558,4 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	#endif
 
 
-}*/
+}

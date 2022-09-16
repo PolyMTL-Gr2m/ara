@@ -22,7 +22,7 @@
 #define TILE_SIZE_OUT_ (TILE_SIZE - F + 1)
 
 
-void conv2d_prec3(int8_t * i_ptr, int8_t *f_ptr, int8_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
+void conv2d_prec2(int8_t * i_ptr, int8_t *f_ptr, int8_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
 
 void conv2d_prec1(int8_t * i_ptr, int8_t *f_ptr, int8_t *o_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F);
 

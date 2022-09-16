@@ -75,7 +75,7 @@ int main(){
     printf("Computing results...\n");
     
     start_timer();
-    conv2d_prec1_test(i, f, o, H_in, W_in, C_in, F);
+    conv2d_prec1(i, f, o, H_in, W_in, C_in, F);
     stop_timer();
     
 	//////////////////
@@ -95,7 +95,7 @@ int main(){
 	float utilization = 100 * performance / (8 * 2.0 * NR_LANES); 
 	#endif
 	
-	error = 0;
+	//error = 0;
 	
 	if (error != 0) {
 		 printf("Fail.\n");
