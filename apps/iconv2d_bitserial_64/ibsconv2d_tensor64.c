@@ -307,6 +307,31 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	asm volatile(".byte  0x57, 0x0C, 0x0C, 0x06");
 	// v28 = popcount(v28)
 	asm volatile(".byte  0x57, 0x0E, 0x0E, 0x06");
+	
+	//////////////////////////////////////////////////////////////
+	//
+	//   64b operands -> 16b operands for shifts ans summation
+	//
+	//////////////////////////////////////////////////////////////
+	
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+	
+	asm volatile("vnsra.wi v16, v20, 0");
+	asm volatile("vnsra.wi v20, v24, 0");
+	asm volatile("vnsra.wi v24, v28, 0");
+	
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+	
+	asm volatile("vnsra.wi v20, v16, 0");
+	asm volatile("vnsra.wi v24, v20, 0");
+	asm volatile("vnsra.wi v28, v24, 0");
+	
+		
+	asm volatile("vadd.vv v20, v20, v24");
+	asm volatile("vadd.vv v16, v16, v28");								
+	asm volatile("vadd.vv v16, v16, v20");		
 
 		
 		
@@ -356,9 +381,29 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	asm volatile(".byte  0x57, 0x0C, 0x0C, 0x06");
 	// v28 = popcount(v28)
 	asm volatile(".byte  0x57, 0x0E, 0x0E, 0x06");
+	
+	//////////////////////////////////////////////////////////////
+	//
+	//   64b operands -> 16b operands for shifts ans summation
+	//
+	//////////////////////////////////////////////////////////////
+	
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+
+	asm volatile("vnsra.wi v20, v24, 0");
+	asm volatile("vnsra.wi v24, v28, 0");
+	
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+
+	asm volatile("vnsra.wi v24, v20, 0");
+	asm volatile("vnsra.wi v28, v24, 0");
+	
 		
-		
-	asm volatile("vadd.vv v20, v24, v28");				
+	asm volatile("vadd.vv v20, v20, v24");							
+	asm volatile("vadd.vv v16, v16, v20");		
+					
 	
 	asm volatile("vslidedown.vi v12, v12, 1");				
 	asm volatile("vslidedown.vi v16, v16, 1");				
@@ -376,13 +421,32 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	// v28 = popcount(v28)
 	asm volatile(".byte  0x57, 0x0E, 0x0E, 0x06");
 	
+	//////////////////////////////////////////////////////////////
+	//
+	//   64b operands -> 16b operands for shifts ans summation
+	//
+	//////////////////////////////////////////////////////////////
+	
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+
+	asm volatile("vnsra.wi v20, v24, 0");
+	asm volatile("vnsra.wi v24, v28, 0");
+	
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+
+	asm volatile("vnsra.wi v24, v20, 0");
+	asm volatile("vnsra.wi v28, v24, 0");
+	
 		
-	asm volatile("vadd.vv v24, v24, v28");
+	asm volatile("vadd.vv v20, v20, v24");							
+	asm volatile("vadd.vv v16, v16, v20");	
+	
 		
 	asm volatile("vslidedown.vi v12, v12, 1");				
 	asm volatile("vslidedown.vi v16, v16, 1");				
-							
-	asm volatile("vadd.vv v20, v20, v24");
+
 		
 		
 	asm volatile("vand.vx v24, v12, %0" :: "r"(f_packed[2])); // ALL the input multiplied by the 1ST value of 1ST row kernel
@@ -396,10 +460,28 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	// v28 = popcount(v28)
 	asm volatile(".byte  0x57, 0x0E, 0x0E, 0x06");
 	
-	asm volatile("vadd.vv v24, v24, v28");
+	//////////////////////////////////////////////////////////////
+	//
+	//   64b operands -> 16b operands for shifts ans summation
+	//
+	//////////////////////////////////////////////////////////////
 	
-	asm volatile("vadd.vv v20, v20, v24");
-			
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+
+	asm volatile("vnsra.wi v20, v24, 0");
+	asm volatile("vnsra.wi v24, v28, 0");
+	
+	//change registers parameters to put them on 8b
+	asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
+
+	asm volatile("vnsra.wi v24, v20, 0");
+	asm volatile("vnsra.wi v28, v24, 0");
+	
+		
+	asm volatile("vadd.vv v20, v20, v24");							
+	asm volatile("vadd.vv v16, v16, v20");	
+	
 	//	complete the joint between the tail and the overhead
 		
 		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(H_per_it * W_in_tiled));
@@ -556,7 +638,7 @@ if(W_in >= VEC_SIZE){
 	}
 else
 	{
-	H_per_it = MIN(VEC_SIZE / W_in, H_in); 
+	H_per_it = MIN((VEC_SIZE - (VEC_SIZE % W_in)) / W_in, H_in); 
 	W_in_tiled = W_in;
 	}
 
@@ -564,12 +646,8 @@ bitpack_filter(f_ptr, f_packed, F*F);
 
 int64_t nb_out;
 
-for (int height = H_per_it ; height <= H_in ; height += H_per_it){
-		
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(H_per_it * W_in_tiled));
+	asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(H_per_it * W_in_tiled));
 	
-	
-	if (height == H_per_it){
 		#ifdef DEBUG
 			start_timer();
 		#endif
@@ -584,8 +662,10 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		asm volatile("vslidedown.vx v4, v0, %0" :: "r"(W_in_tiled << 1));
 		
 		nb_out = H_per_it - 2;
+
+for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		
-		}		
+		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(H_per_it * W_in_tiled));
 		
 		
 		asm volatile("vmv.v.v v12, v0");
@@ -653,15 +733,17 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 			asm volatile("vsll.vi v22, v22, 1"); 
 			asm volatile("vsll.vi v24, v24, 1"); 
 			
-			asm volatile("vadd.vv v20, v20, v22");
-			asm volatile("vadd.vv v30, v30, v20");
-			asm volatile("vadd.vv v30, v30, v24");
-			
 			if(f_w < F - 1){
 				asm volatile("vslidedown.vi v0, v0, 1");
 				asm volatile("vslidedown.vi v2, v2, 1");
 				asm volatile("vslidedown.vi v4, v4, 1");
 			}
+			
+			asm volatile("vadd.vv v20, v20, v22");
+			asm volatile("vadd.vv v30, v30, v20");
+			asm volatile("vadd.vv v30, v30, v24");
+			
+
 			
 		}
 		
@@ -1048,13 +1130,11 @@ if(W_in >= VEC_SIZE){
 	}
 else
 	{
-	H_per_it = MIN((VEC_SIZE - (VEC_SIZE % H_in)) / W_in, H_in); 
+	H_per_it = MIN((VEC_SIZE - (VEC_SIZE % W_in)) / W_in, H_in); 
 	W_in_tiled = W_in;
 	}
 
 bitpack_filter_1(f_ptr, f_packed, F*F);
-
-int64_t nb_out;
 
 	asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(H_per_it * W_in_tiled));
 	
@@ -1076,19 +1156,11 @@ int64_t nb_out;
 for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 
 		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(H_per_it * W_in_tiled));
-		
-		//asm volatile("vmv.v.v v12, v0");
+
 		
 		i_ += H_per_it * W_in_tiled;
 		
-		nb_out = H_per_it - 2;
-		
-		asm volatile("vslidedown.vx v12, v0, %0" :: "r"((H_per_it - 2) * W_in_tiled));
-		
-		//asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(W_in_tiled << 1));
-		
-		//asm volatile("vslidedown.vx v8, v6, %0" :: "r"(W_in_tiled));
-		
+		asm volatile("vslidedown.vx v12, v0, %0" :: "r"((H_per_it - 2) * W_in_tiled));		
 	
 		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
 		
@@ -1177,13 +1249,13 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	
 	
 	
-	for(int64_t h_i = 0 ; h_i < nb_out ; h_i ++){
+	for(int64_t h_i = 0 ; h_i < H_per_it - 2 ; h_i ++){
 		
 		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(ldo));
 		
 		asm volatile("vse64.v v16, (%0)" : "+&r"(o_));
 
-		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(nb_out * W_in_tiled));
+		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"((H_per_it - 2) * W_in_tiled));
 
 		asm volatile("vslidedown.vx v16, v16, %0" :: "r"(W_in_tiled));			
 		
@@ -1284,11 +1356,6 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 		asm volatile("vslideup.vx v12, v0, %0" :: "r"(W_in_tiled));
 		
 		asm volatile("vmv.v.v v16, v0");
-		
-		
-		//	complete the joint between the tail and the overhead
-		
-		nb_out = 2;
 			
 		
 		
@@ -1349,33 +1416,24 @@ for (int height = H_per_it ; height <= H_in ; height += H_per_it){
 	//asm volatile("vmv.v.i v16, 0");
 	
 	asm volatile("vadd.vv v20, v20, v24");
-	
-	
-	for(int64_t h_i = 0 ; h_i < nb_out ; h_i ++){
 		
-		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(ldo));
+	asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(ldo));
 		
-		asm volatile("vse64.v v20, (%0)" : "+&r"(o_));
+	asm volatile("vse64.v v20, (%0)" : "+&r"(o_));
 
-		asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(nb_out * W_in_tiled));
+	asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(2 * W_in_tiled));
 
-		asm volatile("vslidedown.vx v20, v20, %0" :: "r"(W_in_tiled));			
+	asm volatile("vslidedown.vx v20, v20, %0" :: "r"(W_in_tiled));			
 		
-		o_ += ldo;
+	o_ += ldo;
+	
+	asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(ldo));
 		
-		}
+	asm volatile("vse64.v v20, (%0)" : "+&r"(o_));
+
+	o_ += ldo;
 	
 	}
-	
-	
-	/*printf("V6_2\n");
-	asm volatile("vse64.v v6, (%0)" : "+&r"(o_));
-	print_tensor_(o_, 2, W_in, 1);
-
-
-	printf("V8_2\n");
-	asm volatile("vse64.v v8, (%0)" : "+&r"(o_));
-	print_tensor_(o_, 2, W_in, 1);*/
 
 		
 	}

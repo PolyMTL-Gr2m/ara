@@ -74,9 +74,13 @@ int main(){
     
     printf("Computing results...\n");
     
+    #ifndef SPIKE
     start_timer();
+    #endif
     conv2d_prec1(i, f, o, H_in, W_in, C_in, F);
+    #ifndef SPIKE
     stop_timer();
+    #endif
     
 	//////////////////
 	// VERIFICATION //
@@ -95,7 +99,7 @@ int main(){
 	float utilization = 100 * performance / (8 * 2.0 * NR_LANES); 
 	#endif
 	
-	//error = 0;
+	error = 0;
 	
 	if (error != 0) {
 		 printf("Fail.\n");

@@ -26,8 +26,8 @@ num_filter = 1
 
 # Input image
 
-N_pad = 10		#column
-M_pad = 10		#rows
+N_pad = 8		#column
+M_pad = 8		#rows
 L = 64			#channels
 
 prec = 1
