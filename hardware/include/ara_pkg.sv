@@ -101,7 +101,7 @@ package ara_pkg;
     // Arithmetic and logic instructions
     VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR,
     // Fixed point
-    VSADDU, VSADD, VSSUBU, VSSUB, VAADDU, VAADD, VASUBU, VASUB,
+    VSADDU, VSADD, VSSUBU, VSSUB, VAADDU, VAADD, VASUBU, VASUB, VSMUL, VSSRL, VSSRA, VNCLIP, VNCLIPU,
     // Shifts,
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
     // Merge

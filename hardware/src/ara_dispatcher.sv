@@ -505,7 +505,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   6'b100010: ara_req_d.op = ara_pkg::VSSUBU;
                   6'b100011: ara_req_d.op = ara_pkg::VSSUB;
                   6'b100101: ara_req_d.op = ara_pkg::VSLL;
+                  6'b100111: ara_req_d.op = ara_pkg::VSMUL;
                   6'b101000: ara_req_d.op = ara_pkg::VSRL;
+                  6'b101010: ara_req_d.op = ara_pkg::VSSRL;
+                  6'b101011: ara_req_d.op = ara_pkg::VSSRA;
                   6'b101001: ara_req_d.op = ara_pkg::VSRA;
                   6'b101100: begin
                     ara_req_d.op             = ara_pkg::VNSRL;
@@ -543,6 +546,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       default:;
                     endcase
                   end
+                  6'b101110: ara_req_d.op = ara_pkg::VNCLIPU;
+                  6'b101111: ara_req_d.op = ara_pkg::VNCLIP;
                   // Reductions encode in cvt_resize the neutral value bits
                   // CVT_WIDE is 2'b00 (hack to save wires)
                   6'b110000: begin
@@ -719,7 +724,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   6'b100010: ara_req_d.op = ara_pkg::VSSUBU;
                   6'b100011: ara_req_d.op = ara_pkg::VSSUB;
                   6'b100101: ara_req_d.op = ara_pkg::VSLL;
+                  6'b100111: ara_req_d.op = ara_pkg::VSMUL;
                   6'b101000: ara_req_d.op = ara_pkg::VSRL;
+                  6'b101010: ara_req_d.op = ara_pkg::VSSRL;
+                  6'b101011: ara_req_d.op = ara_pkg::VSSRA;
                   6'b101001: ara_req_d.op = ara_pkg::VSRA;
                   6'b101100: begin
                     ara_req_d.op             = ara_pkg::VNSRL;
@@ -757,6 +765,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       default:;
                     endcase
                   end
+                  6'b101110: ara_req_d.op = ara_pkg::VNCLIPU;
+                  6'b101111: ara_req_d.op = ara_pkg::VNCLIP;
                   default: illegal_insn = 1'b1;
                 endcase
 
@@ -917,6 +927,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   end
                   6'b101000: ara_req_d.op = ara_pkg::VSRL;
                   6'b101001: ara_req_d.op = ara_pkg::VSRA;
+                  6'b101010: ara_req_d.op = ara_pkg::VSSRL;
+                  6'b101011: ara_req_d.op = ara_pkg::VSSRA;
                   6'b101100: begin
                     ara_req_d.op             = ara_pkg::VNSRL;
                     ara_req_d.conversion_vs1 = OpQueueConversionZExt2;
@@ -953,6 +965,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       default:;
                     endcase
                   end
+                  6'b101110: ara_req_d.op = ara_pkg::VNCLIPU;
+                  6'b101111: ara_req_d.op = ara_pkg::VNCLIP;
                   default: illegal_insn = 1'b1;
                 endcase
 

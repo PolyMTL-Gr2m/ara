@@ -389,6 +389,212 @@ module simd_alu import ara_pkg::*; import rvv_pkg::*; #(
                 $signed(opb.w64[b]) >>> opa.w64[b][5:0];
           endcase
 
+        // Fixed point shift instructions
+        VSSRA: unique case (vew_i)
+            EW8: for (int b = 0; b < 8; b++) begin
+                automatic logic [7:0] sra = $signed(opb.w8 [b]) >>> opa.w8 [b][2:0];
+                unique case (vxrm)
+                  2'b00: r = sra[0];
+                  2'b01: r = &sra[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !sra[1] & (sra[0]!=0);
+                endcase
+                res.w8[b] = sra + r;
+              end
+            EW16: for (int b = 0; b < 4; b++) begin
+                automatic logic [15:0] sra = $signed(opb.w16[b]) >>> opa.w16[b][3:0];
+                unique case (vxrm)
+                  2'b00: r = sra[0];
+                  2'b01: r = &sra[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !sra[1] & (sra[0]!=0);
+                endcase
+                res.w16[b] = sra + r;
+              end
+            EW32: for (int b = 0; b < 2; b++) begin
+                automatic logic [31:0] sra = $signed(opb.w32[b]) >>> opa.w32[b][4:0];
+                unique case (vxrm)
+                  2'b00: r = sra[0];
+                  2'b01: r = &sra[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !sra[1] & (sra[0]!=0);
+                endcase
+                res.w32[b] = sra + r;
+              end
+            EW64: for (int b = 0; b < 1; b++) begin
+                automatic logic [63:0] sra = $signed(opb.w64[b]) >>> opa.w64[b][5:0];
+                unique case (vxrm)
+                  2'b00: r = sra[0];
+                  2'b01: r = &sra[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !sra[1] & (sra[0]!=0);
+                endcase
+                res.w64[b] = sra + r;
+              end
+          endcase
+        VSSRL: unique case (vew_i)
+            EW8: for (int b = 0; b < 8; b++) begin
+                automatic logic [8:0] srl = opb.w8 [b] >> opa.w8 [b];
+                unique case (vxrm)
+                  2'b00: r = srl[6];
+                  2'b01: r = &srl[7:6];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !srl[7] & (srl[6:0]!=0);
+                endcase
+                res.w8[b] = srl + r;
+              end
+            EW16: for (int b = 0; b < 4; b++) begin
+                automatic logic [16:0] srl = opb.w16[b] >> opa.w16[b];
+                unique case (vxrm)
+                  2'b00: r = srl[14];
+                  2'b01: r = &srl[15:14];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !srl[15] & (srl[14:0]!=0);
+                endcase
+                res.w16[b] = srl + r;
+              end
+            EW32: for (int b = 0; b < 2; b++) begin
+                automatic logic [32:0] srl = opb.w32[b] >> opa.w32[b];
+                unique case (vxrm)
+                  2'b00: r = srl[30];
+                  2'b01: r = &srl[31:30];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !srl[31] & (srl[30:0]!=0);
+                endcase
+                res.w32[b] = srl + r;
+              end
+            EW64: for (int b = 0; b < 1; b++) begin
+                automatic logic [64:0] srl = opb.w64[b] >> opa.w64[b];
+                unique case (vxrm)
+                  2'b00: r = srl[62];
+                  2'b01: r = &srl[63:62];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !srl[63] & (srl[62:0]!=0);
+                endcase
+                res.w64[b] = srl + r;
+              end
+          endcase
+
+        // Fixed point clip instructions
+        VNCLIP: unique case (vew_i)
+            EW8 : for (int b = 0; b < 4; b++) begin
+                automatic logic [15:0] clip = $signed(opb.w16[b]) >>> opa.w16[b][3:0];
+                unique case (vxrm)
+                  2'b00: r = clip[0];
+                  2'b01: r = &clip[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !clip[1] & (clip[0]!=0);
+                endcase
+                vxsat.w8[b]   = |clip[15:8];
+                res.w8 [2*b + narrowing_select_i] = $signed(opb.w16[b]) >>> opa.w16[b][3:0] + r;
+              end
+            EW16: for (int b = 0; b < 2; b++) begin
+                automatic logic [31:0] clip = $signed(opb.w32[b]) >>> opa.w32[b][4:0];
+                unique case (vxrm)
+                  2'b00: r = clip[0];
+                  2'b01: r = &clip[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !clip[1] & (clip[0]!=0);
+                endcase
+                vxsat.w8[b]   = |clip[31:16];
+                res.w16[2*b + narrowing_select_i] = $signed(opb.w32[b]) >>> opa.w32[b][4:0] + r;
+              end
+            EW32: for (int b = 0; b < 1; b++) begin
+                automatic logic [63:0] clip = $signed(opb.w64[b]) >>> opa.w64[b][5:0];
+                unique case (vxrm)
+                  2'b00: r = clip[0];
+                  2'b01: r = &clip[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !clip[1] & (clip[0]!=0);
+                endcase
+                vxsat.w8[b]   = |clip[63:32];
+                res.w32[2*b + narrowing_select_i] = $signed(opb.w64[b]) >>> opa.w64[b][5:0] + r;
+              end
+          endcase
+        VNCLIPU: unique case (vew_i)
+            EW8 : for (int b = 0; b < 4; b++) begin
+                automatic logic [15:0] clipu = opb.w16[b] >> opa.w16[b][3:0];
+                unique case (vxrm)
+                  2'b00: r = clipu[0];
+                  2'b01: r = &clipu[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !clipu[1] & (clipu[0]!=0);
+                endcase
+                vxsat.w8[b]   = |clipu[15:8];
+                res.w8 [2*b + narrowing_select_i] = opb.w16[b] >> opa.w16[b][3:0] + r;
+              end
+            EW16: for (int b = 0; b < 2; b++) begin
+                automatic logic [31:0] clipu = opb.w32[b] >> opa.w32[b][4:0];
+                unique case (vxrm)
+                  2'b00: r = clipu[0];
+                  2'b01: r = &clipu[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !clipu[1] & (clipu[0]!=0);
+                endcase
+                vxsat.w8[b]   = |clipu[31:16];
+                res.w16[2*b + narrowing_select_i] = opb.w32[b] >> opa.w32[b][4:0] + r;
+              end
+            EW32: for (int b = 0; b < 1; b++) begin
+                automatic logic [63:0] clipu = opb.w64[b] >> opa.w64[b][5:0];
+                unique case (vxrm)
+                  2'b00: r = clipu[0];
+                  2'b01: r = &clipu[1:0];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !clipu[1] & (clipu[0]!=0);
+                endcase
+                vxsat.w8[b]   = |clipu[63:32];
+                res.w32[2*b + narrowing_select_i] = opb.w64[b] >> opa.w64[b][5:0] + r;
+              end
+          endcase
+
+        // Fixed point single width multiply instructions
+        VSMUL: unique case (vew_i)
+            EW8: for (int b = 0; b < 8; b++) begin
+                automatic logic [16:0] mul = $signed(opb.w8 [b]) * $signed(opa.w8 [b]);
+                unique case (vxrm)
+                  2'b00: r = mul[6];
+                  2'b01: r = &mul[7:6];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !mul[7] & (mul[6:0]!=0);
+                endcase
+                vxsat.w8[b]   = |mul[16:8];
+                res.w8[b] = (mul >> 7) + r;
+              end
+            EW16: for (int b = 0; b < 4; b++) begin
+                automatic logic [32:0] mul = $signed(opb.w16[b]) * $signed(opa.w16[b]);
+                unique case (vxrm)
+                  2'b00: r = mul[14];
+                  2'b01: r = &mul[15:14];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !mul[15] & (mul[14:0]!=0);
+                endcase
+                vxsat.w8[b]   = |mul[32:16];
+                res.w16[b] = (mul >> 15) + r;
+              end
+            EW32: for (int b = 0; b < 2; b++) begin
+                automatic logic [64:0] mul = $signed(opb.w32[b]) * $signed(opa.w32[b]);
+                unique case (vxrm)
+                  2'b00: r = mul[30];
+                  2'b01: r = &mul[31:30];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !mul[31] & (mul[30:0]!=0);
+                endcase
+                vxsat.w8[b]   = |mul[64:32];
+                res.w32[b] = (mul >> 31) + r;
+              end
+            EW64: for (int b = 0; b < 1; b++) begin
+                automatic logic [128:0] mul = $signed(opb.w64[b]) * $signed(opa.w64[b]);
+                unique case (vxrm)
+                  2'b00: r = mul[62];
+                  2'b01: r = &mul[63:62];
+                  2'b10: r = 1'b0;
+                  2'b11: r = !mul[63] & (mul[62:0]!=0);
+                endcase
+                vxsat.w8[b]   = |mul[128:64];
+                res.w64[b] = (mul >> 63) + r;
+              end
+          endcase
+
         // Merge instructions
         VMERGE: unique case (vew_i)
             EW8 : for (int b = 0; b < 8; b++) res.w8 [b] = mask_i[1*b] ? opa.w8 [b] : opb.w8 [b];
