@@ -3,8 +3,6 @@
 
 #define next_plane_(a) (R - a + 1)*C
 
-#define TILE_SIZE_1x1 4096
-
 #define block_size_3x3 6
 #define block_size_5x5 6
 #define block_size_7x7 4
@@ -43,8 +41,7 @@ void iconv2d_tensor8(int8_t *o, int8_t *i, int8_t *f, int64_t H_in, int64_t W_in
 		i_ = i;                                            // Since we aren't working on batch, we only consider one input
 		f_ = f + c * F * F * C_in;
 
-	  // Iterate over the output rows
-	  
+	  // Iterate over the output rows	  
 
 		switch (F){
 			 case 1:

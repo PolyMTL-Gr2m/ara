@@ -25,9 +25,9 @@ def emit(name, array, alignment='3'):
 num_filter = 1
 
 # Input image
-M_pad = 32
-N_pad = 32
-L = 3
+M_pad = 8
+N_pad = 8
+L = 1
 
 
 M = M_pad
@@ -111,7 +111,7 @@ sys.stdout = sys.stderr # Redirect the standard output to the standard error.
 tensor = np.float32(tensor)
 gen_filter = np.float32(gen_filter)
 
-print("\n----------------------")
+"""print("\n----------------------")
 print("NCHW memory layout")
 print("----------------------\n")
 
@@ -139,6 +139,6 @@ emit("golden_o_7_wide", result_7_wide, 'NR_LANES*4')
 
 emit("o", empty_o, 'NR_LANES*4')
 emit("o_wide", empty_o_wide, 'NR_LANES*4')
-emit("o_checksum", checksum)
+emit("o_checksum", checksum)"""
 
 

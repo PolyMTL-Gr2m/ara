@@ -17,61 +17,62 @@
 // Author: Matteo Perotti
 //	- Modified by Théo Dupuis - Polytechnique Montréal (2022)
 
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "iconv2d_tensor8.h"
+#include "runtime.h"
 
 #ifndef SPIKE
 #include "printf.h"
-#include "runtime.h"
 #endif
 
-#define F_MAX 7
-#define I_MAX 32
 
-#define WIDE_ONLY
+// use to check if the results are correct
+// since we compute the expectude results with
+// scalar code and rolled loops, it had a significant
+// amout of time on simulation
+
+#define VERIF
 
 
-// Define Tensor dimensions:
-// o = i ° f, with i=[MxNxL], f=[FxFxF], o=[(M-F+1)x(N-F+1)xK]
-// The filter is a cube tensor, and F is odd
-// Tensors defined in data.S
+#define F_MAX 		7		// Max size of the kernel F x F
+#define C_in 		1		// Number of input channels 
+#define C_out		1		// Number of filters (or output channels C_out)
+#define I_MAX 		64		// Max H_in x W_in input size
+#define I_START	8		// Start input size
 
-// input and filters
 
-extern int8_t i[] __attribute__((aligned(4 * NR_LANES))); // [M x N x L]
-extern int8_t f[] __attribute__((aligned(4 * NR_LANES))); // [K x F x F x L]
+int8_t i[I_MAX * I_MAX * C_in];
 
-// o points to a [(M + F - 1) x (N - F + 1) x K] memory vector which is set to 0 at the start
-		
-extern int8_t o[] __attribute__((aligned(4 * NR_LANES)));
+int8_t f[F_MAX * F_MAX * C_in * C_out];
 
-// expected output (golden_o) are size of [(M + F - 1) x (N - F + 1) x K]
 
-extern int8_t golden_o_1[] __attribute__((aligned(4 * NR_LANES)));
-extern int8_t golden_o_3[] __attribute__((aligned(4 * NR_LANES)));
-extern int8_t golden_o_5[] __attribute__((aligned(4 * NR_LANES)));
-extern int8_t golden_o_7[] __attribute__((aligned(4 * NR_LANES)));
 
-// o points to a [(M + F - 1) x (N - F + 1) x K] memory vector which is set to 0 at the start
+//////////////////////////////////////
+// initialisation functions         //
+//////////////////////////////////////
 
-extern int32_t o_wide[] __attribute__((aligned(4 * NR_LANES)));
 
-// expected output (golden_o) are size of [(M + F - 1) x (N - F + 1) x K]
+void init_tensor(int8_t *tensor, int64_t R, int64_t C, int64_t D) {
+  for (int d = 0; d < D; ++d)   //depth
+  	for (int r = 0; r < R; ++r)  //rows
+  	  for (int c = 0; c < C; ++c)//column
+  	  {
+  	  		tensor[c + C * (r + d * R)] = (1 + d + r + c) % 8;
+  	  }
+}
 
-extern int32_t golden_o_1_wide[] __attribute__((aligned(4 * NR_LANES))); 
-extern int32_t golden_o_3_wide[] __attribute__((aligned(4 * NR_LANES)));
-extern int32_t golden_o_5_wide[] __attribute__((aligned(4 * NR_LANES))); 
-extern int32_t golden_o_7_wide[] __attribute__((aligned(4 * NR_LANES))); 
-
-// M, N, L, K defined in data.S
-
-extern int64_t M; // number of input rows
-extern int64_t N; // number of input column
-extern int64_t L; // number of channels
-extern int64_t K; // number of filters (1 by default)
+void init_tensor_wide(int32_t *tensor, int64_t R, int64_t C, int64_t D) {
+  for (int d = 0; d < D; ++d)   //depth
+  	for (int r = 0; r < R; ++r)  //rows
+  	  for (int c = 0; c < C; ++c)//column
+  	  {
+  	  		tensor[c + C * (r + d * R)] = (1 + d + r + c) % 8;
+  	  }
+}
 
 
 
@@ -79,8 +80,42 @@ extern int64_t K; // number of filters (1 by default)
 // Verification and debug fonctions //
 //////////////////////////////////////
 
+void iconv2d_tensor8_naive_wide(int32_t *o, int8_t *i, int8_t *f, int64_t R, int64_t C, int64_t W, int64_t F, int64_t K) {
 
-int verify_8btensor(int8_t *tensor1, int8_t *tensor2, int64_t R,
+//treat pointers as 3D arrays
+int8_t (*i_)[R+F-1][C+F-1] = (int8_t (*)[R+F-1][C+F-1])i;
+int8_t (*f_)[W][F][F] = (int8_t (*)[W][F][F])f;
+int32_t (*o_)[R][C] = (int32_t (*)[R][C])o;
+ 
+for(int k = 0 ; k < K ; k++) 
+	for(int ch = 0 ; ch < W ; ch++)
+		for(int r = 0 ; r < R ; r++)
+			for(int c = 0 ; c < C ; c++)
+				for(int fh = 0 ; fh < F ; fh++)
+					for(int fw = 0 ; fw < F ; fw++) {
+						o_[k][r][c] += i_[ch][r+fh][c+fw]*f_[k][ch][fh][fw];
+					}
+}
+
+void iconv2d_tensor8_naive(int8_t *o, int8_t *i, int8_t *f, int64_t R, int64_t C, int64_t W, int64_t F, int64_t K) {
+
+//treat pointers as 3D arrays
+int8_t (*i_)[R+F-1][C+F-1] = (int8_t (*)[R+F-1][C+F-1])i;
+int8_t (*f_)[W][F][F] = (int8_t (*)[W][F][F])f;
+int8_t (*o_)[R][C] = (int8_t (*)[R][C])o;
+ 
+for(int k = 0 ; k < K ; k++) 
+	for(int ch = 0 ; ch < W ; ch++)
+		for(int r = 0 ; r < R ; r++)
+			for(int c = 0 ; c < C ; c++)
+				for(int fh = 0 ; fh < F ; fh++)
+					for(int fw = 0 ; fw < F ; fw++) {
+						o_[k][r][c] += i_[ch][r+fh][c+fw]*f_[k][ch][fh][fw];
+					}
+}
+
+
+int verify_8btensor(uint8_t *tensor1, uint8_t *tensor2, int64_t R,
                   int64_t C, int64_t D) {
   for (int d = 0; d < D; ++d)   //depth
   	for (int r = 0; r < R; ++r)  //rows
@@ -88,7 +123,7 @@ int verify_8btensor(int8_t *tensor1, int8_t *tensor2, int64_t R,
   	    if (tensor1[c + C * (r + d * R)] != tensor2[c + C * (r + d * R)]) {
   	      printf("Error: o[%d][%d][%d] = %ld, instead of %ld\n", d, r, c,
   	             tensor1[c + C * (r + d * R)], tensor2[c + C * (r + d * R)]);
-  	      return 1;
+  	      //return 1;
   	   }
 return 0;
   		
@@ -109,75 +144,50 @@ return 0;
 }
 
 
-void print_8btensor(int8_t *tensor, uint64_t num_rows,
-                  uint64_t num_columns, uint64_t num_depth) {
-  printf("0x%8X\n", (uint64_t)tensor);
-  for (uint64_t k = 0; k < num_depth; ++k) {
-  	for (uint64_t i = 0; i < num_rows; ++i) {
-    	for (uint64_t j = 0; j < num_columns; ++j) {
-      printf("%10d ", tensor[(i+k*num_rows) * num_columns  + j ]);
-    	}
-    	printf("\n");
-  	 }
-  	 printf("\n");
-	}
-}
-
-void print_32btensor(int32_t *tensor, uint64_t num_rows,
-                  uint64_t num_columns, uint64_t num_depth) {
-  printf("0x%8X\n", (uint64_t)tensor);
-  for (uint64_t k = 0; k < num_depth; ++k) {
-  	for (uint64_t i = 0; i < num_rows; ++i) {
-    	for (uint64_t j = 0; j < num_columns; ++j) {
-      printf("%10d ", tensor[(i+k*num_rows) * num_columns  + j ]);
-    	}
-    	printf("\n");
-  	 }
-  	 printf("\n");
-	}
-}
-
-
-
 int main() {
 
-printf("================\n");
-printf("=  CONV2D int8 =\n");
-printf("================\n");
+printf("===============\n");
+printf("= CONV2D int8 =\n");
+printf("===============\n");
 
 	///////////////////////////////
 	// SAME SIZE OUTPUT 8b -> 8b //
 	///////////////////////////////
+	
 
 #ifndef WIDE_ONLY
+
+printf("Filling the input tensor and filters...");
+init_tensor(i, I_MAX, I_MAX, C_in);
+init_tensor(f, F_MAX, F_MAX, C_in);
+printf("   done\n");
+
 for(int64_t F = 1 ; F <= F_MAX ; F += 2){
-
-int8_t * golden_o;
-
-	switch(F){
-		case 1: golden_o = golden_o_1; break;
-		case 3: golden_o = golden_o_3; break;
-		case 5: golden_o = golden_o_5; break;
-		case 7: golden_o = golden_o_7; break;
-	}
  
-	printf("\nfilter %ix%i \n", F, F);
+	printf("\nfilter %dx%d \n", F, F);
 
-	for(int size = 8 ; size <= I_MAX ; size *= 2){
+	for(int size = 16 ; size <= I_MAX ; size *= 2){
 
+	printf("\n");
 	printf("----------------------------------------------------------------\n");
 	printf("Calculating convolution between \n");
-	printf("Input of [1 x %i x %i x %i] and Filters of [%i x %i x %i x %i]  \n", L, size,  size, K, L, F, F);
-	printf("Result (8b) is an output of [1 x %i x %i x %i] \n", K, size - F + 1, size - F + 1);
+	printf("Input of [1 x %d x %d x %d] and Filters of [%d x %d x %d x %d]  \n", C_in, size,  size, C_out, C_in, F, F);
+	printf("Result (8b) is an output of [1 x %d x %d x %d] \n", C_out, size - F + 1, size - F + 1);
 	printf("----------------------------------------------------------------\n");
+	printf("\n");
+	printf("\n");
 
-	printf("Computing results...\n");
+	#ifdef VERIF
+	printf("Formatting data and expected outputs...");
+	#else
+	printf("Formatting data...");
+	#endif
 
-	int channels = L; // channel size is fixed for simplicity
-	int width = size;
-	int height = size;  
+	int64_t channels = C_in; // channel size is fixed for simplicity
+	int64_t width = size;
+	int64_t height = size;  
 
-	int filters = K;
+	int64_t filters = C_out;
 	  
 	int8_t input[width * height * channels];
 	int8_t filter[filters * F * F * channels];
@@ -193,55 +203,62 @@ int8_t * golden_o;
 			for(int y = 0 ; y < F ; y++)
 				for(int x = 0 ; x < F ; x++)
 		  			filter[x + F * (y + F * (z + k * channels))] = f[x + F_MAX * (y + F_MAX * (z + k * channels))];
-		  		
 
 	for(int z = 0; z < channels ; z++)
 		for(int y = 0 ; y < height ; y++)
 			for(int x = 0 ; x < width ; x++)
-	  			input[x + width * (y + z * height)] = i[x + N * (y + z * M)];
+	  			input[x + width * (y + z * height)] = i[x + I_MAX * (y + z * I_MAX)];
 	  			
 	for(int z = 0; z < filters ; z++)
 		for(int y = 0 ; y < (height - F + 1) ; y++)
 			for(int x = 0 ; x < (width - F + 1) ; x++)
-	  			golden_output[x + (width - F + 1) * (y + z * (height - F + 1))] = golden_o[x + (N - F + 1) * (y + z * (M - F + 1))];
+			{
+				output[x + (width - F + 1) * (y + z * (height - F + 1))] = 0;
+				golden_output[x + (width - F + 1) * (y + z * (height - F + 1))] = 0;
+			}
+	
+	#ifdef VERIF
+	//Compute the expected output
+	iconv2d_tensor8_naive(golden_output, input, filter, (height - F + 1), (width - F + 1), channels, F, filters);	
+	#endif	
 	
 	///////////////////////////
 	// FONCTION TO BE TESTED //
 	///////////////////////////
-	#ifndef SPIKE
-	start_timer();
-	#endif			
+	printf("   done\n");
+	printf("Computing results...");
+	start_timer();	
 	iconv2d_tensor8(output, input, filter, height, width, channels, F, filters);
-	#ifndef SPIKE
 	stop_timer();
-	#endif
-	
+	printf("   done\n");
 	//////////////////
 	// VERIFICATION //
 	//////////////////
-		
-	printf("Verifying results...\n");
-		
+	
+	#ifdef VERIF	
+	printf("Verifying results...");
 	int error = verify_8btensor(output, golden_output, (height - F + 1), (width - F + 1), filters);
-
+	printf("   done\n");
+	#else
+	printf("-- Change macro to add verification step -- \n");
+	int error = 0;
+	#endif
+	
 	/////////////
 	// METRICS //
 	/////////////
 	
-	#ifndef SPIKE
+	
 	int64_t runtime = get_timer();
 	float performance = 2.0 * filters * channels * F * F * (height - F + 1) * (width - F + 1) / runtime;
 	float utilization = 100 * performance / (8 * 2.0 * NR_LANES);
-	#endif
 
 	if (error != 0)
 		 printf("Fail.\n");
 	else {
 		 printf("Passed.\n");
-		 #ifndef SPIKE  
 		 printf("The execution took %d cycles.\n", runtime);
 	  	 printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
-	  	 #endif
 	  }
 	}
 }
@@ -254,43 +271,48 @@ int8_t * golden_o;
 	
 #ifndef SIMPLE_ONLY
 
+printf("Filling the input tensor and filters...");
+init_tensor(i, I_MAX, I_MAX, C_in);
+init_tensor(f, F_MAX, F_MAX, C_in);
+printf("   done\n");
+
 for(int64_t F = 1 ; F <= F_MAX ; F += 2){
-	
-	int32_t * golden_o;
-
-	switch(F){
-		case 1: golden_o = golden_o_1_wide; break;
-		case 3: golden_o = golden_o_3_wide; break;
-		case 5: golden_o = golden_o_5_wide; break;
-		case 7: golden_o = golden_o_7_wide; break;
-	}
  
-	printf("\nfilter %ix%i \n", F, F);
+	printf("\nfilter %dx%d \n", F, F);
 
-	for(int size = 8 ; size <= I_MAX ; size = size * 2){
+	for(int size = 16 ; size <= I_MAX ; size *= 2){
 
+	printf("\n");
 	printf("----------------------------------------------------------------\n");
 	printf("Calculating convolution between \n");
-	printf("Input of [1 x %i x %i x %i] and Filters of [%i x %i x %i x %i]  \n", L, size,  size, K, L, F, F);
-	printf("Result (32b) is an output of [1 x %i x %i x %i] \n", K, size - F + 1, size - F + 1);
+	printf("Input of [1 x %d x %d x %d] and Filters of [%d x %d x %d x %d]  \n", C_in, size,  size, C_out, C_in, F, F);
+	printf("Result (32b) is an output of [1 x %d x %d x %d] \n", C_out, size - F + 1, size - F + 1);
 	printf("----------------------------------------------------------------\n");
+	printf("\n");
+	printf("\n");
+	
+	#ifdef VERIF
+	printf("Formatting data and expected outputs...");
+	#else
+	printf("Formatting data...");
+	#endif
 
-	printf("Computing results...\n");
+	int64_t channels = C_in; // channel size is fixed for simplicity
+	int64_t width = size;
+	int64_t height = size;  
 
-	int channels = L;
-	int width = size;
-	int height = size;  
+	int64_t filters = C_out;
 
-	int filters = K;
 	  
 	int8_t input[width * height * channels];
 	int8_t filter[filters * F * F * channels];
-	int32_t output[width * height * filters]; // keep empty space at max size (just for the test)
-	int32_t golden_output[(width - F + 1) * (height - F + 1) * filters];
-	
+	int32_t output[width * height * filters];
+	int32_t golden_output[(width - F + 1) * (height- F + 1) * filters];
+
 	////////////////////////////////////////////////
 	// INPUT, FILTERS AND EXPECTED OUTPUT SLICING //
 	////////////////////////////////////////////////
+
 	
 	for(int k = 0; k < filters ; k++)
 		for(int z = 0; z < channels ; z++)
@@ -301,49 +323,60 @@ for(int64_t F = 1 ; F <= F_MAX ; F += 2){
 	for(int z = 0; z < channels ; z++)
 		for(int y = 0 ; y < height ; y++)
 			for(int x = 0 ; x < width ; x++)
-	  			input[x + width * (y + z * height)] = i[x + N * (y + z * M)];
+	  			input[x + width * (y + z * height)] = i[x + I_MAX * (y + z * I_MAX)];
 	  			
 	for(int z = 0; z < filters ; z++)
 		for(int y = 0 ; y < (height - F + 1) ; y++)
 			for(int x = 0 ; x < (width - F + 1) ; x++)
-	  			golden_output[x + (width - F + 1) * (y + z * (height - F + 1))] = golden_o[x + (N - F + 1) * (y + z * (M - F + 1))];
-	  			
+			{
+				output[x + (width - F + 1) * (y + z * (height - F + 1))] = 0;
+				golden_output[x + (width - F + 1) * (y + z * (height - F + 1))] = 0;
+			}
+	
+	#ifdef VERIF
+	//Compute the expected output
+	iconv2d_tensor8_naive_wide(golden_output, input, filter, (height - F + 1), (width - F + 1), channels, F, filters);	
+	#endif	
+	
 	///////////////////////////
 	// FONCTION TO BE TESTED //
 	///////////////////////////
-	#ifndef SPIKE
-	start_timer();			
-	#endif
+	
+	printf("   done\n");
+	printf("Computing results...");
+	start_timer();	
 	iconv2d_tensor8_wide(output, input, filter, height, width, channels, F, filters);
-	#ifndef SPIKE
 	stop_timer();
-	#endif
+	printf("   done\n");
 	
 	//////////////////
 	// VERIFICATION //
 	//////////////////
-		
-	printf("Verifying results...\n");
-		
+	
+	#ifdef VERIF	
+	printf("Verifying results...");
 	int error = verify_32btensor(output, golden_output, (height - F + 1), (width - F + 1), filters);
-
+	printf("   done\n");
+	#else
+	printf("-- Change macro to add verification step -- \n");
+	int error = 0;
+	#endif
+	
 	/////////////
 	// METRICS //
 	/////////////
-	#ifndef SPIKE
+	
+	
 	int64_t runtime = get_timer();
 	float performance = 2.0 * filters * channels * F * F * (height - F + 1) * (width - F + 1) / runtime;
-	float utilization = 100 * performance / (2 * 2.0 * NR_LANES); 
-	#endif
-	
-	  if (error != 0) {
+	float utilization = 100 * performance / (2 * 2.0 * NR_LANES);
+
+	if (error != 0)
 		 printf("Fail.\n");
-	  } else {
+	else {
 		 printf("Passed.\n");
-		 #ifndef SPIKE  
 		 printf("The execution took %d cycles.\n", runtime);
 	  	 printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
-	  	 #endif
 	  }
 	}
 }

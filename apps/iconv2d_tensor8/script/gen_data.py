@@ -25,9 +25,9 @@ def emit(name, array, alignment='3'):
 num_filter = 1
 
 # Input image
-M_pad = 32		#rows
-N_pad = 32		#column
-L = 3				#channels
+M_pad = 7		#rows
+N_pad = 7		#column
+L = 1			#channels
 
 
 M = M_pad
@@ -156,7 +156,7 @@ print(result_7_wide)
 sys.stdout = original_stdout # Reset the standard output to its original value
 
 # Print information on file
-print(".section .data,\"aw\",@progbits")
+"""print(".section .data,\"aw\",@progbits")
 emit("M", np.array(M_pad, dtype=np.uint64))
 emit("N", np.array(N_pad, dtype=np.uint64))
 emit("L", np.array(L, dtype=np.uint64))
@@ -165,7 +165,7 @@ emit("K", np.array(num_filter, dtype=np.uint64))
 emit("i", tensor, 'NR_LANES*4')
 emit("f", gen_filter, 'NR_LANES*4')
 
-emit("golden_o_1", result_1, 'NR_LANES*4')
+#emit("golden_o_1", result_1, 'NR_LANES*4')
 emit("golden_o_3", result_3, 'NR_LANES*4')
 emit("golden_o_5", result_5, 'NR_LANES*4')
 emit("golden_o_7", result_7, 'NR_LANES*4')
@@ -176,7 +176,7 @@ emit("golden_o_5_wide", result_5_wide, 'NR_LANES*4')
 emit("golden_o_7_wide", result_7_wide, 'NR_LANES*4')
 
 emit("o", empty_o, 'NR_LANES*4')
-emit("o_wide", empty_o_wide, 'NR_LANES*4')
-emit("o_checksum", checksum)
+#emit("o_wide", empty_o_wide, 'NR_LANES*4')
+emit("o_checksum", checksum)"""
 
 

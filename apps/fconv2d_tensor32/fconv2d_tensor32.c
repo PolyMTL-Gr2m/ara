@@ -77,7 +77,6 @@ void fconv2d_tensor32(float *o, float *i, float *f, int64_t H_in, int64_t W_in, 
 	}
 }
 
-
 //////////////////////////////////////////////////////////////////////////
 //																								//
 //											1x1 kernel										//

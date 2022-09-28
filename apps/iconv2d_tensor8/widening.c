@@ -75,27 +75,6 @@ void iconv2d_tensor8_wide(int32_t *o, int8_t *i, int8_t *f, int64_t H_in, int64_
 	}
 }
 
-//Convolution on the scalar core (for test)
-
-void iconv2d_tensor8_naive_wide(int32_t *o, int8_t *i, int8_t *f, int64_t R, int64_t C, int64_t W, int64_t F, int64_t K) {
-
-//treat pointers as 3D arrays
-int8_t (*i_)[R+F-1][C+F-1] = (int8_t (*)[R+F-1][C+F-1])i;
-int8_t (*f_)[W][F][F] = (int8_t (*)[W][F][F])f;;
-int32_t (*o_)[R][C] = (int32_t (*)[R][C])o;
- 
-for(int k = 0 ; k < K ; k++) 
-	for(int ch = 0 ; ch < W ; ch++)
-		for(int r = 0 ; r < R ; r++)
-			for(int c = 0 ; c < C ; c++)
-				for(int fh = 0 ; fh < F ; fh++)
-					for(int fw = 0 ; fw < F ; fw++) {
-						o_[k][r][c] += i_[ch][r+fh][c+fw]*f_[k][ch][fh][fw];
-					}
-}
-
-
-
 
 //////////////////////////////////////////////////////////////////////////
 //                                                                      //
