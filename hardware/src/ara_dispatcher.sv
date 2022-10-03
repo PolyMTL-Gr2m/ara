@@ -171,6 +171,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   // To avoid collisions, we give precedence to the VLSU, and we delay the vl_q == 0 memory op
   // completion signal if a collision occurs
   logic load_zero_vl, store_zero_vl;
+  // Do not checks vregs validity against current LMUL
+  logic skip_lmul_checks;
+  // Are we decoding?
+  logic is_decoding;
 
   // Pipeline the VLSU's load and store complete signals, for timing reasons
   logic load_complete_q;
@@ -201,6 +205,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     is_vstore     = 1'b0;
     load_zero_vl  = 1'b0;
     store_zero_vl = 1'b0;
+
+    skip_lmul_checks = 1'b0;
+
+    is_decoding = 1'b0;
 
     acc_req_ready_o  = 1'b0;
     acc_resp_valid_o = 1'b0;
@@ -276,6 +284,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
     if (state_d == NORMAL_OPERATION && state_q != RESHUFFLE) begin
       if (acc_req_valid_i && ara_req_ready_i && acc_resp_ready_i) begin
+        // Decoding
+        is_decoding = 1'b1;
         // Acknowledge the request
         acc_req_ready_o = ara_req_ready_i;
 
@@ -346,7 +356,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       vl_d = vlmax;
                     end else begin
                       // Normal stripmining
-                      vl_d = (vlen_t'(acc_req_i.rs1) > vlmax) ? vlmax : vlen_t'(acc_req_i.rs1);
+                      vl_d = ((|acc_req_i.rs1[$bits(acc_req_i.rs1)-1:$bits(vl_d)]) ||
+                        (vlen_t'(acc_req_i.rs1) > vlmax)) ? vlmax : vlen_t'(acc_req_i.rs1);
                     end
                   end
                 end
@@ -355,7 +366,12 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 acc_resp_o.result = vl_d;
 
                 // If the vtype has changed, wait for the backend before issuing any new instructions.
-                if (vtype_d != vtype_q)
+                // This is to avoid hazards on implicit register labels when LMUL_old > LMUL_new
+                // and both the LMULs are greater then LMUL_1 (i.e., lmul[2] == 1'b0)
+                // Checking only lmul_q is a trick: we want to stall only if both lmuls have
+                // zero MSB. If lmul_q has zero MSB, it's greater than lmul_d only if also
+                // lmul_d has zero MSB since the slice comparison is intrinsically unsigned
+                if (!vtype_q.vlmul[2] && (vtype_d.vlmul[2:0] < vtype_q.vlmul[2:0]))
                   state_d = WAIT_IDLE;
               end
 
@@ -516,7 +532,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.op = ara_pkg::VWREDSUMU;
                     ara_req_d.emul           = next_lmul(vtype_q.vlmul);
                     ara_req_d.vtype.vsew     = vtype_q.vsew.next();
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.conversion_vs2 = OpQueueConversionZExt2;
                     ara_req_d.cvt_resize     = CVT_WIDE;
                   end
@@ -524,7 +540,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.op = ara_pkg::VWREDSUM;
                     ara_req_d.emul           = next_lmul(vtype_q.vlmul);
                     ara_req_d.vtype.vsew     = vtype_q.vsew.next();
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.conversion_vs2 = OpQueueConversionSExt2;
                     ara_req_d.cvt_resize     = CVT_WIDE;
                   end
@@ -838,8 +854,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     automatic int unsigned vlmax;
                     // Execute also if vl == 0
                     ignore_zero_vl_check = 1'b1;
-                    // Maximum vector length. VLMAX = simm[2:0] * VLEN / SEW.
-                    vlmax = VLENB;
+                    // The number of elements depends on the EEW we will consider
+                    vlmax = VLENB >> eew_q[insn.varith_type.rs2];
+                    // Rescale the maximum vector length depending on how many
+                    // registers we should copy (VLMAX = simm[2:0] * VLEN / SEW).
                     unique case (insn.varith_type.rs1[17:15])
                       3'd0 : begin
                         vlmax <<= 0;
@@ -869,8 +887,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.use_vs1       = 1'b1;
                     ara_req_d.use_vs2       = 1'b0;
                     ara_req_d.vs1           = insn.varith_type.rs2;
-                    ara_req_d.vtype.vsew    = EW8;
-                    ara_req_d.scale_vl      = 1'b1;
+                    ara_req_d.eew_vs1       = eew_q[insn.varith_type.rs2];
+                    // Copy the encoding information to the new register
+                    ara_req_d.vtype.vsew    = eew_q[insn.varith_type.rs2];
                     ara_req_d.vl            = vlmax; // whole register move
                   end
                   6'b101000: ara_req_d.op = ara_pkg::VSRL;
@@ -950,43 +969,79 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // value of each operation
                   6'b000000: begin
                     ara_req_d.op             = ara_pkg::VREDSUM;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000001: begin
                     ara_req_d.op             = ara_pkg::VREDAND;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b11);
                   end
                   6'b000010: begin
                     ara_req_d.op             = ara_pkg::VREDOR;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000011: begin
                     ara_req_d.op             = ara_pkg::VREDXOR;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000100: begin
                     ara_req_d.op             = ara_pkg::VREDMINU;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b11);
                   end
                   6'b000101: begin
                     ara_req_d.op             = ara_pkg::VREDMIN;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b01);
                   end
                   6'b000110: begin
                     ara_req_d.op             = ara_pkg::VREDMAXU;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b00);
                   end
                   6'b000111: begin
                     ara_req_d.op             = ara_pkg::VREDMAX;
-                    ara_req_d.conversion_vs1 = OpQueueReductionZExt;
+                    ara_req_d.conversion_vs1 = OpQueueIntReductionZExt;
                     ara_req_d.cvt_resize     = resize_e'(2'b10);
+                  end
+                  6'b010000: begin // VWXUNARY0
+                    // vmv.x.s
+                    // Stall the interface until we get the result
+                    acc_req_ready_o  = 1'b0;
+                    acc_resp_valid_o = 1'b0;
+
+                    ara_req_d.op         = ara_pkg::VMVXS;
+                    ara_req_d.use_vd     = 1'b0;
+                    ara_req_d.vl         = 1;
+                    ara_req_d.vstart     = '0;
+                    skip_lmul_checks     = 1'b1;
+                    ignore_zero_vl_check = 1'b1;
+
+                    // Sign extend operands
+                    unique case (vtype_q.vsew)
+                      EW8: begin
+                        ara_req_d.conversion_vs2 = OpQueueConversionSExt8;
+                      end
+                      EW16: begin
+                        ara_req_d.conversion_vs2 = OpQueueConversionSExt4;
+                      end
+                      EW32: begin
+                        ara_req_d.conversion_vs2 = OpQueueConversionSExt2;
+                      end
+                      default:;
+                    endcase
+
+                    // Wait until the back-end answers to acknowledge those instructions
+                    if (ara_resp_valid_i) begin
+                      acc_req_ready_o   = 1'b1;
+                      acc_resp_o.result = ara_resp_i.resp;
+                      acc_resp_o.error  = ara_resp_i.error;
+                      acc_resp_valid_o  = 1'b1;
+                      ara_req_valid_d   = 1'b0;
+                    end
                   end
                   6'b011000: begin
                     ara_req_d.op        = ara_pkg::VMANDNOT;
@@ -1248,24 +1303,26 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 // Instructions with an integer LMUL have extra constraints on the registers they can
                 // access. These constraints can be different for the two source operands and the
                 // destination register.
-                unique case (ara_req_d.emul)
-                  LMUL_2: if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_4: if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_8: if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                  default:;
-                endcase
-                unique case (lmul_vs2)
-                  LMUL_2: if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_4: if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_8: if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                  default:;
-                endcase
-                unique case (lmul_vs1)
-                  LMUL_2: if ((insn.varith_type.rs1 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_4: if ((insn.varith_type.rs1 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_8: if ((insn.varith_type.rs1 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                  default:;
-                endcase
+                if (!skip_lmul_checks) begin
+                  unique case (ara_req_d.emul)
+                    LMUL_2: if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_4: if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_8: if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                    default:;
+                  endcase
+                  unique case (lmul_vs2)
+                    LMUL_2: if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_4: if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_8: if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                    default:;
+                  endcase
+                  unique case (lmul_vs1)
+                    LMUL_2: if ((insn.varith_type.rs1 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_4: if ((insn.varith_type.rs1 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_8: if ((insn.varith_type.rs1 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                    default:;
+                  endcase
+                end
 
                 // Ara cannot support instructions who operates on more than 64 bits.
                 if (int'(ara_req_d.vtype.vsew) > int'(EW64)) illegal_insn = 1'b1;
@@ -1301,6 +1358,14 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.eew_vs2 = vtype_q.vsew;
                     // Request will need reshuffling
                     ara_req_d.scale_vl = 1'b1;
+                  end
+                  6'b010000: begin // VRXUNARY0
+                    // vmv.s.x
+                    ara_req_d.op      = ara_pkg::VMVSX;
+                    ara_req_d.use_vs2 = 1'b0;
+                    ara_req_d.vl      = |vl_q ? 1 : '0;
+                    // This instruction ignores LMUL checks
+                    skip_lmul_checks  = 1'b1;
                   end
                   // Divide instructions
                   6'b100000: ara_req_d.op = ara_pkg::VDIVU;
@@ -1472,18 +1537,20 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 // Instructions with an integer LMUL have extra constraints on the registers they can
                 // access. The constraints can be different for the two source operands and the
                 // destination register.
-                unique case (ara_req_d.emul)
-                  LMUL_2: if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_4: if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_8: if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                  default:;
-                endcase
-                unique case (lmul_vs2)
-                  LMUL_2: if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_4: if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                  LMUL_8: if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                  default:;
-                endcase
+                if (!skip_lmul_checks) begin
+                  unique case (ara_req_d.emul)
+                    LMUL_2: if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_4: if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_8: if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                    default:;
+                  endcase
+                  unique case (lmul_vs2)
+                    LMUL_2: if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_4: if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                    LMUL_8: if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                    default:;
+                  endcase
+                end
 
                 // Ara cannot support instructions who operates on more than 64 bits.
                 if (int'(ara_req_d.vtype.vsew) > int'(EW64)) illegal_insn = 1'b1;
@@ -1514,15 +1581,70 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       // operand. Send the first operand (vs2) to the third result queue.
                       ara_req_d.swap_vs2_vd_op = 1'b1;
                     end
+                    6'b000001: begin
+                      ara_req_d.op             = ara_pkg::VFREDUSUM;
+                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.swap_vs2_vd_op = 1'b1;
+                      ara_req_d.cvt_resize     = resize_e'(2'b00);
+                    end
                     6'b000010: begin
                       ara_req_d.op             = ara_pkg::VFSUB;
                       ara_req_d.swap_vs2_vd_op = 1'b1;
                     end
+                    6'b000011: begin
+                      ara_req_d.op             = ara_pkg::VFREDOSUM;
+                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.swap_vs2_vd_op = 1'b1;
+                      ara_req_d.cvt_resize     = resize_e'(2'b00);
+                    end
                     6'b000100: ara_req_d.op = ara_pkg::VFMIN;
+                    6'b000101: begin
+                      ara_req_d.op             = ara_pkg::VFREDMIN;
+                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.cvt_resize     = resize_e'(2'b01);
+                    end
                     6'b000110: ara_req_d.op = ara_pkg::VFMAX;
+                    6'b000111: begin
+                      ara_req_d.op             = ara_pkg::VFREDMAX;
+                      ara_req_d.conversion_vs1 = OpQueueFloatReductionZExt;
+                      ara_req_d.cvt_resize     = resize_e'(2'b10);
+                    end
                     6'b001000: ara_req_d.op = ara_pkg::VFSGNJ;
                     6'b001001: ara_req_d.op = ara_pkg::VFSGNJN;
                     6'b001010: ara_req_d.op = ara_pkg::VFSGNJX;
+                    6'b010000: begin // VWFUNARY0
+                      // vmv.f.s
+                      // Stall the interface until we get the result
+                      acc_req_ready_o  = 1'b0;
+                      acc_resp_valid_o = 1'b0;
+
+                      ara_req_d.op         = ara_pkg::VFMVFS;
+                      ara_req_d.use_vd     = 1'b0;
+                      ara_req_d.vl         = 1;
+                      ara_req_d.vstart     = '0;
+                      skip_lmul_checks     = 1'b1;
+                      ignore_zero_vl_check = 1'b1;
+
+                      // Zero-extend operands
+                      unique case (vtype_q.vsew)
+                        EW16: begin
+                          ara_req_d.conversion_vs2 = OpQueueConversionZExt4;
+                        end
+                        EW32: begin
+                          ara_req_d.conversion_vs2 = OpQueueConversionZExt2;
+                        end
+                        default:;
+                      endcase
+
+                      // Wait until the back-end answers to acknowledge those instructions
+                      if (ara_resp_valid_i) begin
+                        acc_req_ready_o   = 1'b1;
+                        acc_resp_o.result = ara_resp_i.resp;
+                        acc_resp_o.error  = ara_resp_i.error;
+                        acc_resp_valid_o  = 1'b1;
+                        ara_req_valid_d   = 1'b0;
+                      end
+                    end
                     6'b011000: ara_req_d.op = ara_pkg::VMFEQ;
                     6'b011001: ara_req_d.op = ara_pkg::VMFLE;
                     6'b011011: ara_req_d.op = ara_pkg::VMFLT;
@@ -1678,6 +1800,15 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       ara_req_d.conversion_vs1 = OpQueueConversionWideFP2;
                       ara_req_d.conversion_vs2 = OpQueueConversionWideFP2;
                     end
+                    6'b110001: begin // VFWREDUSUM
+                      ara_req_d.op             = ara_pkg::VFWREDUSUM;
+                      ara_req_d.swap_vs2_vd_op = 1'b1;
+                      ara_req_d.emul           = next_lmul(vtype_q.vlmul);
+                      ara_req_d.vtype.vsew     = vtype_q.vsew.next();
+                      ara_req_d.conversion_vs1 = OpQueueFloatReductionWideZExt;
+                      ara_req_d.conversion_vs2 = OpQueueConversionWideFP2;
+                      ara_req_d.cvt_resize     = resize_e'(2'b00);
+                    end
                     6'b110010: begin // VFWSUB
                       ara_req_d.op             = ara_pkg::VFSUB;
                       ara_req_d.swap_vs2_vd_op = 1'b1;
@@ -1685,6 +1816,15 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                       ara_req_d.vtype.vsew     = vtype_q.vsew.next();
                       ara_req_d.conversion_vs1 = OpQueueConversionWideFP2;
                       ara_req_d.conversion_vs2 = OpQueueConversionWideFP2;
+                    end
+                    6'b110011: begin // VFWREDOSUM
+                      ara_req_d.op             = ara_pkg::VFWREDOSUM;
+                      ara_req_d.swap_vs2_vd_op = 1'b1;
+                      ara_req_d.emul           = next_lmul(vtype_q.vlmul);
+                      ara_req_d.vtype.vsew     = vtype_q.vsew.next();
+                      ara_req_d.conversion_vs1 = OpQueueFloatReductionWideZExt;
+                      ara_req_d.conversion_vs2 = OpQueueConversionWideFP2;
+                      ara_req_d.cvt_resize     = resize_e'(2'b00);
                     end
                     6'b110100: begin // VFWADD.W
                       ara_req_d.op             = ara_pkg::VFADD;
@@ -1753,27 +1893,29 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // Instructions with an integer LMUL have extra constraints on the registers they
                   // can access. The constraints can be different for the two source operands and the
                   // destination register.
-                  unique case (ara_req_d.emul)
-                    LMUL_2   : if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_4   : if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_8   : if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_RSVD: illegal_insn = 1'b1;
-                    default:;
-                  endcase
-                  unique case (lmul_vs2)
-                    LMUL_2   : if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_4   : if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_8   : if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_RSVD: illegal_insn = 1'b1;
-                    default:;
-                  endcase
-                  unique case (lmul_vs1)
-                    LMUL_2   : if ((insn.varith_type.rs1 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_4   : if ((insn.varith_type.rs1 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_8   : if ((insn.varith_type.rs1 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_RSVD: illegal_insn = 1'b1;
-                    default:;
-                  endcase
+                  if (!skip_lmul_checks) begin
+                    unique case (ara_req_d.emul)
+                      LMUL_2   : if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_4   : if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_8   : if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_RSVD: illegal_insn = 1'b1;
+                      default:;
+                    endcase
+                    unique case (lmul_vs2)
+                      LMUL_2   : if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_4   : if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_8   : if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_RSVD: illegal_insn = 1'b1;
+                      default:;
+                    endcase
+                    unique case (lmul_vs1)
+                      LMUL_2   : if ((insn.varith_type.rs1 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_4   : if ((insn.varith_type.rs1 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_8   : if ((insn.varith_type.rs1 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_RSVD: illegal_insn = 1'b1;
+                      default:;
+                    endcase
+                  end
 
                   // Ara can support 16-bit float, 32-bit float, 64-bit float.
                   // Ara cannot support instructions who operates on more than 64 bits.
@@ -1845,6 +1987,14 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.eew_vs2  = vtype_q.vsew;
                     // Request will need reshuffling
                     ara_req_d.scale_vl = 1'b1;
+                    end
+                    6'b010000: begin // VRFUNARY0
+                      // vmv.s.f
+                      ara_req_d.op      = ara_pkg::VFMVSF;
+                      ara_req_d.use_vs2 = 1'b0;
+                      ara_req_d.vl      = |vl_q ? 1 : '0;
+                      // This instruction ignores LMUL checks
+                      skip_lmul_checks  = 1'b1;
                     end
                     6'b010111: ara_req_d.op = ara_pkg::VMERGE;
                     6'b011000: ara_req_d.op = ara_pkg::VMFEQ;
@@ -1987,20 +2137,22 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // Instructions with an integer LMUL have extra constraints on the registers they
                   // can access. The constraints can be different for the two source operands and the
                   // destination register.
-                  unique case (ara_req_d.emul)
-                    LMUL_2   : if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_4   : if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_8   : if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_RSVD: illegal_insn = 1'b1;
-                    default:;
-                  endcase
-                  unique case (lmul_vs2)
-                    LMUL_2   : if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_4   : if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_8   : if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
-                    LMUL_RSVD: illegal_insn = 1'b1;
-                    default:;
-                  endcase
+                  if (!skip_lmul_checks) begin
+                    unique case (ara_req_d.emul)
+                      LMUL_2   : if ((insn.varith_type.rd & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_4   : if ((insn.varith_type.rd & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_8   : if ((insn.varith_type.rd & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_RSVD: illegal_insn = 1'b1;
+                      default:;
+                    endcase
+                    unique case (lmul_vs2)
+                      LMUL_2   : if ((insn.varith_type.rs2 & 5'b00001) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_4   : if ((insn.varith_type.rs2 & 5'b00011) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_8   : if ((insn.varith_type.rs2 & 5'b00111) != 5'b00000) illegal_insn = 1'b1;
+                      LMUL_RSVD: illegal_insn = 1'b1;
+                      default:;
+                    endcase
+                  end
 
                   // Ara can support 16-bit float, 32-bit float, 64-bit float.
                   // Ara cannot support instructions who operates on more than 64 bits.
@@ -2639,7 +2791,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
 
     // Any valid non-config instruction is a NOP if vl == 0, with some exceptions,
     // e.g. whole vector memory operations / whole vector register move
-    if (acc_req_valid_i && vl_q == '0 && !is_config && !ignore_zero_vl_check && !acc_resp_o.error) begin
+    if (is_decoding && vl_q == '0 && !is_config && !ignore_zero_vl_check && !acc_resp_o.error) begin
       // If we are acknowledging a memory operation, we must tell Ariane that the memory
       // operation was resolved (to decrement its pending load/store counter)
       // This can collide with the same signal from the vector load/store unit, so we must

@@ -1,4 +1,4 @@
-// Copyright 2020 ETH Zurich and University of Bologna.
+// Copyright 2022 ETH Zurich and University of Bologna.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -13,21 +13,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-// Author: Matheus Cavalcante, ETH Zurich
+//
+// Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
 
 #include <stdint.h>
-#include <string.h>
-
-#ifndef SPIKE
-#include "printf.h"
-#else
-#include "util.h"
 #include <stdio.h>
-#endif
+#include <stdlib.h>
 
-int main() {
-  printf("Ariane says Hello!\n");
+#include "riscv_vector.h"
 
-  return 0;
-}
+#define vfredsum_dec_gen(DATA_TYPE, sew)                                       \
+  DATA_TYPE vfredsum_##sew(DATA_TYPE *i, size_t avl, uint8_t is_ordered,       \
+                           uint8_t is_chained);
+
+vfredsum_dec_gen(_Float16, 16);
+vfredsum_dec_gen(float, 32);
+vfredsum_dec_gen(double, 64);

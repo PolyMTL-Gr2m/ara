@@ -70,6 +70,8 @@ package ara_pkg;
   localparam int unsigned LatFDivSqrt     = 'd3;
   localparam int unsigned LatFNonComp     = 'd1;
   localparam int unsigned LatFConv        = 'd2;
+  // Define the maximum FPU latency
+  localparam int unsigned LatFMax = LatFCompEW64;
 
   // Define the maximum instruction queue depth
   localparam MaxVInsnQueueDepth = 4;
@@ -79,6 +81,7 @@ package ara_pkg;
   localparam int unsigned VlduInsnQueueDepth = 4;
   localparam int unsigned VstuInsnQueueDepth = 4;
   localparam int unsigned SlduInsnQueueDepth = 2;
+  localparam int unsigned NoneInsnQueueDepth = 1;
   // Ara supports MaskuInsnQueueDepth = 1 only.
   localparam int unsigned MaskuInsnQueueDepth = 1;
 
@@ -102,6 +105,8 @@ package ara_pkg;
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
     // Merge
     VMERGE,
+    // Scalar moves to VRF
+    VMVSX, VFMVSF,
     // Integer Reductions
     VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX, VWREDSUMU, VWREDSUM,
     // Mul/Mul-Add
@@ -109,9 +114,11 @@ package ara_pkg;
     // Div
     VDIVU, VDIV, VREMU, VREM,
     // FPU
-    VFADD, VFSUB, VFRSUB, VFMUL, VFMACC, VFNMACC, VFMSAC, VFNMSAC, VFMADD, VFNMADD, VFMSUB, VFNMSUB,
-    VFMIN, VFMAX, VFSGNJ, VFSGNJN, VFSGNJX, VFCVTXUF, VFCVTXF, VFCVTFXU, VFCVTFX, VFCVTRTZXUF, VFCVTRTZXF,
-    VFCVTFF,
+    VFADD, VFSUB, VFRSUB, VFMUL, VFDIV, VFRDIV, VFMACC, VFNMACC, VFMSAC, VFNMSAC, VFMADD, VFNMADD, VFMSUB,
+    VFNMSUB, VFSQRT, VFMIN, VFMAX, VFCLASS, VFSGNJ, VFSGNJN, VFSGNJX, VFCVTXUF, VFCVTXF, VFCVTFXU, VFCVTFX,
+    VFCVTRTZXUF, VFCVTRTZXF, VFCVTFF,
+    // Floating-point reductions
+    VFREDUSUM, VFREDOSUM, VFREDMIN, VFREDMAX, VFWREDUSUM, VFWREDOSUM,
     // Floating-point comparison instructions
     VMFEQ, VMFLE, VMFLT, VMFNE, VMFGT, VMFGE,
     // Integer comparison instructions
@@ -120,6 +127,8 @@ package ara_pkg;
     VMADC, VMSBC,
     // Mask operations
     VMANDNOT, VMAND, VMOR, VMXOR, VMORNOT, VMNAND, VMNOR, VMXNOR,
+    // Scalar moves from VRF
+    VMVXS, VFMVFS,
     // Slide instructions
     VSLIDEUP, VSLIDEDOWN,
     // Load instructions
@@ -166,7 +175,9 @@ package ara_pkg;
     OpQueueConversionZExt8,
     OpQueueConversionSExt8,
     OpQueueConversionWideFP2,
-    OpQueueReductionZExt,
+    OpQueueIntReductionZExt,
+    OpQueueFloatReductionZExt,
+    OpQueueFloatReductionWideZExt,
     OpQueueAdjustFPCvt
   } opqueue_conversion_e;
   // OpQueueAdjustFPCvt is introduced to support widening FP conversions, to comply with the
@@ -176,6 +187,8 @@ package ara_pkg;
   // Moreover, the operand requester treats widening instructions differently for handling WAW
   // CVT_WIDE is equal to 2'b00 since these bits are reused with reductions
   // (this is a hack to save wires)
+  // Also for floating-point reduction, it is reused as neutral value
+  // 00: zero, 01: positive infinity, 10: negative infinity
   typedef enum logic [1:0] {
     CVT_WIDE   = 2'b00,
     CVT_SAME   = 2'b01,
@@ -273,7 +286,6 @@ package ara_pkg;
 
     // Request token, for registration in the sequencer
     logic token;
-
   } ara_req_t;
 
   typedef struct packed {
@@ -296,9 +308,9 @@ package ara_pkg;
   // It is important that all the VFUs that can write back to the VRF
   // are grouped towards the beginning of the enumeration. The store unit
   // cannot do so, therefore it is at the end of the enumeration.
-  localparam int unsigned NrVFUs = 6;
+  localparam int unsigned NrVFUs = 7;
   typedef enum logic [$clog2(NrVFUs)-1:0] {
-    VFU_Alu, VFU_MFpu, VFU_SlideUnit, VFU_MaskUnit, VFU_LoadUnit, VFU_StoreUnit
+    VFU_Alu, VFU_MFpu, VFU_SlideUnit, VFU_MaskUnit, VFU_LoadUnit, VFU_StoreUnit, VFU_None
   } vfu_e;
 
   // Internally, each lane is treated as a processing element, between indexes
@@ -870,7 +882,7 @@ package ara_pkg;
     rvv_pkg::vew_e eew;        // Effective element width
     vlen_t vl;                 // Vector length
     opqueue_conversion_e conv; // Type conversion
-    logic [1:0] ntr_red;       // Neutral bits for reductions
+    logic [1:0] ntr_red;       // Neutral type for reductions
     target_fu_e target_fu;     // Target FU of the opqueue (if it is not clear)
   } operand_queue_cmd_t;
 

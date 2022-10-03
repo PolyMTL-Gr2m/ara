@@ -1,4 +1,4 @@
-// Copyright 2020 ETH Zurich and University of Bologna.
+// Copyright 2022 ETH Zurich and University of Bologna.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -14,20 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Author: Matheus Cavalcante, ETH Zurich
+// Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
 
 #include <stdint.h>
 #include <string.h>
 
-#ifndef SPIKE
-#include "printf.h"
-#else
-#include "util.h"
-#include <stdio.h>
-#endif
+#include "riscv_vector.h"
 
-int main() {
-  printf("Ariane says Hello!\n");
+double fdotp_v64b(const double *a, const double *b, size_t avl);
+float fdotp_v32b(const float *a, const float *b, size_t avl);
+_Float16 fdotp_v16b(const _Float16 *a, const _Float16 *b, size_t avl);
 
-  return 0;
-}
+double fdotp_s64b(const double *a, const double *b, size_t avl);
+float fdotp_s32b(const float *a, const float *b, size_t avl);
+_Float16 fdotp_s16b(const _Float16 *a, const _Float16 *b, size_t avl);

@@ -59,6 +59,10 @@ rv64uv_sc_tests = vadd \
                   vwmaccus \
                   vmerge \
                   vmv \
+                  vmvxs \
+                  vmvsx \
+                  vfmvfs \
+                  vfmvsf \
                   vmvnrr \
                   vredsum \
                   vredmaxu \
@@ -91,6 +95,12 @@ rv64uv_sc_tests = vadd \
                   vfwnmsac \
                   vfmin \
                   vfmax \
+                  vfredusum \
+                  vfredosum \
+                  vfredmin \
+                  vfredmax \
+                  vfwredusum \
+                  vfwredosum \
                   vfsgnj \
                   vfsgnjn \
                   vfsgnjx \

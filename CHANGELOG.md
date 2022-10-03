@@ -16,6 +16,30 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Avoid losing hazard-related information in the pipeline between the main sequencer and the operand requesters
  - Fix anticipated grant bug from operand requester to LDU, SLDU, MASKU, because of the stream registers. Now, the three units wait for a final true grant before commiting
  - The mask unit does not require synchronized lanes anymore to commit an instruction
+ - MASKU does not wait anymore for valid incoming data from inactive lanes
+ - Fix corner-case comparison in MASKU to provide the expected behavior
+ - Fix MaskB-queue vector length in the lane sequencer
+ - VALU cleans up the partial result of a reduction when no more needed
+ - VALU can step from normalOp->reduction and vice-versa without issues
+ - VALU's counters can now count bits when operating on mask vectors
+ - Fix the vector length for mask instructions that run on the VALU/VMFPU
+ - Don't let indexed memory operations interfere with the reductions in MASKU
+ - Enforce strict in-order execution of FPU operations in VMFPU
+ - Fixed AXI-inval-filter policy for D$ lines invalidation upon vector stores that are misaligned w.r.t. the D$ line width
+ - Fix lane sequencer checks for floating-point comparisons
+ - Fix synthesis error occuring due to the continuous assignmnet in the always block of mask unit
+ - Fix wrong variable in `vmerge` and `vmv` `riscv-tests`
+ - Re-introduce WAIT_STATE to avoid hazards when changin LMUL
+ - Fix the PEs-ready signals related conditions in the main sequencer
+ - Fix misaligned memory operations with more than 255 beats (>= 256 beats)
+ - Fix stripmining condition in dispatcher
+ - CVA6 tracks writes to floating-point scalar registers by the accelerator
+ - Fixed de-synch bug in vector-FPU
+ - Fix masked VSLIDEUP. Use only the mask bits with index higher than the stride
+ - Fix SLDU issue_counter modification upon new VSLIDEUP incoming instruction
+ - Fix whole-register-move destination register re-encoding
+ - `vslide1up` always writes the scalar element in `vd`
+ - Don't trim `vslide1up` counters since it always writes the scalar element
 
 ### Added
 
@@ -24,16 +48,32 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Vector indexed unordered/ordered stores (`vsuxei8`, `vsuxei16`, `vsuxei32`, `vsuxei64`, `vsoxei8`, `vsoxei16`, `vsoxei32`, `vsoxei64`)
  - Vector integer reductions (`vredsum`, `vredmaxu`, `vredmax`, `vredminu`, `vredmin`, `vredand`, `vredor`, `vredxor`, `vwredsumu`, `vwredsum`)
  - Introduce the global hazard table in the main sequencer, to provide up-to-date information to the operand requesters about the status of the different dependant instructions
+ - Integer and Floating-Point scalar move instructions (`vmv.x.s`, `vmv.s.x`, `vmv.f.s`, `vmv.s.f`)
+ - Add support for `apps` simulation with `spike`
+ - Support for vector single-width floating-point reduction instructions: `vfredusum`, `vfredosum`, `vfredmin`, `vfredmax`
+ - Support for Vector widening floating-point reductions: `vfwredusum`, `vfwredosum`
+ - fdotproduct benchmark to evaluate dot products with reductions
+ - fredsum benchmark to evaluate fp-reductions
+ - riscv-tests for `vfredusum`, `vfredosum`, `vfredmin`, `vfredmax`, `vfwredusum`, `vfwredosum`
 
 ### Changed
 
  - The main sequencer issues instructions every time the target unit has a non-full instruction queue
  - The main sequencer stalls if the instructions target a lane, and its operand requesters are not ready
  - New instructions enter the main sequencer with a token that marks them as new, and the related counter is updated upon arrival
-- Update `README` with instructions on how to compile convolutions
-- Refactor `benchmark` app
-- Double the testbench memory size
-- Update the `python-requirements` list
+ - Update `README` with instructions on how to compile convolutions
+ - Refactor `benchmark` app
+ - Double the testbench memory size
+ - Update the `python-requirements` list
+ - Remove the assign keyword from the always block of masku.sv
+ - Update LLVM to version `15.0.0` (RVV 1.0)
+ - Update Spike to version `1.1.1-dev` (RVV 1.0)
+ - Update `newlib` from commit 84d068 to 5192d5
+ - Ara's dispatcher goes to WAIT_STATE only when the new LMUL is lower than the old one
+ - Updated target -march to rv64gcv_zfh_zvfh0p1 to enable half-floats support
+ - Halve CVA6's L1 caches to ease backend timing closure
+ - Remove CVA6's cache patch from `hardware/patches` (CVA6 is now updated)
+ - Increase addrgen queue depth to four, to better hide memory latency
 
 ## 2.2.0 - 2021-11-02
 

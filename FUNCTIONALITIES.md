@@ -57,6 +57,8 @@ This file specifies the functionalities of the RISC-V Vector Specification suppo
 
 - Vector single-width integer reduction instructions: `vredsum`, `vredmaxu`, `vredmax`, `vredminu`, `vredmin`, `vredand`, `vredor`, `vredxor`
 - Vector widening integer reductions: `vwredsumu`, `vwredsum`
+- Vector single-width floating-point reduction instructions: `vfredusum`, `vfredosum`, `vfredmin`, `vfredmax`
+- Vector widening floating-point reductions: `vfwredusum`, `vfwredosum`
 
 ## Vector mask instructions
 
@@ -64,4 +66,6 @@ This file specifies the functionalities of the RISC-V Vector Specification suppo
 
 ## Vector permutation instructions
 
+- Integer Scalar Move instructions: `vmv.x.s`, `vmv.s.x`
+- Floating-Point Scalar Move instructions: `vfmv.f.s`, `vfmv.s.f`
 - Vector slide instructions: `vslideup`, `vslidedown`, `vslide1up`, `vfslide1up`, `vslide1down`, `vfslide1down`
