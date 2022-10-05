@@ -26,8 +26,8 @@ num_filter = 1
 
 # Input image
 
-N_pad = 8		#column
-M_pad = 8		#rows
+N_pad = 32		#column
+M_pad = 32		#rows
 L = 64			#channels
 
 prec = 1
@@ -41,14 +41,14 @@ L_pad = L
 tensor = np.around(rand_tensor(1, L_pad, M_pad, N_pad, 0)).astype(np.uint64) & prec
 np.random.shuffle(tensor.flat)
 
-#tensor[:,:,6:,:] = 0
-tensor[:,63:,:,:] = 0
+#tensor[:,:,0:,:] = 1
+tensor[:,127:,:,:] = 0
 
 # Generate a random int64 filter
 gen_filter = np.around(rand_tensor(num_filter, L, 7, 7, 0)).astype(np.uint64) & prec
 np.random.shuffle(gen_filter.flat)
 
-#gen_filter[:,:,2:,0:] = 0
+gen_filter[:,:,:,:] = 1
 
 filter_1 = gen_filter[:,:,:1,:1]
 filter_3 = gen_filter[:,:,:3,:3]
@@ -84,7 +84,7 @@ sys.stdout = sys.stderr # Redirect the standard output to the standard error.
 
 # Print information on display
 #vhex = np.vectorize(hex)
-print("\n----------------------")
+"""print("\n----------------------")
 print("NCHW memory layout")
 print("----------------------\n")
 
@@ -122,5 +122,5 @@ emit("golden_o", result_3, 'NR_LANES*4')
 
 emit("o", empty_o, 'NR_LANES*4')
 emit("o_checksum", checksum)
-
+"""
 

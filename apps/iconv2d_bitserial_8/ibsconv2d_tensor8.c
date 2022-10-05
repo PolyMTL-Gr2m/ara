@@ -1,14 +1,9 @@
-#include "ibsconv2d_tensor64.h"
+#include "ibsconv2d_tensor8.h"
 #include <stdio.h>
-
-#define VEC_SIZE 256
 
 //#define DEBUG
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-
-
-
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                           Description : Functions for cross-correlation between                             //		
@@ -28,12 +23,26 @@
 // F     : size of the kernel/filter 
 // Cout  : number of kernel/filter corresponding to the number of output channels
 
+#ifdef DEBUG
+void print_tensor_(uint8_t *tensor, uint64_t num_rows, uint64_t num_columns, uint64_t num_depth) {
+  printf("0x%8X\n", (uint64_t)tensor);
+  for (uint64_t k = 0; k < num_depth; ++k) {
+  	for (uint64_t i = 0; i < num_rows; ++i) {
+    	for (uint64_t j = 0; j < num_columns; ++j) {
+      printf("%10d ", tensor[(i+k*num_rows) * num_columns  + j ]);
+    	}
+    	printf("\n");
+  	 }
+  	 printf("\n");
+	}
+}
+#endif
 
-void ibsconv2d_tensor64_3x3(int64_t *o, int64_t *i, int64_t *f, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out, int64_t precA, int64_t precW) {
+void ibsconv2d_tensor8_3x3(int8_t *o, int8_t *i, int8_t *f, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out, int64_t precA, int64_t precW) {
 	
-  int64_t *i_;
-  int64_t *o_;
-  int64_t *f_;
+  int8_t *i_;
+  int8_t *o_;
+  int8_t *f_;
   
   //helper variable
   
@@ -49,16 +58,16 @@ void ibsconv2d_tensor64_3x3(int64_t *o, int64_t *i, int64_t *f, int64_t H_in, in
 		switch (precA){
 			 case 1:
 			 		if(precW == 1)
-						ibsconv2d64_W1_A1_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
+						ibsconv2d8_W1_A1_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
 					else
-						ibsconv2d64_W2_A1_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
+						ibsconv2d8_W2_A1_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
 				break;
 
 			 case 2:
 			 		if(precW == 1)
-						ibsconv2d64_W1_A2_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
+						ibsconv2d8_W1_A2_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
 					else
-						ibsconv2d64_W2_A2_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
+						ibsconv2d8_W2_A2_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F);
 				break;
 				
 		}
@@ -69,27 +78,11 @@ void ibsconv2d_tensor64_3x3(int64_t *o, int64_t *i, int64_t *f, int64_t H_in, in
 
 
 
-
 //////////////////////////////////////////////////////////////////////////
 //                                                                      //
 //                                1x1 kernel                            //
 //                                                                      //
 //////////////////////////////////////////////////////////////////////////
-
-
-void print_tensor_(uint64_t *tensor, uint64_t num_rows, uint64_t num_columns, uint64_t num_depth) {
-  printf("0x%8X\n", (uint64_t)tensor);
-  for (uint64_t k = 0; k < num_depth; ++k) {
-  	for (uint64_t i = 0; i < num_rows; ++i) {
-    	for (uint64_t j = 0; j < num_columns; ++j) {
-      printf("%lX ", tensor[(i+k*num_rows) * num_columns  + j ] >> 63);
-    	}
-    	printf("\n");
-  	 }
-  	 printf("\n");
-	}
-}
-
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -98,7 +91,9 @@ void print_tensor_(uint64_t *tensor, uint64_t num_rows, uint64_t num_columns, ui
 //                                                                      //
 //////////////////////////////////////////////////////////////////////////
 
-void ibsconv2d64_W1_A1_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
+
+
+void ibsconv2d8_W1_A1_vec_3x3(int8_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
 
 #ifdef DEBUG
 	uint64_t cycle_count = 0;
@@ -106,7 +101,7 @@ void ibsconv2d64_W1_A1_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, 
 	uint64_t call_bp = 0;
 #endif
 
-int64_t f_packed[9];
+int8_t f_packed[9];
 
 int64_t ldo = W_in - 2;
 
@@ -115,28 +110,28 @@ int64_t vlen;
 for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
 {
 
-	int64_t * f_ptr_ = f_ptr;
+	int8_t * f_ptr_ = f_ptr;
 
 	if(width > W_in - TILE_SIZE) 	// if we are at the right border of the input
 		vlen = W_in % TILE_SIZE;		 	// we set the vector length to fit the last inputs
 	else
 		vlen = TILE_SIZE;						// else we go full length
 
-	bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+	bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 
-	int64_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
-	int64_t *o_ = o_ptr + width;									// output pointer relative to the tile	
+	int8_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
+	int8_t *o_ = o_ptr + width;									// output pointer relative to the tile	
 	
-	int64_t *i__ = i_ptr + width;
-	int64_t *o__ = o_ptr + width;
+	int8_t *i__ = i_ptr + width;
+	int8_t *o__ = o_ptr + width;
 
 
-	asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+	asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 	
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_1_to_64(i__ + 2 * W_in, H_in * W_in); 
+	bitpack8_vec_1_to_8(i__ + 2 * W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -148,7 +143,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_1_to_64(i__ + W_in, H_in * W_in); 
+	bitpack8_vec_1_to_8(i__ + W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -160,14 +155,12 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_1_to_64(i__, H_in * W_in); 
+	bitpack8_vec_1_to_8(i__, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
 		cycle_count += sum_count;
 	#endif
-	
-	asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));	
 
 			
 		// LSB
@@ -305,20 +298,21 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		asm volatile("vadd.vv v30, v30, v14");		
 		
 		
-		for(int channels = 64 ; channels < C_in ; channels += 64){ //can only do multiple of 8 channels
+		for(int channels = 8 ; channels < C_in ; channels += 8){ //can only do multiple of 8 channels
 		
-			f_ptr_ += 64 * F * F;
+			f_ptr_ += 8 * F * F;
 			
-			i__ += 64 * H_in * W_in;
+			i__ += 8 * H_in * W_in;
 			
-			bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+			bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
+			
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 		
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
 				
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__ + 2 * W_in, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__ + 2 * W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -330,7 +324,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__ + W_in, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__ + W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -342,7 +336,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -485,9 +479,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		}
 		
 				
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 			
-		asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+		asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 		
 		i_ += 3 * W_in;	
 		
@@ -500,15 +494,15 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			o_ += ldo;
 			
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);	
+			if(C_in > 8)
+				bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);	
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_1_to_64(i__, H_in * W_in); 
+				bitpack8_vec_1_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -614,21 +608,21 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 			asm volatile("vadd.vv v26, v26, v14");
 			
-			for(int channels = 64 ; channels < C_in ; channels += 64){ //can only do multiple of 8 channels
+			for(int channels = 8 ; channels < C_in ; channels += 8){ //can only do multiple of 8 channels
 			
-				f_ptr_ += 64 * F * F;
+				f_ptr_ += 8 * F * F;
 				
-				i__ += 64 * H_in * W_in;
+				i__ += 8 * H_in * W_in;
 				
-				bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+				bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 				
-				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+				asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 
 			
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_1_to_64(i__, H_in * W_in); 
+				bitpack8_vec_1_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -733,29 +727,29 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 			i_ += W_in;
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));	
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));	
 					
 		}
 		
 		// last 2 lines (no need for pre calculation)
-			
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+		
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 			
 		f_ptr_ = f_ptr;			
 		i__ = i_;
 		o_ += ldo;
 
-		if(C_in > 64)
-			bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);	
-			
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+		if(C_in > 8)
+			bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
+		
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 
 		#ifdef DEBUG
 			start_timer();
 		#endif
-		bitpack64_vec_1_to_64(i__, H_in * W_in); 
+		bitpack8_vec_1_to_8(i__, H_in * W_in); 
 		#ifdef DEBUG
 			stop_timer();
 			sum_count = get_timer();
@@ -819,20 +813,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		asm volatile("vadd.vv v30, v30, v10");
 		asm volatile("vadd.vv v28, v28, v12");	
 		
-		for(int channels = 64 ; channels < C_in ; channels += 64){ //can only do multiple of 8 channels
+		for(int channels = 8 ; channels < C_in ; channels += 8){ //can only do multiple of 8 channels
 			
-			f_ptr_ += 64 * F * F;
+			f_ptr_ += 8 * F * F;
 			
-			i__ += 64 * H_in * W_in;
+			i__ += 8 * H_in * W_in;
 			
-			bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+			bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 		
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -901,26 +895,26 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 		i_ += W_in;
 		
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 			
-		asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+		asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 		
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 					
 					
 		f_ptr_ = f_ptr;				
 		i__ = i_;
 		o_ += ldo;
 		
-		if(C_in > 64)
-			bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
-			
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));		
+		if(C_in > 8)
+			bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);	
+		
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));	
 
 		#ifdef DEBUG
 			start_timer();
 		#endif
-		bitpack64_vec_1_to_64(i__, H_in * W_in); 
+		bitpack8_vec_1_to_8(i__, H_in * W_in); 
 		#ifdef DEBUG
 			stop_timer();
 			sum_count = get_timer();
@@ -957,20 +951,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		
 		asm volatile("vadd.vv v30, v30, v10");
 		
-		for(int channels = 64 ; channels < C_in ; channels += 64){ //can only do multiple of 8 channels
+		for(int channels = 8 ; channels < C_in ; channels += 8){ //can only do multiple of 8 channels
 			
-			f_ptr_ += 64 * F * F;
+			f_ptr_ += 8 * F * F;
 			
-			i__ += 64 * H_in * W_in;
+			i__ += 8 * H_in * W_in;
 			
-			bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+			bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 		
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -1009,9 +1003,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 
 		
 			
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 			
-		asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+		asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 		
 		
 	}
@@ -1021,7 +1015,11 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 }
 
 
-void ibsconv2d64_W2_A1_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
+
+
+
+
+void ibsconv2d8_W2_A1_vec_3x3(int8_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
 
 #ifdef DEBUG
 	uint64_t cycle_count = 0;
@@ -1029,7 +1027,7 @@ void ibsconv2d64_W2_A1_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, 
 	uint64_t call_bp = 0;
 #endif
 
-int64_t f_packed[18];
+int8_t f_packed[18];
 
 int64_t ldo = W_in - 2;
 
@@ -1038,7 +1036,7 @@ int64_t vlen;
 for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
 {
 
-	int64_t * f_ptr_ = f_ptr;
+	int8_t * f_ptr_ = f_ptr;
 
 	if(width > W_in - TILE_SIZE) 	// if we are at the right border of the input
 		vlen = W_in % TILE_SIZE;		 	// we set the vector length to fit the last inputs
@@ -1046,20 +1044,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		vlen = TILE_SIZE;						// else we go full length
 
 
-	bitpack_filter64_vec_2_to_64(f_ptr, f_packed, F*F);
+	bitpack_filter8_vec_2_to_8(f_ptr, f_packed, F*F);
 
-	int64_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
-	int64_t *o_ = o_ptr + width;									// output pointer relative to the tile	
+	int8_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
+	int8_t *o_ = o_ptr + width;									// output pointer relative to the tile	
 	
-	int64_t *i__ = i_ptr + width;
-	int64_t *o__ = o_ptr + width;
+	int8_t *i__ = i_ptr + width;
+	int8_t *o__ = o_ptr + width;
 
-	asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+	asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 	
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_1_to_64(i__ + 2 * W_in, H_in * W_in); 
+	bitpack8_vec_1_to_8(i__ + 2 * W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -1072,7 +1070,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_1_to_64(i__ + W_in, H_in * W_in); 
+	bitpack8_vec_1_to_8(i__ + W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -1085,7 +1083,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_1_to_64(i__, H_in * W_in); 
+	bitpack8_vec_1_to_8(i__, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -1204,21 +1202,21 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		
 		
 		
-		for(int channels = 64 ; channels < C_in ; channels += 64){
+		for(int channels = 8 ; channels < C_in ; channels += 8){
 		
 			
-			f_ptr_ += 64 * F * F;
+			f_ptr_ += 8 * F * F;
 			
-			i__ += 64 * H_in * W_in;
+			i__ += 8 * H_in * W_in;
 			
-			bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 		
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__ + 2 * W_in, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__ + 2 * W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -1231,7 +1229,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__ + W_in, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__ + W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -1244,7 +1242,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -1351,9 +1349,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 
 		
 				
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 			
-		asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+		asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 		
 		i_ += 3 * W_in;	
 		
@@ -1364,10 +1362,10 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		
 			f_ptr_ = f_ptr;
 		
-			if(C_in > 64)
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 			
 			i__ = i_;
 			o_ += ldo;
@@ -1375,7 +1373,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_1_to_64(i__, H_in * W_in); 
+				bitpack8_vec_1_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -1454,21 +1452,21 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 				}
 				
-				for(int channels = 64 ; channels < C_in ; channels += 64){
+				for(int channels = 8 ; channels < C_in ; channels += 8){
 				
 					
-					f_ptr_ += 64 * F * F;
+					f_ptr_ += 8 * F * F;
 					
-					i__ += 64 * H_in * W_in;
+					i__ += 8 * H_in * W_in;
 					
-					bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+					bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 					
-					asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+					asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 				
 					#ifdef DEBUG
 						start_timer();
 					#endif
-					bitpack64_vec_1_to_64(i__, H_in * W_in); 
+					bitpack8_vec_1_to_8(i__, H_in * W_in); 
 					#ifdef DEBUG
 						stop_timer();
 						sum_count = get_timer();
@@ -1541,9 +1539,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				
 			i_ += W_in;
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));	
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));	
 			}
 			
 			
@@ -1551,10 +1549,10 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 			
 			i__ = i_;
 			o_ += ldo;
@@ -1562,7 +1560,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_1_to_64(i__, H_in * W_in); 
+			bitpack8_vec_1_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -1608,20 +1606,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 
 			}
 			
-				for(int channels = 64 ; channels < C_in ; channels += 64){
+				for(int channels = 8 ; channels < C_in ; channels += 8){
 				
-					f_ptr_ += 64 * F * F;
+					f_ptr_ += 8 * F * F;
 					
-					i__ += 64 * H_in * W_in;
+					i__ += 8 * H_in * W_in;
 					
-					bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+					bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 					
-					asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+					asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 					
 					#ifdef DEBUG
 						start_timer();
 					#endif
-					bitpack64_vec_1_to_64(i__, H_in * W_in); 
+					bitpack8_vec_1_to_8(i__, H_in * W_in); 
 					#ifdef DEBUG
 						stop_timer();
 						sum_count = get_timer();
@@ -1667,16 +1665,16 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				
 			i_ += W_in;
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 	
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 						
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));			
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));			
 						
 			i__ = i_;
 			o_ += ldo;
@@ -1684,7 +1682,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_1_to_64(i__, H_in * W_in); 
+				bitpack8_vec_1_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -1716,20 +1714,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				
 				}
 				
-				for(int channels = 64 ; channels < C_in ; channels += 64){
+				for(int channels = 8 ; channels < C_in ; channels += 8){
 				
-					f_ptr_ += 64 * F * F;
+					f_ptr_ += 8 * F * F;
 					
-					i__ += 64 * H_in * W_in;
+					i__ += 8 * H_in * W_in;
 					
-					bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+					bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 					
-					asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));	
+					asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));	
 					
 					#ifdef DEBUG
 						start_timer();
 					#endif
-					bitpack64_vec_1_to_64(i__, H_in * W_in); 
+					bitpack8_vec_1_to_8(i__, H_in * W_in); 
 					#ifdef DEBUG
 						stop_timer();
 						sum_count = get_timer();
@@ -1760,9 +1758,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 					}
 			}
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 			
 		
 	}
@@ -1770,9 +1768,12 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		printf("The execution took %d cycles.\n", cycle_count);
 		printf("Bitpack operation was called %d times.\n", call_bp);
 	#endif
+
+
 }
 
-void ibsconv2d64_W1_A2_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
+
+void ibsconv2d8_W1_A2_vec_3x3(int8_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
 
 #ifdef DEBUG
 	uint64_t cycle_count = 0;
@@ -1780,7 +1781,7 @@ void ibsconv2d64_W1_A2_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, 
 	uint64_t call_bp = 0;
 #endif
 
-int64_t f_packed[9];
+int8_t f_packed[9];
 
 int64_t ldo = W_in - 2;
 
@@ -1791,7 +1792,7 @@ int64_t vlen;
 for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
 {
 
-	int64_t * f_ptr_ = f_ptr;
+	int8_t * f_ptr_ = f_ptr;
 
 	if(width > W_in - TILE_SIZE) 	// if we are at the right border of the input
 		vlen = W_in % TILE_SIZE;		 	// we set the vector length to fit the last inputs
@@ -1799,20 +1800,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		vlen = TILE_SIZE;						// else we go full length
 
 
-	int64_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
-	int64_t *o_ = o_ptr + width;									// output pointer relative to the tile	
+	int8_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
+	int8_t *o_ = o_ptr + width;									// output pointer relative to the tile	
 	
-	int64_t *i__ = i_ptr + width;
-	int64_t *o__ = o_ptr + width;
+	int8_t *i__ = i_ptr + width;
+	int8_t *o__ = o_ptr + width;
 	
-	bitpack_filter64_vec_1_to_64(f_ptr, f_packed, F*F);
+	bitpack_filter8_vec_1_to_8(f_ptr, f_packed, F*F);
 
-	asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+	asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 	
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_2_to_64(i__ + 2 * W_in, H_in * W_in); 
+	bitpack8_vec_2_to_8(i__ + 2 * W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -1826,7 +1827,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_2_to_64(i__ + W_in, H_in * W_in); 
+	bitpack8_vec_2_to_8(i__ + W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -1840,7 +1841,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_2_to_64(i__, H_in * W_in); 
+	bitpack8_vec_2_to_8(i__, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -1961,20 +1962,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		
 		}
 		
-		for(int channels = 64 ; channels < C_in ; channels += 64){
+		for(int channels = 8 ; channels < C_in ; channels += 8){
 				
-			f_ptr_ += 64 * F * F;
+			f_ptr_ += 8 * F * F;
 					
-			i__ += 64 * H_in * W_in;
+			i__ += 8 * H_in * W_in;
 			
-			bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+			bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 					
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));	
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));	
 			
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_2_to_64(i__ + 2 * W_in, H_in * W_in); 
+			bitpack8_vec_2_to_8(i__ + 2 * W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -1988,7 +1989,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_2_to_64(i__ + W_in, H_in * W_in); 
+			bitpack8_vec_2_to_8(i__ + W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -2002,7 +2003,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_2_to_64(i__, H_in * W_in); 
+			bitpack8_vec_2_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -2111,9 +2112,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			}
 		}
 				
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 			
-		asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+		asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 		
 		i_ += 3 * W_in;	
 		
@@ -2124,10 +2125,10 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 			
 			i__ = i_;
 			o_ += ldo;
@@ -2135,7 +2136,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -2210,20 +2211,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 					asm volatile("vslidedown.vi v6, v6, 1");
 				}
 			}
-			for(int channels = 64 ; channels < C_in ; channels += 64){
+			for(int channels = 8 ; channels < C_in ; channels += 8){
 					
-				f_ptr_ += 64 * F * F;
+				f_ptr_ += 8 * F * F;
 						
-				i__ += 64 * H_in * W_in;
+				i__ += 8 * H_in * W_in;
 				
-				bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+				bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 						
-				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));	
+				asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));	
 				
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -2254,6 +2255,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 					asm volatile("vadd.vv v28, v28, v14");		
 					
 					asm volatile("vadd.vv v26, v26, v16");	
+										
 					
 					// LSB (weights bit 0)
 					
@@ -2289,9 +2291,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				
 			i_ += W_in;
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));	
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));	
 			}
 			
 			
@@ -2299,10 +2301,10 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 			
 			i__ = i_;
 			o_ += ldo;
@@ -2310,7 +2312,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -2359,20 +2361,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 			
 			}
-			for(int channels = 64 ; channels < C_in ; channels += 64){
+			for(int channels = 8 ; channels < C_in ; channels += 8){
 					
-				f_ptr_ += 64 * F * F;
+				f_ptr_ += 8 * F * F;
 						
-				i__ += 64 * H_in * W_in;
+				i__ += 8 * H_in * W_in;
 				
-				bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+				bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 						
-				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));	
+				asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));	
 				
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -2418,18 +2420,18 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				
 			i_ += W_in;
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 			
 			
 			
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 						
 			i__ = i_;
 			o_ += ldo;
@@ -2437,7 +2439,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -2470,20 +2472,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				}	
 				
 				
-				for(int channels = 64 ; channels < C_in ; channels += 64){
+				for(int channels = 8 ; channels < C_in ; channels += 8){
 					
-					f_ptr_ += 64 * F * F;
+					f_ptr_ += 8 * F * F;
 							
-					i__ += 64 * H_in * W_in;
+					i__ += 8 * H_in * W_in;
 					
-					bitpack_filter64_vec_1_to_64(f_ptr_, f_packed, F*F);
+					bitpack_filter8_vec_1_to_8(f_ptr_, f_packed, F*F);
 							
-					asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));	
+					asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));	
 					
 					#ifdef DEBUG
 						start_timer();
 					#endif
-					bitpack64_vec_2_to_64(i__, H_in * W_in); 
+					bitpack8_vec_2_to_8(i__, H_in * W_in); 
 					#ifdef DEBUG
 						stop_timer();
 						sum_count = get_timer();
@@ -2514,9 +2516,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 						}
 					}	
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 			
 		
 	}
@@ -2530,7 +2532,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 
 
 
-void ibsconv2d64_W2_A2_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
+void ibsconv2d8_W2_A2_vec_3x3(int8_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F){
 
 #ifdef DEBUG
 	uint64_t cycle_count = 0;
@@ -2538,18 +2540,18 @@ void ibsconv2d64_W2_A2_vec_3x3(int64_t * o_ptr, int64_t *i_ptr, int64_t *f_ptr, 
 	uint64_t call_bp = 0;
 #endif
 
-int64_t f_packed[18];
+int8_t f_packed[18];
 
 int64_t ldo = W_in - 2;
 
 int64_t vlen;
 
-bitpack_filter64_vec_2_to_64(f_ptr, f_packed, F*F);
+bitpack_filter8_vec_2_to_8(f_ptr, f_packed, F*F);
 
 for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
 {
 
-	int64_t * f_ptr_ = f_ptr;
+	int8_t * f_ptr_ = f_ptr;
 
 	if(width > W_in - TILE_SIZE) 	// if we are at the right border of the input
 		vlen = W_in % TILE_SIZE;		 	// we set the vector length to fit the last inputs
@@ -2557,21 +2559,21 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		vlen = TILE_SIZE;						// else we go full length
 
 
-	int64_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
-	int64_t *o_ = o_ptr + width;									// output pointer relative to the tile	
+	int8_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
+	int8_t *o_ = o_ptr + width;									// output pointer relative to the tile	
 	
-	int64_t *i__ = i_ptr + width;
-	int64_t *o__ = o_ptr + width;
+	int8_t *i__ = i_ptr + width;
+	int8_t *o__ = o_ptr + width;
 	
-	if(C_in > 64)
-		bitpack_filter64_vec_2_to_64(f_ptr, f_packed, F*F);
+	if(C_in > 8)
+		bitpack_filter8_vec_2_to_8(f_ptr, f_packed, F*F);
 
-	asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+	asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 	
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_2_to_64(i__ + 2 * W_in, H_in * W_in); 
+	bitpack8_vec_2_to_8(i__ + 2 * W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -2585,7 +2587,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_2_to_64(i__ + W_in, H_in * W_in); 
+	bitpack8_vec_2_to_8(i__ + W_in, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -2599,7 +2601,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 	#ifdef DEBUG
 		start_timer();
 	#endif
-	bitpack64_vec_2_to_64(i__, H_in * W_in); 
+	bitpack8_vec_2_to_8(i__, H_in * W_in); 
 	#ifdef DEBUG
 		stop_timer();
 		sum_count = get_timer();
@@ -2687,6 +2689,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		asm volatile(".byte  0x57, 0x06, 0x06, 0x06");
 		// v14 = popcount(v14)
 		asm volatile(".byte  0x57, 0x07, 0x07, 0x06");
+
 		// v16 = popcount(v16)
 		asm volatile(".byte  0x57, 0x08, 0x08, 0x06");
 		
@@ -2805,20 +2808,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		}
 		
 		
-		for(int channels = 64 ; channels < C_in ; channels += 64){
+		for(int channels = 8 ; channels < C_in ; channels += 8){
 					
-			f_ptr_ += 64 * F * F;
+			f_ptr_ += 8 * F * F;
 							
-			i__ += 64 * H_in * W_in;
+			i__ += 8 * H_in * W_in;
 					
-			bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 			
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_2_to_64(i__ + 2 * W_in, H_in * W_in); 
+			bitpack8_vec_2_to_8(i__ + 2 * W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -2832,7 +2835,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_2_to_64(i__ + W_in, H_in * W_in); 
+			bitpack8_vec_2_to_8(i__ + W_in, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -2846,7 +2849,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_2_to_64(i__, H_in * W_in); 
+			bitpack8_vec_2_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -3038,9 +3041,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				}
 		}
 				
-		asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+		asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 			
-		asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+		asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 		
 		i_ += 3 * W_in;	
 		
@@ -3051,10 +3054,10 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 
 			i__ = i_;
 			o_ += ldo;
@@ -3062,7 +3065,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			#ifdef DEBUG
 				start_timer();
 			#endif
-			bitpack64_vec_2_to_64(i__, H_in * W_in); 
+			bitpack8_vec_2_to_8(i__, H_in * W_in); 
 			#ifdef DEBUG
 				stop_timer();
 				sum_count = get_timer();
@@ -3191,20 +3194,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 			}	
 				
-			for(int channels = 64 ; channels < C_in ; channels += 64){
+			for(int channels = 8 ; channels < C_in ; channels += 8){
 						
-				f_ptr_ += 64 * F * F;
+				f_ptr_ += 8 * F * F;
 								
-				i__ += 64 * H_in * W_in;
+				i__ += 8 * H_in * W_in;
 						
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 				
-				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+				asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 				
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -3323,9 +3326,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				
 			i_ += W_in;
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));	
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));	
 			}
 			
 			
@@ -3333,10 +3336,10 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 			
 			i__ = i_;
 			o_ += ldo;
@@ -3344,7 +3347,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -3414,20 +3417,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				asm volatile("vmacc.vx v28,  %0, v26" ::"r"(4));		
 			}
 			
-			for(int channels = 64 ; channels < C_in ; channels += 64){
+			for(int channels = 8 ; channels < C_in ; channels += 8){
 						
-				f_ptr_ += 64 * F * F;
+				f_ptr_ += 8 * F * F;
 								
-				i__ += 64 * H_in * W_in;
+				i__ += 8 * H_in * W_in;
 						
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 				
-				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+				asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 				
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -3498,16 +3501,16 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				
 			i_ += W_in;
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 	
 			f_ptr_ = f_ptr;
 			
-			if(C_in > 64)
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+			if(C_in > 8)
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 						
 			i__ = i_;
 			o_ += ldo;
@@ -3515,7 +3518,7 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -3558,20 +3561,20 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 			
 				}	
 			
-			for(int channels = 64 ; channels < C_in ; channels += 64){
+			for(int channels = 8 ; channels < C_in ; channels += 8){
 						
-				f_ptr_ += 64 * F * F;
+				f_ptr_ += 8 * F * F;
 								
-				i__ += 64 * H_in * W_in;
+				i__ += 8 * H_in * W_in;
 						
-				bitpack_filter64_vec_2_to_64(f_ptr_, f_packed, F*F);
+				bitpack_filter8_vec_2_to_8(f_ptr_, f_packed, F*F);
 				
-				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen));
+				asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen));
 				
 				#ifdef DEBUG
 					start_timer();
 				#endif
-				bitpack64_vec_2_to_64(i__, H_in * W_in); 
+				bitpack8_vec_2_to_8(i__, H_in * W_in); 
 				#ifdef DEBUG
 					stop_timer();
 					sum_count = get_timer();
@@ -3614,9 +3617,9 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 				}
 			
 			
-			asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(vlen - 2));
+			asm volatile("vsetvli zero, %0, e8, m2, ta, ma" ::"r"(vlen - 2));
 				
-			asm volatile("vse64.v v30, (%0)" : "+&r"(o_));
+			asm volatile("vse8.v v30, (%0)" : "+&r"(o_));
 			
 		
 	}
@@ -3625,5 +3628,3 @@ for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_OUT) // IF CONVOLUT
 		printf("Bitpack operation was called %d times.\n", call_bp);
 	#endif
 }
-
-

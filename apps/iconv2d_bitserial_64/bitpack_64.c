@@ -28,7 +28,7 @@
 //
 /////////////////////////////////////////////////////////////////
 
-void vbitpack_1(uint64_t * tensor, uint64_t size){
+void bitpack64_vec_1_to_64(int64_t * tensor, uint64_t size){
 
     // tensor       : input tensor
     // packed_data  : output packed data
@@ -37,32 +37,19 @@ void vbitpack_1(uint64_t * tensor, uint64_t size){
     // len  : len of input vector needed to be packed
     // bit_prec     : precision of values 
     
-    uint64_t *i = tensor;
+    int64_t *i = tensor;
     
-    uint64_t val_shift = 0x8000000000000000; //if not declared like this, the shifting will only consider a 32b value, therefore not doing the right shifting
+    uint64_t shift = 0x8000000000000000; 
     
-	 for (int data_pos = 63 ; data_pos >= 0 ; data_pos --){
+	 for (int data_pos = 0 ; data_pos < 64 ; data_pos ++){
 	 	 
 		 asm volatile("vle64.v v8, (%0)" : "+&r" (i));
 		 i += size;
- 	
-		 asm volatile("vsll.vx v8, v8, %0"  :: "r"(data_pos)); 
-
 		 
-		 if(data_pos < 63){
-		 
-		 	 val_shift >>= 1;
-		 
-			 asm volatile("vand.vx v8, v8, %0" :: "r"(val_shift));
-		 
-			 asm volatile("vor.vv v0, v0, v8");
-			 
-		 }
-		 else{		 
-		 
-			 asm volatile("vand.vx v0, v8, %0" :: "r"(0x8000000000000000));
-			 
-		 }
+		 if(data_pos > 0)
+		 	asm volatile("vmacc.vx v0,  %0, v8" ::"r"(shift >> data_pos));
+		 else
+		 	asm volatile("vmul.vx v0, v8, %0" :: "r"(shift));
 	 }
 	 
 	 // WE DO NOT STORE IT, WE WANT TO USE THE REGISTER RIGHT AWAY
@@ -70,7 +57,7 @@ void vbitpack_1(uint64_t * tensor, uint64_t size){
 
 
 
-void bitpack_filter_1(uint64_t* tensor, uint64_t* packed_data, uint64_t len){
+void bitpack_filter64_vec_1_to_64(int64_t* tensor, int64_t* packed_data, uint64_t len){
 
     // tensor       : input tensor
     // packed_data  : output packed data
@@ -81,43 +68,27 @@ void bitpack_filter_1(uint64_t* tensor, uint64_t* packed_data, uint64_t len){
     
     asm volatile("vsetvli zero, %0, e64, m1, ta, ma" ::"r"(len));
     
-    uint64_t *i = tensor;
-    uint64_t *o = packed_data;
+    int64_t *i = tensor;
+    int64_t *o = packed_data;
     
-    uint64_t val_init = 1; //if not declared like this, the shifting will only consider a 32b value, therefore not doing the right shifting
+    uint64_t shift = 0x8000000000000000;
     
-	 for (int data_pos = 63 ; data_pos >= 0 ; data_pos --){
+    asm volatile("vmv.v.i v0, 0");
+    
+    
+	 for (int data_pos = 0 ; data_pos < 64 ; data_pos ++){
 	 	 
-		 asm volatile("vle64.v v0, (%0)" : "+&r" (i)); 
-		 i += len; // F*F for each channel
+		 asm volatile("vle64.v v8, (%0)" : "+&r" (i));
+		 i += len;
 		 
-		 asm volatile("vsll.vx v10, v0, %0"  :: "r"(data_pos)); 
-		 
-		 
-
-		 
-		 if(data_pos < 63){
-			 asm volatile("vand.vx v10, v10, %0" :: "r"(val_init << data_pos));
-			  
-			 asm volatile("vadd.vv v8, v8, v10");
-		 }
-		 else{		 
-			 asm volatile("vand.vx v8, v10, %0" :: "r"(0x8000000000000000));
-		 }
-		
+		 if(data_pos > 0)
+		 	asm volatile("vmacc.vx v0,  %0, v8" ::"r"(shift >> data_pos));
+		 else
+		 	asm volatile("vmul.vx v0, v8, %0" :: "r"(shift));
 	 }
 
-    asm volatile("vse64.v v8, (%0)" : "+&r"(o));
+    asm volatile("vse64.v v0, (%0)" : "+&r"(o));
 }
-
-
-
-
-
-
-
-
-
 
 
 /////////////////////////////////////////////////////////////////
@@ -130,7 +101,7 @@ void bitpack_filter_1(uint64_t* tensor, uint64_t* packed_data, uint64_t len){
 
 
 
-void vbitpack(uint64_t * tensor, uint64_t size){
+void bitpack64_vec_2_to_64(int64_t * tensor, uint64_t size){
 
     // tensor       : input tensor
     // packed_data  : output packed data
@@ -139,45 +110,26 @@ void vbitpack(uint64_t * tensor, uint64_t size){
     // len  : len of input vector needed to be packed
     // bit_prec     : precision of values 
     
-    uint64_t *i = tensor;
+    int64_t *i = tensor;
     
-    uint64_t val_shift = 0x8000000000000000;
+    uint64_t shift = 0x8000000000000000;
     
-	 for (int data_pos = 63 ; data_pos >= 0 ; data_pos --){
+	 for (int data_pos = 0 ; data_pos < 64 ; data_pos ++){
 	 	 
-		 asm volatile("vle64.v v8, (%0)" : "+&r" (i));
+		 asm volatile("vle64.v v20, (%0)" : "+&r" (i));
 		 i += size;
 		 
+		 
+		 asm volatile("vsrl.vi v16, v20, 1");
+		 asm volatile("vand.vi v20, v20, 1");
+		 
 		 if(data_pos > 0){
-		 	
-		 	 asm volatile("vsll.vx v16, v8, %0"  :: "r"(data_pos - 1));
-		 	 asm volatile("vsll.vx v8, v8, %0"  :: "r"(data_pos)); 
-		 	 
+			 asm volatile("vmacc.vx v0,  %0, v20" ::"r"(shift >> data_pos));
+			 asm volatile("vmacc.vx v6,  %0, v16" ::"r"(shift >> data_pos));
 		 }
 		 else{
-		 
-		 	 asm volatile("vsrl.vi v16, v8, 1");
-		 	 
-		 }
-		  
-		 
-		 
-		 if(data_pos < 63){
-		 	
-		 	val_shift >>= 1;
-		 	
-			 asm volatile("vand.vx v8, v8, %0" :: "r"(val_shift));
-			 asm volatile("vand.vx v16, v16, %0" :: "r"(val_shift));
-		 
-			 asm volatile("vor.vv v0, v0, v8");
-			 asm volatile("vor.vv v6, v6, v16");
-			 
-		 }
-		 else{		 
-		 
-			 asm volatile("vand.vx v0, v8,  %0" :: "r"(val_shift));
-			 asm volatile("vand.vx v6, v16, %0" :: "r"(val_shift)); // bug here idk y 
-			 
+		 	 asm volatile("vmul.vx v0, v20, %0" :: "r"(shift));
+		 	 asm volatile("vmul.vx v6, v16, %0" :: "r"(shift));
 		 }
 		
 	 }
@@ -186,8 +138,7 @@ void vbitpack(uint64_t * tensor, uint64_t size){
 }
 
 
-
-void bitpack_filter(uint64_t* tensor, uint64_t* packed_data, uint64_t len){
+void bitpack_filter64_vec_2_to_64(int64_t * tensor, int64_t* packed_data, uint64_t len){
 
     // tensor       : input tensor
     // packed_data  : output packed data
@@ -198,45 +149,36 @@ void bitpack_filter(uint64_t* tensor, uint64_t* packed_data, uint64_t len){
     
     asm volatile("vsetvli zero, %0, e64, m1, ta, ma" ::"r"(len));
     
-    uint64_t *i = tensor;
-    uint64_t *o = packed_data;
+    int64_t *i = tensor;
+    int64_t *o = packed_data; 
     
-    uint64_t val_init = 1;
+    uint64_t shift = 0x8000000000000000;
     
-	 for (int data_pos = 63 ; data_pos >= 0 ; data_pos --){
+	 for (int8_t data_pos = 0 ; data_pos < 64 ; data_pos ++){
 	 	 
-		 asm volatile("vle64.v v0, (%0)" : "+&r" (i)); 
-		 i += len; // F*F for each channel
+		 asm volatile("vle64.v v8, (%0)" : "+&r" (i));
+		 i += len;
 		 
+		 
+		 asm volatile("vsrl.vi v16, v8, 1");
+		 asm volatile("vand.vi v8, v8, 1");
 		 
 		 if(data_pos > 0){
-		 	asm volatile("vsll.vx v10, v0, %0"  :: "r"(data_pos)); 
-		 	asm volatile("vsll.vx v11, v0, %0"  :: "r"(data_pos - 1)); 
+			 asm volatile("vmacc.vx v0,  %0, v8" ::"r"(shift >> data_pos));
+			 asm volatile("vmacc.vx v6,  %0, v16" ::"r"(shift >> data_pos));
 		 }
 		 else{
-		 	asm volatile("vsrl.vx v10, v0, %0"  :: "r"(data_pos)); 
-		 	asm volatile("vsrl.vx v11, v0, %0"  :: "r"(data_pos + 1)); 
+		 	 asm volatile("vmul.vx v0, v8, %0" :: "r"(shift));
+		 	 asm volatile("vmul.vx v6, v16, %0" :: "r"(shift));
 		 }
 		 
 		 
-		 if(data_pos < 63){
-			 asm volatile("vand.vx v10, v10, %0" :: "r"(val_init << data_pos));
-			 asm volatile("vand.vx v11, v11, %0" :: "r"(val_init << data_pos));
-			  
-			 asm volatile("vadd.vv v8, v8, v10");
-			 asm volatile("vadd.vv v9, v9, v11");
-		 }
-		 else{		 
-			 asm volatile("vand.vx v8, v10, %0" :: "r"(0x8000000000000000));
-		 	 asm volatile("vand.vx v9, v11, %0" :: "r"(0x8000000000000000)); 
-		 }
 		
 	 }
 
-    asm volatile("vse64.v v8, (%0)" : "+&r"(o));
+    asm volatile("vse64.v v0, (%0)" : "+&r"(o));
     o += len;
-    asm volatile("vse64.v v9, (%0)" : "+&r"(o));
+    asm volatile("vse64.v v6, (%0)" : "+&r"(o));
 }
-
 
 
