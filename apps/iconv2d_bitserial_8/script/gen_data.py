@@ -25,7 +25,7 @@ def emit(name, array, alignment='3'):
 num_filter = 1
 
 # Input image
-M_pad = 8  	#rows
+M_pad = 8 	#rows
 N_pad = 8		#column
 L = 8				#channels
 
@@ -102,7 +102,7 @@ print("3x3\n")
 print(result_3)
 
 sys.stdout = original_stdout # Reset the standard output to its original value
-
+"""
 # Print information on file
 print(".section .data,\"aw\",@progbits")
 emit("H_in", np.array(M_pad, dtype=np.uint64))
@@ -118,5 +118,5 @@ emit("golden_o", result_3, 'NR_LANES*4')
 
 emit("o", empty_o, 'NR_LANES*4')
 emit("o_checksum", checksum)
-
+"""
 
