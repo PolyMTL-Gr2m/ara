@@ -247,7 +247,16 @@ module simd_alu import ara_pkg::*; import rvv_pkg::*; #(
                 res.w64[b] = (op_i == VAADDU) ? sum[64:1] + r : {sum[63], sum[63:1]} + r;
               end
           endcase
-        VADD, VADC, VMADC, VREDSUM, VWREDSUMU, VWREDSUM: unique case (vew_i)
+          VBPACK: unique case (vew_i)
+            EW8, EW16, EW32, EW64: begin
+              for (int b=0; b<1; b++) begin
+                res.w64[b][31:0 ] = {opb.w64[b][23: 0], opa.w64[b][56], opa.w64[b][48], opa.w64[b][40], opa.w64[b][32], opa.w64[b][24], opa.w64[b][16], opa.w64[b][8], opa.w64[b][0]};
+                res.w64[b][63:32] = {opb.w64[b][55:32], opa.w64[b][57], opa.w64[b][49], opa.w64[b][41], opa.w64[b][33], opa.w64[b][25], opa.w64[b][17], opa.w64[b][9], opa.w64[b][1]};
+              end
+            end
+          endcase
+
+          VADD, VADC, VMADC, VREDSUM, VWREDSUMU, VWREDSUM: unique case (vew_i)
             EW8: for (int b = 0; b < 8; b++) begin
                 automatic logic [ 8:0] sum = opa.w8 [b] + opb.w8 [b] +
                 logic'(op_i inside {VADC, VMADC} && mask_i[1*b] & ~vm_i);
