@@ -455,6 +455,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   6'b000000: ara_req_d.op = ara_pkg::VADD;
                   6'b000001: ara_req_d.op = ara_pkg::VPOPCNT;
                   6'b000010: ara_req_d.op = ara_pkg::VSUB;
+                  6'b000011: ara_req_d.op = ara_pkg::VBPACK;
                   6'b000100: ara_req_d.op = ara_pkg::VMINU;
                   6'b000101: ara_req_d.op = ara_pkg::VMIN;
                   6'b000110: ara_req_d.op = ara_pkg::VMAXU;
