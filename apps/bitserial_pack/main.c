@@ -9,7 +9,8 @@
 
 #include "printf.h"
 #include "runtime.h"
-// #include "kernel/bitserial_pack.h"
+#include <inttypes.h>
+#include "kernel/bitserial_pack.h"
 
 // Define Matrix dimensions:
 // C = AB with A=[MxN], B=[NxP], C=[MxP]
@@ -39,7 +40,7 @@ int main(void) {
     // init_matrix(b, s, s);
     // Matrices are initialized --> Start calculating
     for (int i=0; i<s*s; i++){
-        printf("[%4d]: %x\n", i, a[i]);
+        printf("[%4d]:  0x%" PRIx64 "\n", i, a[i]);
     }
     printf("Calculating bitserial_pack_64...\n");
     start_timer();
@@ -48,7 +49,7 @@ int main(void) {
     int64_t runtime = get_timer();
     printf("Results...\n");
     for (int i=0; i<s*s; i++){
-        printf("[%4d]: %x\n", i, c[i]);
+        printf("[%4d]:  0x%" PRIx64 "\n", i, c[i]);
     }
 
     printf("The execution took %d cycles.\n", runtime);
