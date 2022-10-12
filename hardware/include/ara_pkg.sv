@@ -120,6 +120,8 @@ package ara_pkg;
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
     // Popcount instruction
     VPOPCNT,
+    // Bit-Serial Packing
+    VBPACK,
     // Merge
     VMERGE,
     // Scalar moves to VRF
