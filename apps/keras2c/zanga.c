@@ -2,19 +2,20 @@
  #include <string.h> 
 #include "./include/k2c_include.h" 
 #include "./include/k2c_tensor_include.h" 
+
+#ifndef SPIKE
 #include "printf.h"
- 
+#endif
 
 
 void zanga(k2c_tensor* input_1_input, k2c_tensor* dense_output) { 
-
+printf("starting from zanga.c \n");
 size_t conv2d_stride[2] = {1,1}; 
-size_t conv2d_dilation[2] = {1,1};
-int iterator1=0;
-float conv2d_output_array[21632]= {0} ;
+size_t conv2d_dilation[2] = {1,1}; 
 printf("zanga setting up output array \n");
-k2c_tensor conv2d_output = {&conv2d_output_array[0],3,21632,{26,26,32, 1, 1}};
+float conv2d_output_array[21632] = {0}; 
 printf("zanga setting up kernel array \n");
+k2c_tensor conv2d_output = {&conv2d_output_array[0],3,21632,{26,26,32, 1, 1}}; 
 float conv2d_kernel_array[288] = {
 +5.16253188e-02f,-1.06500655e-01f,-4.47007149e-01f,-1.87237024e-01f,+2.21528381e-01f,
 -3.32534432e-01f,-6.76552057e-02f,+1.09231077e-01f,+4.38235521e-01f,+7.75387809e-02f,
@@ -75,7 +76,6 @@ float conv2d_kernel_array[288] = {
 -2.13321373e-01f,+7.10286722e-02f,-4.25185055e-01f,+8.21751505e-02f,+1.16577573e-01f,
 +9.45638195e-02f,-2.78309196e-01f,+2.94628829e-01f,}; 
 k2c_tensor conv2d_kernel = {&conv2d_kernel_array[0],4,288,{ 3, 3, 1,32, 1}}; 
-printf("zanga setting up conv2d bias array \n");
 float conv2d_bias_array[32] = {
 -1.42195180e-01f,-3.43134557e-03f,-3.25768180e-02f,-3.60935517e-02f,-1.17364205e-01f,
 +4.98576649e-02f,-1.21094391e-01f,-1.54997021e-01f,+1.59471706e-01f,-3.98801342e-02f,
@@ -96,8 +96,7 @@ k2c_tensor max_pooling2d_output = {&max_pooling2d_output_array[0],3,5408,{13,13,
 size_t conv2d_1_stride[2] = {1,1}; 
 size_t conv2d_1_dilation[2] = {1,1}; 
 float conv2d_1_output_array[7744] = {0}; 
-k2c_tensor conv2d_1_output = {&conv2d_1_output_array[0],3,7744,{11,11,64, 1, 1}};
-printf("zanga setting up kernel array \n");
+k2c_tensor conv2d_1_output = {&conv2d_1_output_array[0],3,7744,{11,11,64, 1, 1}}; 
 float conv2d_1_kernel_array[18432] = {
 -1.39097601e-01f,-3.44530493e-02f,+3.85315195e-02f,+1.71235967e-02f,+4.24533449e-02f,
 +5.78826927e-02f,-1.13871045e-01f,-6.84381500e-02f,-3.64392214e-02f,-1.47843165e-02f,
@@ -7023,7 +7022,7 @@ float dense_bias_array[10] = {
 k2c_tensor dense_bias = {&dense_bias_array[0],1,10,{10, 1, 1, 1, 1}}; 
 float dense_fwork[17600] = {0}; 
 
-printf("inside zanga starting conv2d\n"); 
+ printf("inside zanga starting conv2d\n");
 k2c_conv2d(&conv2d_output,input_1_input,&conv2d_kernel, 
 	&conv2d_bias,conv2d_stride,conv2d_dilation,k2c_relu); 
 printf("inside zanga starting maxpool\n");

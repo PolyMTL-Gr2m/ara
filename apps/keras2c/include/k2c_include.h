@@ -9,6 +9,8 @@ https://github.com/f0uriest/keras2c
 #pragma once
 
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
 #include "k2c_tensor_include.h"
 
 
@@ -145,3 +147,6 @@ void k2c_gru(k2c_tensor* output, const k2c_tensor* input, float * state,
              k2c_activationType *recurrent_activation,
              k2c_activationType *output_activation);
 
+//vectorized conv2d
+void fconv2d7by7(double *o, double *i, double *f, int64_t R, int64_t C,
+		                 int64_t F);

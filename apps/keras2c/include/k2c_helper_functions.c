@@ -12,7 +12,11 @@ https://github.com/f0uriest/keras2c
 #include "../string.h"
 #include "k2c_include.h"
 #include "fmatmul.h"
-#include "../../common/printf.h"
+//#include "../../common/printf.h"
+//#include "printf.h"
+#ifndef SPIKE
+#include "printf.h"
+#endif
 /**
  * Just your basic 1d matrix multipication.
  * computes C = A*B
@@ -29,7 +33,7 @@ void k2c_matmul(float * C, const float * A, const float * B, const size_t outrow
                 const size_t outcols, const size_t innerdim) {
 	 memset(C, 0, outrows*outcols*sizeof(C[0])); 
 	fmatmul(C, A, B, outrows, outcols, innerdim);
-	printf("finished matmul\n");
+	//printf("finished matmul\n");
     // make sure output is empty
 	return;
     for (size_t i = 0 ; i < outrows; ++i) {

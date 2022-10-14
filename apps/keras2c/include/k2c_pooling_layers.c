@@ -10,7 +10,11 @@ https://github.com/f0uriest/keras2c
 #include <math.h>
 #include <string.h>
 #include "k2c_include.h"
-#include "../../common/printf.h"
+//#include "../../common/printf.h"
+#ifndef SPIKE
+#include "printf.h"
+#endif
+
 /**
  * Global max pooling.
  * works for 1D, 2D, or 3D inputs.
@@ -19,7 +23,8 @@ https://github.com/f0uriest/keras2c
  * :param input: input tensor.
  */
 void k2c_global_max_pooling(k2c_tensor* output, const k2c_tensor* input) {
-
+    fmax_pool32(output->array, input->array, input->shape[0], input->shape[1], input->shape[2], 7);
+    /* 
     const size_t in_chan = input->shape[input->ndim-1];
     for (size_t i=0; i<in_chan; ++i) {
         output->array[i] = input->array[i];
@@ -32,6 +37,7 @@ void k2c_global_max_pooling(k2c_tensor* output, const k2c_tensor* input) {
             }
         }
     }
+    */
 }
 
 
@@ -92,10 +98,12 @@ void k2c_maxpool1d(k2c_tensor* output, const k2c_tensor* input, const size_t poo
 void k2c_maxpool2d(k2c_tensor* output, const k2c_tensor* input, const size_t * pool_size,
                    const size_t * stride) {
 
-	printf("starting maxpooling2d\n");
+	//printf("starting maxpooling2d\n");
     const size_t channels = input->shape[2];
     // i,j,l output indices
     /// i, k, m input indices
+    fmax_pool32(output->array, input->array, input->shape[0], input->shape[1], input->shape[2], 7);
+    /* 
     for (size_t i=0; i< channels; ++i) {
         for (size_t j=0, k=0; j<output->shape[1]*channels;
                 j+=channels, k+=channels*stride[1]) {
@@ -113,6 +121,7 @@ void k2c_maxpool2d(k2c_tensor* output, const k2c_tensor* input, const size_t * p
             }
         }
     }
+    */
 }
 
 

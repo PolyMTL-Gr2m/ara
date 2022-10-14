@@ -10,7 +10,11 @@ https://github.com/f0uriest/keras2c
 #include <stdio.h>
 #include <string.h>
 #include "k2c_include.h"
-#include "../../common/printf.h"
+//#include "../../common/printf.h"
+
+#ifndef SPIKE
+#include "printf.h"
+#endif
 /**
  * Dense (fully connected) Layer.
  *

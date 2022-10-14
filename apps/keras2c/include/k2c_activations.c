@@ -11,6 +11,10 @@ https://github.com/f0uriest/keras2c
 #include <stdio.h>
 #include "k2c_include.h"
 
+#ifndef SPIKE
+#include "printf.h"
+#endif
+
 void k2c_linear_func(float * x, const size_t size) {
 
 }
@@ -41,7 +45,7 @@ k2c_activationType * k2c_exponential = k2c_exponential_func;
  * :param size: length of input array.
  */
 void k2c_relu_func(float * x, const size_t size) {
-
+    printf("k2c activation relu\n");
     for (size_t i=0; i < size; ++i) {
         if (x[i] <= 0.0f) {
             x[i] = 0.0f;
@@ -267,6 +271,7 @@ void k2c_ThresholdedReLU(float * x, const size_t size, const float theta) {
  */
 void k2c_ReLU(float * x, const size_t size, const float max_value,
               const float alpha, const float theta) {
+    printf("k2c activation relu\n");
 
     for (size_t i=0; i<size; ++i) {
         if (x[i] >= max_value) {

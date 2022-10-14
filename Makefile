@@ -25,7 +25,7 @@ LLVM_INSTALL_DIR    ?= ${INSTALL_DIR}/riscv-llvm
 ISA_SIM_INSTALL_DIR ?= ${INSTALL_DIR}/riscv-isa-sim
 VERIL_INSTALL_DIR   ?= ${INSTALL_DIR}/verilator
 VERIL_VERSION       ?= v4.214
-
+config=4_lanes.mk
 CMAKE ?= cmake
 
 # CC and CXX are Makefile default variables that are always defined in a Makefile. Hence, overwrite
