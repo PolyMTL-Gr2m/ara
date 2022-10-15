@@ -11,8 +11,9 @@ void TEST_CASE1() {
   VSET(3, e8, m1);
   VLOAD_8(v2, 127, 127, -50);
   VLOAD_8(v3, 127, 10, 127);
+  __asm__ volatile("csrw vxrm, 2");
   __asm__ volatile("vsmul.vv v1, v2, v3");
-  VEC_CMP_8(1, v1, 126, 10, -50);
+  VCMP_I8(1, v1, 126, 9, -50);
 }
 
 void TEST_CASE2() {
@@ -20,17 +21,19 @@ void TEST_CASE2() {
   VLOAD_8(v2, 127, 127, -50);
   VLOAD_8(v3, 127, 10, 127);
   VLOAD_8(v0, 5, 0, 0);
-  CLEAR(v1);
+  VCLEAR(v1);
+  __asm__ volatile("csrw vxrm, 2");
   __asm__ volatile("vsmul.vv v1, v2, v3, v0.t");
-  VEC_CMP_8(2, v1, 126, 0, -50);
+  VCMP_I8(2, v1, 126, 0, -50);
 }
 
 void TEST_CASE3() {
   VSET(3, e8, m1);
   VLOAD_8(v2, 127, 63, -50);
   int8_t scalar = 55;
+  __asm__ volatile("csrw vxrm, 2");
   __asm__ volatile("vsmul.vx v1, v2, %[A]" ::[A] "r"(scalar));
-  VEC_CMP_8(3, v1, 55, 27, -21);
+  VCMP_I8(3, v1, 54, 27, -22);
 }
 
 void TEST_CASE4() {
@@ -38,9 +41,10 @@ void TEST_CASE4() {
   VLOAD_8(v2, 127, 127, -50);
   int8_t scalar = 55;
   VLOAD_8(v0, 5, 0, 0);
-  CLEAR(v1);
+  VCLEAR(v1);
+  __asm__ volatile("csrw vxrm, 2");
   __asm__ volatile("vsmul.vx v1, v2, %[A], v0.t" ::[A] "r"(scalar));
-  VEC_CMP_8(4, v1, 55, 0, -21);
+  VCMP_I8(4, v1, 54, 0, -22);
 }
 
 int main(void) {
