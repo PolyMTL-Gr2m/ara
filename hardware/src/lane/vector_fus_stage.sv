@@ -135,46 +135,46 @@ module vector_fus_stage import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg
   //  Vector MFPU  //
   ///////////////////
 
-  vmfpu #(
-    .NrLanes   (NrLanes   ),
-    .FPUSupport(FPUSupport),
-    .vaddr_t   (vaddr_t   )
-  ) i_vmfpu (
-    .clk_i                (clk_i                           ),
-    .rst_ni               (rst_ni                          ),
-    .lane_id_i            (lane_id_i                       ),
-    // Interface with CVA6
-    .fflags_ex_o          (fflags_ex_o                     ),
-    .fflags_ex_valid_o    (fflags_ex_valid_o               ),
-    // Interface with the lane sequencer
-    .vfu_operation_i      (vfu_operation_i                 ),
-    .vfu_operation_valid_i(vfu_operation_valid_i           ),
-    .mfpu_ready_o         (mfpu_ready_o                    ),
-    .mfpu_vinsn_done_o    (mfpu_vinsn_done_o               ),
-    // Interface with the operand queues
-    .mfpu_operand_i       (mfpu_operand_i                  ),
-    .mfpu_operand_valid_i (mfpu_operand_valid_i            ),
-    .mfpu_operand_ready_o (mfpu_operand_ready_o            ),
-    // Interface with the vector register file
-    .mfpu_result_req_o    (mfpu_result_req_o               ),
-    .mfpu_result_id_o     (mfpu_result_id_o                ),
-    .mfpu_result_addr_o   (mfpu_result_addr_o              ),
-    .mfpu_result_wdata_o  (mfpu_result_wdata_o             ),
-    .mfpu_result_be_o     (mfpu_result_be_o                ),
-    .mfpu_result_gnt_i    (mfpu_result_gnt_i               ),
-    // Interface with the Slide Unit
-    .mfpu_red_valid_o     (sldu_mfpu_req_valid_o           ),
-    .sldu_operand_i       (sldu_operand_i                  ),
-    .sldu_mfpu_valid_i    (sldu_mfpu_valid_i               ),
-    .sldu_mfpu_ready_o    (sldu_mfpu_ready_o               ),
-    .mfpu_red_ready_i     (sldu_mfpu_gnt_i                 ),
-    // Interface with the Mask unit
-    .mask_operand_o       (mask_operand_o[MaskFUMFpu]      ),
-    .mask_operand_valid_o (mask_operand_valid_o[MaskFUMFpu]),
-    .mask_operand_ready_i (mask_operand_ready_i[MaskFUMFpu]),
-    .mask_i               (mask_i                          ),
-    .mask_valid_i         (mask_valid_i                    ),
-    .mask_ready_o         (mfpu_mask_ready                 )
-  );
+  // vmfpu #(
+  //   .NrLanes   (NrLanes   ),
+  //   .FPUSupport(FPUSupport),
+  //   .vaddr_t   (vaddr_t   )
+  // ) i_vmfpu (
+  //   .clk_i                (clk_i                           ),
+  //   .rst_ni               (rst_ni                          ),
+  //   .lane_id_i            (lane_id_i                       ),
+  //   // Interface with CVA6
+  //   .fflags_ex_o          (fflags_ex_o                     ),
+  //   .fflags_ex_valid_o    (fflags_ex_valid_o               ),
+  //   // Interface with the lane sequencer
+  //   .vfu_operation_i      (vfu_operation_i                 ),
+  //   .vfu_operation_valid_i(vfu_operation_valid_i           ),
+  //   .mfpu_ready_o         (mfpu_ready_o                    ),
+  //   .mfpu_vinsn_done_o    (mfpu_vinsn_done_o               ),
+  //   // Interface with the operand queues
+  //   .mfpu_operand_i       (mfpu_operand_i                  ),
+  //   .mfpu_operand_valid_i (mfpu_operand_valid_i            ),
+  //   .mfpu_operand_ready_o (mfpu_operand_ready_o            ),
+  //   // Interface with the vector register file
+  //   .mfpu_result_req_o    (mfpu_result_req_o               ),
+  //   .mfpu_result_id_o     (mfpu_result_id_o                ),
+  //   .mfpu_result_addr_o   (mfpu_result_addr_o              ),
+  //   .mfpu_result_wdata_o  (mfpu_result_wdata_o             ),
+  //   .mfpu_result_be_o     (mfpu_result_be_o                ),
+  //   .mfpu_result_gnt_i    (mfpu_result_gnt_i               ),
+  //   // Interface with the Slide Unit
+  //   .mfpu_red_valid_o     (sldu_mfpu_req_valid_o           ),
+  //   .sldu_operand_i       (sldu_operand_i                  ),
+  //   .sldu_mfpu_valid_i    (sldu_mfpu_valid_i               ),
+  //   .sldu_mfpu_ready_o    (sldu_mfpu_ready_o               ),
+  //   .mfpu_red_ready_i     (sldu_mfpu_gnt_i                 ),
+  //   // Interface with the Mask unit
+  //   .mask_operand_o       (mask_operand_o[MaskFUMFpu]      ),
+  //   .mask_operand_valid_o (mask_operand_valid_o[MaskFUMFpu]),
+  //   .mask_operand_ready_i (mask_operand_ready_i[MaskFUMFpu]),
+  //   .mask_i               (mask_i                          ),
+  //   .mask_valid_i         (mask_valid_i                    ),
+  //   .mask_ready_o         (mfpu_mask_ready                 )
+  // );
 
 endmodule : vector_fus_stage
