@@ -92,283 +92,6 @@ void print_tensor_(uint32_t *tensor, uint64_t num_rows, uint64_t num_columns, ui
 
 
 
-/*void ibsconv2d32_W1_A1_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
-
-int64_t const ldo = C_out * (W_in - 2);
-uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
-
-// number of elements is  [prec * F*F * C_in / 32]
-int32_t f_packed[10 * (C_in >> 5)];
-
-int64_t vlen; //for now
-
-int8_t * f_ = f_ptr;
-
-
-
-bitpack_filter32_vec_1_to_32(f_, f_packed, F*F, C_in);
-
-
-	//1ST LINE v0
-	//1ST LINE v2
-	//1ST LINE v4
-
-
-if(H_in >= 3 && W_in >= 3)
-for (int width = 0 ; width < (W_in - 2) ; width += TILE_SIZE_A1_3x3_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
-{
-
-	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
-	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
-
-	if(width > W_in - TILE_SIZE_A1_3x3) 	// if we are at the right border of the input
-		vlen = W_in % TILE_SIZE_A1_3x3;		 	// we set the vector length to fit the last inputs
-	else
-		vlen = TILE_SIZE_A1_3x3;						// else we go full length
-	
-	int8_t *i__ = i_;
-	
-	int32_t * f_loop = f_packed;
-	
-	for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
-
-		bitpack32_vec_1_to_32_2H(i__, vlen, C_in, W_in); 
-
-		// the filter is packed in this way:
-		//		32b
-		// [	0LSB,		// initially filter[0] 
-		//		1LSB,		// initially filter[1]
-		//		...
-		//		9LSB	]	// initially filter[9]
-		
-		
-		// since we call the va = popcount(vb & ra)
-		// we need to use real registers
-		// we use t0, t1, t2 for the 3 values at each iteration
-		
-
-		asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-		asm volatile("lw t1, (%0); addi %0, %0, -8"   : "+&r"(f_loop));
-			
-		// v6 = popcount(v2 & f_packed[0])
-		asm volatile(".byte  0x57, 0xC3, 0x22, 0x06");
-		// v10 = popcount(v4 & f_packed[0])
-		asm volatile(".byte  0x57, 0xC5, 0x42, 0x06");
-		// v8 = popcount(v4 & f_packed[3])
-		asm volatile(".byte  0x57, 0x44, 0x43, 0x06");
-
-		asm volatile("vslidedown.vi v2, v2, 1");
-		asm volatile("vslidedown.vi v4, v4, 1");
-		
-		if(channels > 0){
-			asm volatile("vadd.vv v20, v20, v6");
-			asm volatile("vadd.vv v22, v22, v10");	
-
-			asm volatile("vadd.vv v20, v20, v8");
-		}
-		else{
-			asm volatile("vadd.vv v20, v6, v8");
-			asm volatile("vadd.vi v22, v10, 0");
-		}
-		
-
-		asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-		asm volatile("lw t1, (%0); addi %0, %0, -8"   : "+&r"(f_loop));
-			
-			
-		// v6 = popcount(v2 & f_packed[0])
-		asm volatile(".byte  0x57, 0xC3, 0x22, 0x06");
-		// v10 = popcount(v4 & f_packed[0])
-		asm volatile(".byte  0x57, 0xC5, 0x42, 0x06");
-		// v8 = popcount(v4 & f_packed[3])
-		asm volatile(".byte  0x57, 0x44, 0x43, 0x06");
-
-		asm volatile("vslidedown.vi v2, v2, 1");
-		asm volatile("vslidedown.vi v4, v4, 1");
-		
-		asm volatile("vadd.vv v20, v20, v6");
-		asm volatile("vadd.vv v22, v22, v10");
-			
-		asm volatile("vadd.vv v20, v20, v8");
-		
-		
-		asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-		asm volatile("lw t1, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
-			
-			
-		// v6 = popcount(v2 & f_packed[0])
-		asm volatile(".byte  0x57, 0xC3, 0x22, 0x06");
-		// v10 = popcount(v4 & f_packed[0])
-		asm volatile(".byte  0x57, 0xC5, 0x42, 0x06");
-		// v8 = popcount(v4 & f_packed[3])
-		asm volatile(".byte  0x57, 0x44, 0x43, 0x06");
-		
-		i__ += 32;
-			
-		
-		asm volatile("vadd.vv v20, v20, v6");
-		asm volatile("vadd.vv v22, v22, v10");
-			
-		asm volatile("vadd.vv v20, v20, v8");
-		
-	
-	}
-		
-	i_ += (F - 1) * C_in * W_in;	
-		
-
-	// v28 (needs 2 more lines) and v24 (needs one more line) are used to store precalculated values		
-		
-	for (int height = 2 ; height < H_in ; height += 2){
-
-			f_loop = f_packed;
-			
-			i__ = i_;
-			
-			
-			for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
-
-				bitpack32_vec_1_to_32_2H(i__, vlen, C_in, W_in); 
-				
-				asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-				asm volatile("lw t1, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-				asm volatile("lw t2, (%0); addi %0, %0, -20"  : "+&r"(f_loop));
-				
-				// LSB (activation bit 0)	
-				// v8 = popcount(v2 & f_packed[3])
-				asm volatile(".byte  0x57, 0x44, 0x23, 0x06");
-				// v10 = popcount(v2 & f_packed[6])
-				asm volatile(".byte  0x57, 0xC5, 0x23, 0x06");
-				// v16 = popcount(v4 & f_packed[6])
-				asm volatile(".byte  0x57, 0xC8, 0x43, 0x06");
-				
-				if(height < H_in - 2){
-					// v6 = popcount(v2 & f_packed[0])
-					asm volatile(".byte  0x57, 0xC3, 0x22, 0x06");
-					// v12 = popcount(v4 & f_packed[0])
-					asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
-					// v14 = popcount(v4 & f_packed[3])
-					asm volatile(".byte  0x57, 0x47, 0x43, 0x06");
-				}
-
-
-				asm volatile("vslidedown.vi v2, v2, 1");
-				asm volatile("vslidedown.vi v4, v4, 1");
-				
-				asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-				asm volatile("lw t1, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-				asm volatile("lw t2, (%0); addi %0, %0, -20"  : "+&r"(f_loop));
-				
-				if(channels > 0){	
-					asm volatile("vadd.vv v24, v24, v10");
-					asm volatile("vadd.vv v26, v26, v8");
-					if(height < H_in - 2){
-						asm volatile("vadd.vv v20, v20, v6");
-						asm volatile("vadd.vv v22, v22, v12");
-					}
-					
-					asm volatile("vadd.vv v26, v26, v16");
-					if(height < H_in - 2)
-						asm volatile("vadd.vv v20, v20, v14");
-				}
-				else{	
-					asm volatile("vadd.vv v24, v20, v10");
-					asm volatile("vadd.vv v26, v22, v8");
-					if(height < H_in - 2){
-						asm volatile("vadd.vv v20, v14, v6");
-						asm volatile("vadd.vi v22, v12, 0");
-					}
-					
-					asm volatile("vadd.vv v26, v26, v16");
-				}
-					
-				// LSB (activation bit 0)	
-				// v8 = popcount(v2 & f_packed[3])
-				asm volatile(".byte  0x57, 0x44, 0x23, 0x06");
-				// v10 = popcount(v2 & f_packed[6])
-				asm volatile(".byte  0x57, 0xC5, 0x23, 0x06");
-				// v16 = popcount(v4 & f_packed[6])
-				asm volatile(".byte  0x57, 0xC8, 0x43, 0x06");
-				
-				if(height < H_in - 2){
-					// v6 = popcount(v2 & f_packed[0])
-					asm volatile(".byte  0x57, 0xC3, 0x22, 0x06");
-					// v12 = popcount(v4 & f_packed[0])
-					asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
-					// v14 = popcount(v4 & f_packed[3])
-					asm volatile(".byte  0x57, 0x47, 0x43, 0x06");
-				}
-
-				asm volatile("vslidedown.vi v2, v2, 1");
-				asm volatile("vslidedown.vi v4, v4, 1");
-				
-				asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-				asm volatile("lw t1, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
-				asm volatile("lw t2, (%0); addi %0, %0, 8"    : "+&r"(f_loop)); //add height because the 10th value of filter is not used
-
-				asm volatile("vadd.vv v24, v24, v10");
-				asm volatile("vadd.vv v26, v26, v8");
-				
-				if(height < H_in - 2){
-					asm volatile("vadd.vv v20, v20, v6");
-					asm volatile("vadd.vv v22, v22, v12");
-				}
-					
-				asm volatile("vadd.vv v26, v26, v16");
-				if(height < H_in - 2)
-					asm volatile("vadd.vv v20, v20, v14");
-				
-
-				// LSB (activation bit 0)	
-				// v8 = popcount(v2 & f_packed[3])
-				asm volatile(".byte  0x57, 0x44, 0x23, 0x06");
-				// v10 = popcount(v2 & f_packed[6])
-				asm volatile(".byte  0x57, 0xC5, 0x23, 0x06");
-				// v16 = popcount(v4 & f_packed[6])
-				asm volatile(".byte  0x57, 0xC8, 0x43, 0x06");
-				
-				if(height < H_in - 2){
-					// v6 = popcount(v2 & f_packed[0])
-					asm volatile(".byte  0x57, 0xC3, 0x22, 0x06");
-					// v12 = popcount(v4 & f_packed[0])
-					asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
-					// v14 = popcount(v4 & f_packed[3])
-					asm volatile(".byte  0x57, 0x47, 0x43, 0x06");
-				}
-
-				
-				i__ += 32;
-
-				asm volatile("vadd.vv v24, v24, v10");
-				asm volatile("vadd.vv v26, v26, v8");
-				if(height < H_in - 2){
-					asm volatile("vadd.vv v20, v20, v6");
-					asm volatile("vadd.vv v22, v22, v12");
-				}
-					
-				asm volatile("vadd.vv v26, v26, v16");
-				if(height < H_in - 2)
-					asm volatile("vadd.vv v20, v20, v14");
-					
-			}
-			
-				
-			i_ += (F - 1) * C_in * W_in;	
-			
-			asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"(vlen - 2));
-				
-			asm volatile("vsse32.v v24, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
-			
-			o_ += ldo;
-			
-			asm volatile("vsse32.v v26, (%0), %1" : "+&r"(o_) : "r"(stride_o));
-			
-			o_ += ldo;
-			}
-	}
-}*/
-
-
 void ibsconv2d32_W1_A1_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
 
 int64_t const ldo = C_out * (W_in - F + 1);
@@ -386,14 +109,14 @@ int8_t * f_ = f_ptr;
 bitpack_filter32_vec_1_to_32(f_, f_packed, F*F, C_in);
 
 if(H_in >= F && W_in >= F)
-for (int width = 0 ; width < (W_in - F + 1) ; width += TILE_SIZE_A1_3x3_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+for (int width = 0 ; width < W_in - F + 1 ; width += TILE_SIZE_A1_3x3_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
 {
 
 	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
 	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
 
 	if(width > W_in - TILE_SIZE_A1_3x3) 	// if we are at the right border of the input
-		vlen = W_in % TILE_SIZE_A1_3x3;		 	// we set the vector length to fit the last inputs
+		vlen = W_in % TILE_SIZE_A1_3x3_OUT;		 	// we set the vector length to fit the last inputs
 	else
 		vlen = TILE_SIZE_A1_3x3;						// else we go full length
 	
@@ -404,8 +127,6 @@ for (int width = 0 ; width < (W_in - F + 1) ; width += TILE_SIZE_A1_3x3_OUT) // 
 	for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
 
 		bitpack32_vec_1_to_32_2H(i__, vlen, C_in, W_in); 
-		
-		asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vlen));
 		
 		for(int f_w = 0; f_w < 3 ; f_w ++){		
 			
@@ -632,7 +353,7 @@ for (int width = 0 ; width < (W_in - 4) ; width += TILE_SIZE_A1_5x5_OUT) // IF C
 	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
 
 	if(width > W_in - TILE_SIZE_A1_5x5) 	// if we are at the right border of the input
-		vlen = W_in % TILE_SIZE_A1_5x5;		 	// we set the vector length to fit the last inputs
+		vlen = W_in % TILE_SIZE_A1_5x5_OUT;		 	// we set the vector length to fit the last inputs
 	else
 		vlen = TILE_SIZE_A1_5x5;						// else we go full length
 	
@@ -930,7 +651,7 @@ for (int width = 0 ; width < (W_in - 6) ; width += TILE_SIZE_A1_7x7_OUT) // IF C
 	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
 
 	if(width > W_in - TILE_SIZE_A1_7x7) 	// if we are at the right border of the input
-		vlen = W_in % TILE_SIZE_A1_7x7;		 	// we set the vector length to fit the last inputs
+		vlen = W_in % TILE_SIZE_A1_7x7_OUT;		 	// we set the vector length to fit the last inputs
 	else
 		vlen = TILE_SIZE_A1_7x7;						// else we go full length
 	
@@ -1267,6 +988,260 @@ for (int width = 0 ; width < (W_in - 6) ; width += TILE_SIZE_A1_7x7_OUT) // IF C
 }
 
 
+//////////////////////////////////////////////////////////////////////////
+//                                                                      //
+//                         (A1W2) 1b prec                               //
+//                                                                      //
+//////////////////////////////////////////////////////////////////////////
+
+
+
+void ibsconv2d32_W2_A1_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
+
+int64_t const ldo = C_out * (W_in - F + 1);
+uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
+
+// number of elements is  [prec * (F*F + 1)* C_in / 32]
+int32_t f_packed[2 * F * F * (C_in >> 5)];
+
+int64_t vlen; //for now
+
+int8_t * f_ = f_ptr;
+
+
+
+bitpack_filter32_vec_2_to_32(f_, f_packed, F*F, C_in);
+
+if(H_in >= F && W_in >= F)
+for (int width = 0 ; width < (W_in - F + 1) ; width += TILE_SIZE_A1_3x3_OUT) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+{
+
+	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
+	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
+
+	if(width > W_in - TILE_SIZE_A1_3x3) 	// if we are at the right border of the input
+		vlen = W_in % TILE_SIZE_A1_3x3_OUT;		 	// we set the vector length to fit the last inputs
+	else
+		vlen = TILE_SIZE_A1_3x3;						// else we go full length
+	
+	int8_t *i__ = i_;
+	
+	int32_t * f_loop = f_packed;
+	
+	for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+
+		bitpack32_vec_1_to_32_2H(i__, vlen, C_in, W_in); 
+		
+		asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vlen));
+		
+		for(int f_w = 0; f_w < 3 ; f_w ++){		
+			
+			asm volatile("lw t0, (%0); addi %0, %0, 24"   : "+&r"(f_loop));
+			asm volatile("lw t1, (%0); addi %0, %0, -8"   : "+&r"(f_loop));
+			
+			// Weight LSB and Activation LSB
+
+			if(f_w > 0 || channels > 0){ 
+				// v11 = popcount(v3  & f_packed[0])
+				asm volatile(".byte  0xD7, 0xC5, 0x32, 0x06");
+				// v12 = popcount(v4  & f_packed[0])
+				asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
+				
+				asm volatile("vadd.vv v25, v25, v11");
+				asm volatile("vadd.vv v26, v26, v12");
+				
+			}
+			else{  
+				// v25 = popcount(v3  & f_packed[0])
+				asm volatile(".byte  0xD7, 0xCC, 0x32, 0x06");
+				// v26 = popcount(v4  & f_packed[0])
+				asm volatile(".byte  0x57, 0xCD, 0x42, 0x06");
+				
+			}
+			
+			// Weight bit 1 and Activation LSB
+			
+			// v11 = popcount(v3  & f_packed[0])
+			asm volatile(".byte  0xD7, 0xC5, 0x32, 0x06");
+			// v12 = popcount(v4  & f_packed[0])
+			asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
+				
+			asm volatile("vadd.vv v25, v25, v11");
+			asm volatile("vadd.vv v26, v26, v12");
+			
+			
+			
+
+			// v11 = popcount(v4  & f_packed[1])
+			asm volatile(".byte  0xD7, 0x45, 0x43, 0x06");
+			
+			
+			asm volatile("vadd.vv v25, v25, v11");
+			
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v3, v3, 1");
+				asm volatile("vslidedown.vi v4, v4, 1");
+			}
+
+				
+			}
+			
+			i__ += ENCOD_SIZE;	
+			f_loop = f_packed + F * F + 1;
+		}
+		
+		i_ += (F - 1) * C_in * W_in;	
+
+		
+		for (int height = 2 ; height < H_in ; height += 4){
+
+			f_loop = f_packed;
+			
+			i__ = i_;
+			
+			
+			for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+
+				bitpack32_vec_1_to_32_4H(i__, vlen, C_in, W_in); 
+		
+				for(int f_w = 0; f_w < 3 ; f_w ++){		
+				
+					asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
+					asm volatile("lw t1, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
+					asm volatile("lw t2, (%0); addi %0, %0, -20"  : "+&r"(f_loop));
+					
+					// v11 = popcount(v3  & f_packed[2])
+					asm volatile(".byte  0xD7, 0xC5, 0x33, 0x06");
+					// v12 = popcount(v3  & f_packed[1])
+					asm volatile(".byte  0x57, 0x46, 0x33, 0x06");
+					
+					if(f_w > 0 || channels > 0){
+					
+						// v13 = popcount(v3 & f_packed[0])
+						asm volatile(".byte  0xD7, 0xC6, 0x32, 0x06");
+						
+						asm volatile("vadd.vv v21, v21, v11");
+						asm volatile("vadd.vv v22, v22, v12");
+						asm volatile("vadd.vv v23, v23, v13");
+					}
+					else{
+						// v23 = popcount(v3 & f_packed[0])
+						asm volatile(".byte  0xD7, 0xCB, 0x32, 0x06");
+						
+						asm volatile("vadd.vv v21, v25, v11");
+						asm volatile("vadd.vv v22, v26, v12");
+						
+
+					}
+					
+					if(height < H_in - 1){
+						// v12 = popcount(v4 & f_packed[2])
+						asm volatile(".byte  0x57, 0xC6, 0x43, 0x06");
+						// v13 = popcount(v4 & f_packed[1])
+						asm volatile(".byte  0xD7, 0x46, 0x43, 0x06");
+
+
+							
+						if(f_w > 0 || channels > 0)
+							// v14 = popcount(v4 & f_packed[0])
+							asm volatile(".byte  0x57, 0xC7, 0x42, 0x06");
+						else
+							// v24 = popcount(v4 & f_packed[0])
+							asm volatile(".byte  0x57, 0xCC, 0x42, 0x06");
+					
+					
+						asm volatile("vadd.vv v22, v22, v12");
+						asm volatile("vadd.vv v23, v23, v13");
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v24, v24, v14");
+					}
+						
+					if(height < H_in - 2){
+						// v13 = popcount(v5  & f_packed[2])
+						asm volatile(".byte  0xD7, 0xC6, 0x53, 0x06");
+						// v14 = popcount(v5  & f_packed[1])
+						asm volatile(".byte  0x57, 0x47, 0x53, 0x06");
+
+						
+						if(f_w > 0 || channels > 0)
+							// v15 = popcount(v5  & f_packed[0])
+							asm volatile(".byte  0xD7, 0xC7, 0x52, 0x06");
+						else
+							// v25 = popcount(v5 & f_packed[0])
+							asm volatile(".byte  0xD7, 0xCC, 0x52, 0x06");	
+							
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v25, v25, v15");
+					}
+					
+					if(height < H_in - 3){
+
+						// v14 = popcount(v6  & f_packed[2])
+						asm volatile(".byte  0x57, 0xC7, 0x63, 0x06");
+						// v15 = popcount(v6  & f_packed[1])
+						asm volatile(".byte  0xD7, 0x47, 0x63, 0x06");
+
+						if(f_w > 0 || channels > 0)
+							// v16 = popcount(v6  & f_packed[0])
+							asm volatile(".byte  0x57, 0xC8, 0x62, 0x06");
+						else
+							// v26 = popcount(v6 & f_packed[0])
+							asm volatile(".byte  0x57, 0xCD, 0x62, 0x06");	
+							
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v26, v26, v16");
+					}
+						
+						
+					
+					if(f_w < F - 1){
+						asm volatile("vslidedown.vi v3, v3, 1");
+						if(height < H_in - 1)
+							asm volatile("vslidedown.vi v4, v4, 1");
+						if(height < H_in - 2)	
+							asm volatile("vslidedown.vi v5, v5, 1");
+						if(height < H_in - 3)
+							asm volatile("vslidedown.vi v6, v6, 1");	
+					}
+					
+				}	
+				
+				i__ += ENCOD_SIZE;	
+				f_loop = f_packed + F * F + 1;
+			}
+			
+			i_ += 4 * C_in * W_in;	
+			
+			asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vlen - F + 1));
+				
+			asm volatile("vsse32.v v21, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			
+			if(height < H_in - 1){
+				o_ += ldo;	
+				asm volatile("vsse32.v v22, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			if(height < H_in - 2){
+				o_ += ldo;	
+				asm volatile("vsse32.v v23, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			}
+			
+			if(height < H_in - 3){
+				o_ += ldo;	
+				asm volatile("vsse32.v v24, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			o_ += ldo;
+			
+			}
+	}
+}
 
 
 

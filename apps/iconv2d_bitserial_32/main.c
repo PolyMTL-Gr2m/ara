@@ -21,11 +21,11 @@
 #define PRECA_MAX	1
 #define PRECW_MAX	1
 
-#define F_MAX 		7		// Max size of the kernel F x F
-#define C_in 		64		// Number of input input_channels 
-#define C_out		1		// Number of output_channels (or output input_channels C_out)
-#define I_MAX 		32		// Max H_in x W_in input size
-#define I_START	8		// Start input size
+#define F_MAX 		3		// Max size of the kernel F x F
+#define C_in 		32		// Number of input input_channels 
+#define C_out		2		// Number of output_channels (or output input_channels C_out)
+#define I_MAX 		16		// Max H_in x W_in input size
+#define I_START	16		// Start input size
 
 int8_t i[I_MAX * I_MAX * C_in];
 
