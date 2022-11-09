@@ -1,3 +1,7 @@
+// Author : Theo Dupuis
+// GR2M - 2022
+// Polytechnique Montreal
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,11 +23,11 @@
 #define VERIF
 
 #define PRECA_MAX	1
-#define PRECW_MAX	1
+#define PRECW_MAX	2
 
-#define F_MAX 		3		// Max size of the kernel F x F
+#define F_MAX 		5		// Max size of the kernel F x F
 #define C_in 		32		// Number of input input_channels 
-#define C_out		2		// Number of output_channels (or output input_channels C_out)
+#define C_out		1		// Number of output_channels (or output input_channels C_out)
 #define I_MAX 		16		// Max H_in x W_in input size
 #define I_START	16		// Start input size
 
@@ -330,7 +334,7 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 
 				#endif
 				float performance = 2.0 * C_out * C_in * F * F * (size - F + 1) * (size - F + 1) / runtime;
-				float utilization = 100 * performance / (64 / precA * NR_LANES); 
+				float utilization = 100 * performance / (256 / precA) * NR_LANES; 
 				
 				if (error != 0){
 					 printf("Fail.\n");

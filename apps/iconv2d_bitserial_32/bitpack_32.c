@@ -1,3 +1,7 @@
+// Author : Theo Dupuis
+// GR2M - 2022
+// Polytechnique Montreal
+
 #include "ibsconv2d_tensor32.h"
 #include <stdio.h>
 
@@ -72,7 +76,9 @@ void bitpack32_vec_1_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
 		
 		
 		////////////////////////////////////////
+		#ifndef PERF_VHSACC
 		asm volatile("vsll.vi v8, v8, 1");
+		#endif
 		
 		asm volatile("vor.vv v8, v8, v10");
 		///////////////////////////////////// TO REPLACE WITH VSHACC
@@ -111,8 +117,10 @@ void bitpack32_vec_1_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
 		
 		
 		////////////////////////////////////////
+		#ifndef PERF_VHSACC
 		asm volatile("vsll.vi v8, v8, 1");
 		asm volatile("vsll.vi v12, v12, 1");
+		#endif
 		
 		asm volatile("vor.vv v8, v8, v10");
 		asm volatile("vor.vv v12, v12, v14");
@@ -162,9 +170,11 @@ void bitpack32_vec_1_to_32_6H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
 		
 		
 		////////////////////////////////////////
+		#ifndef PERF_VHSACC
 		asm volatile("vsll.vi v8, v8, 1");
 		asm volatile("vsll.vi v12, v12, 1");
 		asm volatile("vsll.vi v16, v16, 1");
+		#endif
 		
 		asm volatile("vor.vv v8, v8, v10");
 		asm volatile("vor.vv v12, v12, v14");
@@ -236,9 +246,13 @@ void bitpack_filter32_vec_1_to_32(int8_t * tensor, int32_t* packed_data, uint64_
 				
 				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len_ >> 1)); 
 				
-
+				/////////////////////////////////////
+				#ifndef PERF_VHSACC
 			   asm volatile("vsll.vi v20, v20, 1");
+			   #endif
+			   
 			   asm volatile("vor.vv v16, v20, v18");
+			   ///////////////////////////////////// TO REPLACE WITH VSHACC
 	 			
 	 			// v0 = vpback(v16)
 	 			asm volatile(".byte 0x57, 0x00, 0x08, 0x0E");
@@ -261,7 +275,7 @@ void bitpack_filter32_vec_1_to_32(int8_t * tensor, int32_t* packed_data, uint64_
 
 
 
-void bitpack32_vec_2_to_32(int8_t * tensor, uint64_t len, uint64_t C_in){
+void bitpack32_vec_2_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in){
 
     // tensor       : input tensor
     // packed_data  : output packed data
