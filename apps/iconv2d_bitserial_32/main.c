@@ -20,16 +20,16 @@
 // scalar code and rolled loops, it had a significant
 // amout of time on simulation
 
-#define VERIF
+//#define VERIF
 
-#define PRECA_MAX	1
+#define PRECA_MAX	2
 #define PRECW_MAX	2
 
-#define F_MAX 		5		// Max size of the kernel F x F
-#define C_in 		32		// Number of input input_channels 
-#define C_out		1		// Number of output_channels (or output input_channels C_out)
-#define I_MAX 		16		// Max H_in x W_in input size
-#define I_START	16		// Start input size
+#define F_MAX 		7		// Max size of the kernel F x F
+#define C_in 		64		// Number of input input_channels 
+#define C_out		2		// Number of output_channels (or output input_channels C_out)
+#define I_MAX 		24		// Max H_in x W_in input size
+#define I_START	24		// Start input size
 
 int8_t i[I_MAX * I_MAX * C_in];
 
@@ -305,34 +305,6 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				/////////////
 				
 				int64_t runtime = get_timer();
-				
-				#ifdef PERF
-									
-					// determine time for bp
-					int32_t f_packed[precW * F * F * C_in / 32];
-					start_timer();
-					if(precA == 2 && precW == 2)
-					{
-						bitpack_filter32_vec_2_to_32(f_nhwc, f_packed, F*F, C_in);
-						stop_timer();
-						runtime_bp = get_timer();
-						start_timer();
-						bitpack32_vec_2_to_32(i_nhwc, width, C_in); 
-						stop_timer();
-						runtime_bp += height * get_timer() * (C_in / 32);
-					}
-					else if(precA == 1 && precW == 1)
-					{
-						bitpack_filter32_vec_1_to_32(f_nhwc, f_packed, F*F, C_in);
-						stop_timer();
-						runtime_bp = get_timer();
-						start_timer();
-						bitpack32_vec_1_to_32_2H(i_nhwc, width, C_in, width); 
-						stop_timer();
-						runtime_bp += height/2 * get_timer() * (C_in / 32);
-					}
-
-				#endif
 				float performance = 2.0 * C_out * C_in * F * F * (size - F + 1) * (size - F + 1) / runtime;
 				float utilization = 100 * performance / (256 / precA) * NR_LANES; 
 				

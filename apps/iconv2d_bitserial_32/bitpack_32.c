@@ -275,44 +275,140 @@ void bitpack_filter32_vec_1_to_32(int8_t * tensor, int32_t* packed_data, uint64_
 
 
 
-void bitpack32_vec_2_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in){
+void bitpack32_vec_2_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t W_in){
 
-    // tensor       : input tensor
-    // packed_data  : output packed data
-    // size			  : number of elements on one plane
-    // C_in			  : number of filter channels
+   asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len));
+   
+    uint64_t const next_line = C_in * W_in;
+   
+    int8_t *i_1 = tensor;
+    int8_t *i_2 = tensor + next_line;
     
-    // has to be set to 64 bit length
-    
-    asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(len));
-    
-    //asm volatile("vmv.v.i v0, 0");
-
-    	int8_t *i = tensor;
-			
-
-		asm volatile("vlse64.v v16, (%0), %1; addi %0, %0, 8" : "+&r" (i) : "r"(C_in));	 			
-		// v0 = vpback(v16)
-		asm volatile(".byte 0x57, 0x00, 0x08, 0x0E");
+   for(int loop = 0; loop < 4; loop ++){
 		
-		asm volatile("vlse64.v v20, (%0), %1; addi %0, %0, 8" : "+&r" (i) : "r"(C_in));
-		// v0 = vpback(v20)
-		asm volatile(".byte 0x57, 0x00, 0x0A, 0x0E");
-		 			
-		asm volatile("vlse64.v v16, (%0), %1; addi %0, %0, 8" : "+&r" (i) : "r"(C_in));		
-		// v0 = vpback(v16)
-		asm volatile(".byte 0x57, 0x00, 0x08, 0x0E");
+		asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+		asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
 		
-		asm volatile("vlse64.v v20, (%0), %1; addi %0, %0, 8" : "+&r" (i) : "r"(C_in));
-		// v0 = vpback(v20)
-		asm volatile(".byte 0x57, 0x00, 0x0A, 0x0E");
- 			
-	 	asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"(len));
- 			
- 		asm volatile("vnsrl.wx v4, v0, %0" :: "r"(32)); // shift 32 and narrow vector elements to extract all the MSB Precisiion
- 		asm volatile("vnsrl.wi v2, v0, 0"); 				// same for the LSB 	
-	 
-	 // WE DO NOT STORE IT, WE WANT TO USE THE REGISTER RIGHT AWAY
+		// v8  = vpback(v0)
+		asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
+		// v10 = vpback(v2)
+		asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+		
+	
+	}
+
+	asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(len));
+		
+ 	asm volatile("vnsrl.wi v0, v8, 0");
+ 	asm volatile("vnsrl.wi v1, v10, 0");
+ 	
+ 	asm volatile("vnsrl.wx v2, v8, %0" :: "r"(32));
+ 	asm volatile("vnsrl.wx v3, v10, %0" :: "r"(32));
+ 	
+}
+
+void bitpack32_vec_2_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t W_in){
+
+   asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len));
+   
+    uint64_t const next_line = C_in * W_in;
+   
+    int8_t *i_1 = tensor;
+    int8_t *i_2 = tensor + next_line;
+    int8_t *i_3 = tensor + 2 * next_line;
+    int8_t *i_4 = tensor + 3 * next_line;
+    
+   for(int loop = 0; loop < 4; loop ++){
+		
+		asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+		asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
+		asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+		asm volatile("vlse64.v v6, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
+		
+		// v8  = vpback(v0)
+		asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
+		// v10 = vpback(v2)
+		asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+		// v12 = vpback(v4)
+		asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
+		// v14 = vpback(v6)
+		asm volatile(".byte 0x57, 0x07, 0xE3, 0x0E");
+		
+	
+	}
+
+	asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(len));
+		
+	asm volatile("vnsrl.wi v0, v8, 0");	
+	asm volatile("vnsrl.wi v1, v10, 0");
+	asm volatile("vnsrl.wi v2, v12, 0");	
+	asm volatile("vnsrl.wi v3, v14, 0");
+		
+	asm volatile("vnsrl.wx v4, v8, %0" :: "r"(32));
+ 	asm volatile("vnsrl.wx v5, v10, %0" :: "r"(32));
+ 	asm volatile("vnsrl.wx v6, v12, %0" :: "r"(32));
+	asm volatile("vnsrl.wx v7, v14, %0" :: "r"(32));
+	
+}
+
+void bitpack32_vec_2_to_32_6H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t W_in){
+
+   asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len));
+   
+    uint64_t const next_line = C_in * W_in;
+   
+    int8_t *i_1 = tensor;
+    int8_t *i_2 = tensor + next_line;
+    int8_t *i_3 = tensor + 2 * next_line;
+    int8_t *i_4 = tensor + 3 * next_line;
+    int8_t *i_5 = tensor + 4 * next_line;
+    int8_t *i_6 = tensor + 5 * next_line;
+    
+   for(int loop = 0; loop < 4; loop ++){
+		
+		asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+		asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
+		asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+		
+		// v8  = vpback(v0)
+		asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
+		// v10 = vpback(v2)
+		asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+		// v12 = vpback(v4)
+		asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
+		
+		
+		
+		asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
+		asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_5) : "r"(C_in));
+		asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_6) : "r"(C_in));
+		
+		// v14 = vpback(v0)
+		asm volatile(".byte 0x57, 0x07, 0xE0, 0x0E");
+		// v16 = vpback(v2)
+		asm volatile(".byte 0x57, 0x08, 0x01, 0x0F");
+		// v18 = vpback(v4)
+		asm volatile(".byte 0x57, 0x09, 0x22, 0x0F");
+		
+	
+	}
+
+	asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(len));
+		
+	asm volatile("vnsrl.wi v0, v8,  0");	
+	asm volatile("vnsrl.wi v1, v10, 0");
+	asm volatile("vnsrl.wi v2, v12, 0");	
+	asm volatile("vnsrl.wi v3, v14, 0");
+	asm volatile("vnsrl.wi v4, v16, 0");
+	asm volatile("vnsrl.wi v5, v18, 0");
+		
+	asm volatile("vnsrl.wx v6,  v8,  %0" :: "r"(32));
+ 	asm volatile("vnsrl.wx v7,  v10, %0" :: "r"(32));
+ 	asm volatile("vnsrl.wx v8,  v12, %0" :: "r"(32));
+	asm volatile("vnsrl.wx v9,  v14, %0" :: "r"(32));
+	asm volatile("vnsrl.wx v10, v16, %0" :: "r"(32));
+	asm volatile("vnsrl.wx v11, v18, %0" :: "r"(32));
+ 	
 }
 
 void bitpack_filter32_vec_2_to_32(int8_t * tensor, int32_t* packed_data, uint64_t len, uint64_t C_in){
