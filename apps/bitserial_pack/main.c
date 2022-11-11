@@ -19,14 +19,15 @@
 #define P 64
 
 uint64_t a[M * N] __attribute__((aligned(32 * NR_LANES), section(".l2")));
-// uint64_t b[N * P] __attribute__((aligned(32 * NR_LANES), section(".l2")));
+uint64_t b[N * P] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 uint64_t c[M * P] __attribute__((aligned(32 * NR_LANES), section(".l2")));
 
 // Initialize the matrices
-void init_matrix(uint64_t *matrix, uint64_t num_rows, uint64_t num_columns) {
+void init_matrix(uint64_t *matrix, uint64_t num_rows, uint64_t num_columns, int mask) {
   for (uint64_t i = 0; i < num_rows; ++i) {
     for (uint64_t j = 0; j < num_columns; ++j) {
-      matrix[i * num_columns + j] = 0x0202020202020202;
+      if  (mask == 0) matrix[i * num_columns + j] = 0x7555755575557555;
+      else            matrix[i * num_columns + j] = 0xAAAAAAAAAAAAAAAA;
     }
   }
 }
@@ -36,23 +37,30 @@ int main(void) {
     const int s = 4;
     // Initialize Matrices
     printf("Initializing matrices...\n");
-    init_matrix(a, s, s);
+    init_matrix(a, s, s, 0);
+    init_matrix(b, s, s, 1);
     // init_matrix(b, s, s);
     // Matrices are initialized --> Start calculating
-    for (int i=0; i<s*s; i++){
-        printf("[%4d]:  0x%" PRIx64 "\n", i, a[i]);
-    }
-    printf("Calculating bitserial_pack_64...\n");
+    //for (int i=0; i<s*s; i++){
+    //    printf("[%4d]:  0x%" PRIx64 "\n", i, a[i]);
+    //}
+    //printf("Calculating bitserial_pack_64...\n");
+    uint64_t* c_ptr = c;
+    asm volatile("vsetvli zero, %0, e64, m1, ta, ma" ::"r"(4));
+    asm volatile("vle64.v v1, (%[A])" : : [A] "r" (&a[0]));
+    asm volatile("vle64.v v2, (%[A])" : : [A] "r" (&b[0]));
     start_timer();
-    bitserial_pack_64(a, c, s*s);
+    // bitserial_pack_64(a, c, s*s);
+    asm volatile(".byte 0x57, 0x84, 0x20, 0x06\n" ::);
     stop_timer();
     int64_t runtime = get_timer();
-    printf("Results...\n");
-    for (int i=0; i<s*s; i++){
-        printf("[%4d]:  0x%" PRIx64 "\n", i, c[i]);
-    }
-
-    printf("The execution took %d cycles.\n", runtime);
+    asm volatile("vse64.v v8, (%0)" : "+&r"(c_ptr));
+    //printf("Results...\n");
+    // for (int i=0; i<s*s; i++){
+    //    printf("[%4d]:  0x%" PRIx64 "\n", i, c[i]);
+    // }
+    printf("The execution took %d cycles!\n", runtime);
+    printf("result: 0x%" PRIx64 "\n", c[0]);
     // printf("The performance is %f OP/cycle (%f%% utilization).\n", performance,
     //        utilization);
 
