@@ -96,7 +96,7 @@ void bitpack32_vec_1_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
  	
 }
 
-void bitpack32_vec_1_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t W_in){
+void bitpack32_vec_1_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t height, uint64_t W_in){
 
    asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len));
    
@@ -109,38 +109,50 @@ void bitpack32_vec_1_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
     
    for(int loop = 0; loop < 4; loop ++){
 		
-		asm volatile("vlse64.v v8, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
-		asm volatile("vlse64.v v10, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+		asm volatile("vlse64.v v8, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+		if(height > 1)
+			asm volatile("vlse64.v v10, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
 		
-		asm volatile("vlse64.v v12, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
-		asm volatile("vlse64.v v14, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+		if(height > 2)
+			asm volatile("vlse64.v v12, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+		if(height > 3)
+			asm volatile("vlse64.v v14, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
 		
 		
 		////////////////////////////////////////
 		#ifndef PERF_VHSACC
-		asm volatile("vsll.vi v8, v8, 1");
-		asm volatile("vsll.vi v12, v12, 1");
+		if(height > 1)
+		asm volatile("vsll.vi v10, v10, 1");
+		if(height > 3)
+		asm volatile("vsll.vi v14, v14, 1");
 		#endif
 		
+		if(height > 1)
 		asm volatile("vor.vv v8, v8, v10");
+		if(height > 3)
 		asm volatile("vor.vv v12, v12, v14");
 		///////////////////////////////////// TO REPLACE WITH VSHACC
 		
 		// v0 = vpback(v8)
 		asm volatile(".byte 0x57, 0x00, 0x04, 0x0E");
 		
-		// v2 = vpback(v12)
-		asm volatile(".byte 0x57, 0x01, 0x26, 0x0E");
+		if(height > 2)
+			// v2 = vpback(v12)
+			asm volatile(".byte 0x57, 0x01, 0x26, 0x0E");
 	
 	}
 
 	asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(len));
 		
+	
  	asm volatile("vnsrl.wi v3, v0, 0");
- 	asm volatile("vnsrl.wx v4, v0, %0" :: "r"(32));
+ 	if(height > 1)
+ 		asm volatile("vnsrl.wx v4, v0, %0" :: "r"(32));
  	
- 	asm volatile("vnsrl.wi v5, v2, 0");
- 	asm volatile("vnsrl.wx v6, v2, %0" :: "r"(32));
+ 	if(height > 2)
+ 		asm volatile("vnsrl.wi v5, v2, 0");
+ 	if(height > 3)
+ 		asm volatile("vnsrl.wx v6, v2, %0" :: "r"(32));
  	
 }
 
@@ -307,7 +319,7 @@ void bitpack32_vec_2_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
  	
 }
 
-void bitpack32_vec_2_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t W_in){
+void bitpack32_vec_2_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t height, uint64_t W_in){
 
    asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len));
    
@@ -317,37 +329,50 @@ void bitpack32_vec_2_to_32_4H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
     int8_t *i_2 = tensor + next_line;
     int8_t *i_3 = tensor + 2 * next_line;
     int8_t *i_4 = tensor + 3 * next_line;
-    
-   for(int loop = 0; loop < 4; loop ++){
 		
+	for(int loop = 0; loop < 4; loop ++){
 		asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
-		asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
-		asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
-		asm volatile("vlse64.v v6, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
-		
+		if(height > 1)
+			asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
+		if(height > 2)
+			asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+		if(height > 3)
+			asm volatile("vlse64.v v6, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
+
 		// v8  = vpback(v0)
 		asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
-		// v10 = vpback(v2)
-		asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
-		// v12 = vpback(v4)
-		asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
-		// v14 = vpback(v6)
-		asm volatile(".byte 0x57, 0x07, 0xE3, 0x0E");
+		if(height > 1)	
+			// v10 = vpback(v2)
+			asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+		if(height > 2)	
+			// v12 = vpback(v4)
+			asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
+		if(height > 3)	
+			// v14 = vpback(v6)
+			asm volatile(".byte 0x57, 0x07, 0xE3, 0x0E");
 		
-	
 	}
+			
 
 	asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(len));
-		
+			
 	asm volatile("vnsrl.wi v0, v8, 0");	
-	asm volatile("vnsrl.wi v1, v10, 0");
-	asm volatile("vnsrl.wi v2, v12, 0");	
-	asm volatile("vnsrl.wi v3, v14, 0");
-		
 	asm volatile("vnsrl.wx v4, v8, %0" :: "r"(32));
- 	asm volatile("vnsrl.wx v5, v10, %0" :: "r"(32));
- 	asm volatile("vnsrl.wx v6, v12, %0" :: "r"(32));
-	asm volatile("vnsrl.wx v7, v14, %0" :: "r"(32));
+		
+	if(height > 1){	
+		asm volatile("vnsrl.wi v1, v10, 0");
+		asm volatile("vnsrl.wx v5, v10, %0" :: "r"(32));
+	}
+		
+	if(height > 2){	
+		asm volatile("vnsrl.wi v2, v12, 0");	
+		asm volatile("vnsrl.wx v6, v12, %0" :: "r"(32));
+	}
+		
+	if(height > 3){	
+		asm volatile("vnsrl.wi v3, v14, 0");
+		asm volatile("vnsrl.wx v7, v14, %0" :: "r"(32));
+	}	
 	
 }
 
@@ -363,52 +388,127 @@ void bitpack32_vec_2_to_32_6H(int8_t * tensor, uint64_t len, uint64_t C_in, uint
     int8_t *i_4 = tensor + 3 * next_line;
     int8_t *i_5 = tensor + 4 * next_line;
     int8_t *i_6 = tensor + 5 * next_line;
-    
-   for(int loop = 0; loop < 4; loop ++){
 		
-		asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
-		asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
-		asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
-		
-		// v8  = vpback(v0)
-		asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
-		// v10 = vpback(v2)
-		asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
-		// v12 = vpback(v4)
-		asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+	
+	// v8  = vpback(v0)
+	asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
+	// v10 = vpback(v2)
+	asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+	// v12 = vpback(v4)
+	asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
 		
 		
 		
-		asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
-		asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_5) : "r"(C_in));
-		asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_6) : "r"(C_in));
-		
-		// v14 = vpback(v0)
-		asm volatile(".byte 0x57, 0x07, 0xE0, 0x0E");
-		// v16 = vpback(v2)
-		asm volatile(".byte 0x57, 0x08, 0x01, 0x0F");
-		// v18 = vpback(v4)
-		asm volatile(".byte 0x57, 0x09, 0x22, 0x0F");
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_5) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_6) : "r"(C_in));
+	
+	// v14 = vpback(v0)
+	asm volatile(".byte 0x57, 0x07, 0xE0, 0x0E");
+	// v16 = vpback(v2)
+	asm volatile(".byte 0x57, 0x08, 0x01, 0x0F");
+	// v18 = vpback(v4)
+	asm volatile(".byte 0x57, 0x09, 0x22, 0x0F");
 		
 	
-	}
+	
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+	
+	// v8  = vpback(v0)
+	asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
+	// v10 = vpback(v2)
+	asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+	// v12 = vpback(v4)
+	asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
+		
+		
+		
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_5) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_6) : "r"(C_in));
+	
+	// v14 = vpback(v0)
+	asm volatile(".byte 0x57, 0x07, 0xE0, 0x0E");
+	// v16 = vpback(v2)
+	asm volatile(".byte 0x57, 0x08, 0x01, 0x0F");
+	// v18 = vpback(v4)
+	asm volatile(".byte 0x57, 0x09, 0x22, 0x0F");
+	
+	
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+	
+	// v8  = vpback(v0)
+	asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
+	// v10 = vpback(v2)
+	asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+	// v12 = vpback(v4)
+	asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
+		
+		
+		
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_5) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_6) : "r"(C_in));
+	
+	// v14 = vpback(v0)
+	asm volatile(".byte 0x57, 0x07, 0xE0, 0x0E");
+	// v16 = vpback(v2)
+	asm volatile(".byte 0x57, 0x08, 0x01, 0x0F");
+	// v18 = vpback(v4)
+	asm volatile(".byte 0x57, 0x09, 0x22, 0x0F");
+	
+	
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_3) : "r"(C_in));
+	
+	// v8  = vpback(v0)
+	asm volatile(".byte 0x57, 0x04, 0x80, 0x0E");
+	// v10 = vpback(v2)
+	asm volatile(".byte 0x57, 0x05, 0xA1, 0x0E");
+	// v12 = vpback(v4)
+	asm volatile(".byte 0x57, 0x06, 0xC2, 0x0E");
+		
+		
+		
+	asm volatile("vlse64.v v0, (%0), %1; addi %0, %0, 8" : "+&r" (i_4) : "r"(C_in));
+	asm volatile("vlse64.v v2, (%0), %1; addi %0, %0, 8" : "+&r" (i_5) : "r"(C_in));
+	asm volatile("vlse64.v v4, (%0), %1; addi %0, %0, 8" : "+&r" (i_6) : "r"(C_in));
+	
+	// v14 = vpback(v0)
+	asm volatile(".byte 0x57, 0x07, 0xE0, 0x0E");
+	// v16 = vpback(v2)
+	asm volatile(".byte 0x57, 0x08, 0x01, 0x0F");
+	// v18 = vpback(v4)
+	asm volatile(".byte 0x57, 0x09, 0x22, 0x0F");
 
 	asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(len));
 		
 	asm volatile("vnsrl.wi v0, v8,  0");	
+	asm volatile("vnsrl.wx v6, v8,  %0" :: "r"(32));
+	
 	asm volatile("vnsrl.wi v1, v10, 0");
+	asm volatile("vnsrl.wx v7, v10, %0" :: "r"(32));
+	
 	asm volatile("vnsrl.wi v2, v12, 0");	
+	asm volatile("vnsrl.wx v8, v12, %0" :: "r"(32));
+	
 	asm volatile("vnsrl.wi v3, v14, 0");
+	asm volatile("vnsrl.wx v9, v14, %0" :: "r"(32));
+	
 	asm volatile("vnsrl.wi v4, v16, 0");
-	asm volatile("vnsrl.wi v5, v18, 0");
-		
-	asm volatile("vnsrl.wx v6,  v8,  %0" :: "r"(32));
- 	asm volatile("vnsrl.wx v7,  v10, %0" :: "r"(32));
- 	asm volatile("vnsrl.wx v8,  v12, %0" :: "r"(32));
-	asm volatile("vnsrl.wx v9,  v14, %0" :: "r"(32));
-	asm volatile("vnsrl.wx v10, v16, %0" :: "r"(32));
-	asm volatile("vnsrl.wx v11, v18, %0" :: "r"(32));
- 	
+	asm volatile("vnsrl.wx v10,v16, %0" :: "r"(32));
+	
+	asm volatile("vnsrl.wi v5,  v18, 0");
+	asm volatile("vnsrl.wx v11, v18, %0":: "r"(32));	
+	
 }
 
 void bitpack_filter32_vec_2_to_32(int8_t * tensor, int32_t* packed_data, uint64_t len, uint64_t C_in){

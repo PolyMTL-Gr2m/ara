@@ -20,16 +20,16 @@
 // scalar code and rolled loops, it had a significant
 // amout of time on simulation
 
-//#define VERIF
+#define VERIF
 
-#define PRECA_MAX	2
-#define PRECW_MAX	2
+#define PRECA_MAX	1
+#define PRECW_MAX	1
 
 #define F_MAX 		7		// Max size of the kernel F x F
-#define C_in 		64		// Number of input input_channels 
-#define C_out		2		// Number of output_channels (or output input_channels C_out)
-#define I_MAX 		24		// Max H_in x W_in input size
-#define I_START	24		// Start input size
+#define C_in 		32		// Number of input input_channels 
+#define C_out		1		// Number of output_channels (or output input_channels C_out)
+#define I_MAX 		10		// Max H_in x W_in input size
+#define I_START	7			// Start input size
 
 int8_t i[I_MAX * I_MAX * C_in];
 
@@ -94,7 +94,7 @@ for (int d = 0; d < D; ++d)   //depth
   	   {
   	   	
   	   		val = (val + val_init) % 27;//65535; //pseudo random generator
-				tensor[c + C * (r + d * R)] = val & mask;
+  	   		tensor[c + C * (r + d * R)] = val & mask;
 				/*if (R == 3)
 				tensor[c + C * (r + d * R)] = 3;
 				else
@@ -217,7 +217,7 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 	 
 			printf("\nfilter %dx%d \n", F, F);
 
-			for(int size = I_START ; size <= I_MAX ; size *= 2){
+			for(int size = I_START ; size <= I_MAX ; size++ /**= 2*/){
 
 				printf("\n");
 				printf("----------------------------------------------------------------\n");
@@ -306,7 +306,7 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				
 				int64_t runtime = get_timer();
 				float performance = 2.0 * C_out * C_in * F * F * (size - F + 1) * (size - F + 1) / runtime;
-				float utilization = 100 * performance / (256 / precA) * NR_LANES; 
+				float utilization = 100 * performance / (256 / (precA * precW)) * NR_LANES; 
 				
 				if (error != 0){
 					 printf("Fail.\n");
