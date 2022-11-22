@@ -10,6 +10,7 @@ https://github.com/f0uriest/keras2c
 #include <math.h>
 #include <string.h>
 #include "k2c_include.h"
+#include "fpooling_tensor32.h"
 //#include "../../common/printf.h"
 #ifndef SPIKE
 #include "printf.h"
@@ -23,7 +24,7 @@ https://github.com/f0uriest/keras2c
  * :param input: input tensor.
  */
 void k2c_global_max_pooling(k2c_tensor* output, const k2c_tensor* input) {
-    fmax_pool32(output->array, input->array, input->shape[0], input->shape[1], input->shape[2], 7);
+    fmax_pool32(output->array, input->array, input->shape[0], input->shape[1], input->shape[2], 3);
     /* 
     const size_t in_chan = input->shape[input->ndim-1];
     for (size_t i=0; i<in_chan; ++i) {

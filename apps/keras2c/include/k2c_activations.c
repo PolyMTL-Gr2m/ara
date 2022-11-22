@@ -45,7 +45,7 @@ k2c_activationType * k2c_exponential = k2c_exponential_func;
  * :param size: length of input array.
  */
 void k2c_relu_func(float * x, const size_t size) {
-    printf("k2c activation relu\n");
+    //printf("k2c activation relu\n");
     for (size_t i=0; i < size; ++i) {
         if (x[i] <= 0.0f) {
             x[i] = 0.0f;

@@ -11,6 +11,9 @@ https://github.com/f0uriest/keras2c
 #include <stdio.h>
 #include <string.h>
 #include "k2c_include.h"
+#include "fpooling_tensor32.h"
+#include "fReLu_tensor32.h"
+
 //#include "../../common/printf.h"
 #ifndef SPIKE
 #include "printf.h"
@@ -194,7 +197,7 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
 		const k2c_tensor* bias, const size_t * stride, const size_t * dilation,
                 k2c_activationType *activation) {
 	//extern double f[] __attribute__((aligned(4 * NR_LANES)));
-	printf("starting conv2d\n");
+	//printf("starting conv2d\n");
     //printf("numel %d",kernel->numel);
     //printf("kernel shape[0] = %d, kernel shape[1] = %d",kernel->shape[0],kernel->shape[1]);
     memset(output->array,0,output->numel*sizeof(output->array[0]));
@@ -203,9 +206,11 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
     const size_t out_cols = output->shape[1];
     const size_t out_channels = output->shape[2];
     const size_t in_channels = input->shape[2];
+    
+    /*
     printf("strating vectrozied conv2d\n");
- 
-    fconv2d_tensor32(output->array, input->array, kernel->array,input->shape[0], input->shape[1],in_channels,kernel->shape[0],32);
+    
+    fconv2d_tensor32(output->array, input->array, kernel->array,input->shape[0], input->shape[1],in_channels,kernel->shape[0],2);
     //this where I do the printing for vectorized conv2d
     
     for( unsigned long var = 0; var < output->numel; var++)
@@ -214,8 +219,9 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
     }
     printf("\n");
     
-    printf("ending vectorized conv2d");
+    printf("ending vectorized conv2d\n");
 	
+    */
     for (size_t x0=0; x0 < out_rows; ++x0) {
         for (size_t x1=0; x1 < out_cols; ++x1) {
             for (size_t z0=0; z0 < kernel->shape[0]; ++z0) {
@@ -236,16 +242,17 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
             }
         }
     }
+    /*
     //this where I do the printing for scalar conv2d
     for( unsigned long var = 0; var < output->numel; var++)
     {
         printf("%f,",output->array[var]);
     }
     printf("\n");
-    
+    */
     k2c_bias_add(output,bias);
-    fReLu_tensor32(output->array, input->array,input->shape[0], input->shape[1], input->shape[2]);
-    //activation(output->array,output->numel);
+    //fReLu_tensor32(output->array, input->array,input->shape[0], input->shape[1], input->shape[2]);
+    activation(output->array,output->numel);
 }
 
 
