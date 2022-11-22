@@ -30,36 +30,6 @@
 //
 /////////////////////////////////////////////////////////////////
 
-/*void bitpack32_vec_1_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t W_in){
-
-   asm volatile("vsetvli zero, %0, e64, m4, ta, ma" ::"r"(len));
-   
-    int8_t *i_1 = tensor;
-    int8_t *i_2 = tensor + C_in * W_in;
-    
-   for(int loop = 0; loop < 4; loop ++){
-		
-	asm volatile("vlse64.v v8, (%0), %1; addi %0, %0, 8" : "+&r" (i_2) : "r"(C_in));
-	asm volatile("vlse64.v v12, (%0), %1; addi %0, %0, 8" : "+&r" (i_1) : "r"(C_in));
-	
-	
-	////////////////////////////////////////
-	asm volatile("vsll.vi v8, v8, 1");
-	asm volatile("vor.vv v16, v12, v8");
-
-	///////////////////////////////////// TO REPLACE WITH VSHACC
-	
-	// v0 = vpback(v16)
-	asm volatile(".byte 0x57, 0x00, 0x08, 0x0E");
-	
-	}
-
-	asm volatile("vsetvli zero, %0, e32, m2, ta, ma" ::"r"(len));
-		
- 	asm volatile("vnsrl.wi v2, v0, 0");
- 	asm volatile("vnsrl.wx v4, v0, %0" :: "r"(32));
-}*/
-
 void bitpack32_vec_1_to_32_2H(int8_t * tensor, uint64_t len, uint64_t C_in, uint64_t W_in){
 
    asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len));
@@ -246,10 +216,11 @@ void bitpack_filter32_vec_1_to_32(int8_t * tensor, int32_t* packed_data, uint64_
 				
 				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len_ >> 1));
 			
-				asm volatile("vlse64.v v18, (%0), %1" : "+&r" (i_1) : "r"(stride_i));
+				asm volatile("vlse64.v v16, (%0), %1" : "+&r" (i_1) : "r"(stride_i));
 				
 				i_1 += 8;
 				
+				if(len > 1){
 				asm volatile("vsetvli zero, %0, e64, m2, ta, ma" ::"r"(len >> 1));
 				
 				asm volatile("vlse64.v v20, (%0), %1" : "+&r" (i_2) : "r"(stride_i));
@@ -263,7 +234,8 @@ void bitpack_filter32_vec_1_to_32(int8_t * tensor, int32_t* packed_data, uint64_
 			   asm volatile("vsll.vi v20, v20, 1");
 			   #endif
 			   
-			   asm volatile("vor.vv v16, v20, v18");
+			   asm volatile("vor.vv v16, v20, v16");
+			   }
 			   ///////////////////////////////////// TO REPLACE WITH VSHACC
 	 			
 	 			// v0 = vpback(v16)

@@ -22,14 +22,14 @@
 
 #define VERIF
 
-#define PRECA_MAX	1
+#define PRECA_MAX	2
 #define PRECW_MAX	1
 
-#define F_MAX 		7		// Max size of the kernel F x F
-#define C_in 		32		// Number of input input_channels 
-#define C_out		1		// Number of output_channels (or output input_channels C_out)
+#define F_MAX 		5		// Max size of the kernel F x F
+#define C_in 		64		// Number of input input_channels 
+#define C_out		2		// Number of output_channels (or output input_channels C_out)
 #define I_MAX 		10		// Max H_in x W_in input size
-#define I_START	7			// Start input size
+#define I_START	10			// Start input size
 
 int8_t i[I_MAX * I_MAX * C_in];
 
@@ -95,12 +95,6 @@ for (int d = 0; d < D; ++d)   //depth
   	   	
   	   		val = (val + val_init) % 27;//65535; //pseudo random generator
   	   		tensor[c + C * (r + d * R)] = val & mask;
-				/*if (R == 3)
-				tensor[c + C * (r + d * R)] = 3;
-				else
-  	  			tensor[c + C * (r + d * R)] = c & 1;//val & mask;
-  	  			else
-  	  			tensor[c + C * (r + d * R)] = 0;*/
   	  			
   	   }		
 }
@@ -270,8 +264,6 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				
 				printf("                                                            done\n");
 				printf("Computing results...\n");
-				
-				//print_tensor(i, 8,8,1);
 				
 				start_timer();
 				

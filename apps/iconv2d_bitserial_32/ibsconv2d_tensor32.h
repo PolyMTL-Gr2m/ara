@@ -28,6 +28,7 @@
 
 // Max size of vector (group) for A1
 
+#define TILE_SIZE_A1_1x1 128
 #define TILE_SIZE_A1_3x3 128
 #define TILE_SIZE_A1_5x5 128
 #define TILE_SIZE_A1_7x7 128
@@ -49,6 +50,7 @@ void ibsconv2d_tensor32_3x3(int32_t *o, int8_t *i, int8_t *f, int64_t H_in, int6
 // A1W1 //
 //////////
 
+void ibsconv2d32_W1_A1_vec_1x1(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 void ibsconv2d32_W1_A1_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 void ibsconv2d32_W1_A1_vec_5x5(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 void ibsconv2d32_W1_A1_vec_7x7(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
@@ -67,6 +69,8 @@ void ibsconv2d32_W2_A1_vec_7x7(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, in
 
 // TBD
 
+void ibsconv2d32_W1_A2_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
+void ibsconv2d32_W1_A2_vec_5x5(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 void ibsconv2d32_W1_A2_vec_7x7(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 
 //////////
@@ -74,7 +78,7 @@ void ibsconv2d32_W1_A2_vec_7x7(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, in
 //////////
 
 void ibsconv2d32_W2_A2_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
-//void ibsconv2d32_W2_A2_vec_5x5(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
+void ibsconv2d32_W2_A2_vec_5x5(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 void ibsconv2d32_W2_A2_vec_7x7(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 
 

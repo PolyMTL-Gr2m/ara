@@ -48,12 +48,19 @@ void ibsconv2d_tensor32_3x3(int32_t *o, int8_t *i, int8_t *f, int64_t H_in, int6
 		
 		
     switch(F){
+    	case 1:
+		  if(precA == 1 && precW == 1)
+		  		ibsconv2d32_W1_A1_vec_1x1(o_, i_, f_, H_in, W_in, C_in, F, C_out);
+    	break;
+    	
     	case 3:
 		  // Iterate over the output rows
 		  if(precA == 1 && precW == 1)
 		  		ibsconv2d32_W1_A1_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F, C_out);	
 		  else if(precA == 1 && precW == 2)
 		  		ibsconv2d32_W2_A1_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F, C_out);	
+		  else if(precA == 2 && precW == 1)
+		  		ibsconv2d32_W1_A2_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F, C_out);	
 		  else if(precA == 2 && precW == 2)
 		  		ibsconv2d32_W2_A2_vec_3x3(o_, i_, f_, H_in, W_in, C_in, F, C_out);	
 		break;
@@ -63,6 +70,10 @@ void ibsconv2d_tensor32_3x3(int32_t *o, int8_t *i, int8_t *f, int64_t H_in, int6
 				ibsconv2d32_W1_A1_vec_5x5(o_, i_, f_, H_in, W_in, C_in, F, C_out);
 			else if(precA == 1 && precW == 2)
 				ibsconv2d32_W2_A1_vec_5x5(o_, i_, f_, H_in, W_in, C_in, F, C_out);
+			else if(precA == 2 && precW == 1)
+				ibsconv2d32_W1_A2_vec_5x5(o_, i_, f_, H_in, W_in, C_in, F, C_out);
+			else if(precA == 2 && precW == 2)
+				ibsconv2d32_W2_A2_vec_5x5(o_, i_, f_, H_in, W_in, C_in, F, C_out);
 			
 		break;
 		
@@ -105,6 +116,121 @@ void print_tensor_(uint32_t *tensor, uint64_t num_rows, uint64_t num_columns, ui
 //                                  (A1W1)                              //
 //                                                                      //
 //////////////////////////////////////////////////////////////////////////
+
+void ibsconv2d32_W1_A1_vec_1x1(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
+
+int64_t const ldo = C_out * W_in;
+uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
+
+// number of elements is  [prec * (F*F + 1)* C_in / 32]
+int32_t f_packed[2 * (C_in >> 5)];
+
+int64_t vlen; //for now
+
+int8_t * f_ = f_ptr;
+
+
+
+bitpack_filter32_vec_1_to_32(f_, f_packed, 1, C_in);
+
+if(H_in >= F && W_in >= F)
+for (int width = 0 ; width < W_in ; width += TILE_SIZE_A1_1x1) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+{
+
+	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
+	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
+
+	if(width > W_in - TILE_SIZE_A1_1x1) 	// if we are at the right border of the input
+		vlen = W_in % TILE_SIZE_A1_1x1;		 	// we set the vector length to fit the last inputs
+	else
+		vlen = TILE_SIZE_A1_1x1;						// else we go full length
+	
+	int8_t *i__ = i_;
+	
+	int32_t * f_loop = f_packed;
+						
+		for (int height = 0 ; height < H_in ; height += 4){
+
+			f_loop = f_packed;
+			
+			i__ = i_;
+			
+			
+			for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+			
+				f_loop = f_packed + channels * 2;
+
+				bitpack32_vec_1_to_32_4H(i__, vlen, C_in, H_in - height, W_in); 
+				
+				asm volatile("lw t0, (%0)"   : "+&r"(f_loop));
+				
+				if(channels > 0){ 
+					// v11 = popcount(v3  & f_packed[0])
+					asm volatile(".byte  0xD7, 0xC5, 0x32, 0x06");
+					if(height < H_in - 1)
+						// v12 = popcount(v4  & f_packed[0])
+						asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
+					if(height < H_in - 2)
+						// v13 = popcount(v5  & f_packed[0])
+						asm volatile(".byte  0xD7, 0xC6, 0x52, 0x06");
+					if(height < H_in - 3)
+						// v14 = popcount(v6  & f_packed[0])
+						asm volatile(".byte  0x57, 0xC7, 0x62, 0x06");
+					
+					asm volatile("vadd.vv v25, v25, v11");
+					if(height < H_in - 1)
+						asm volatile("vadd.vv v26, v26, v12");
+					if(height < H_in - 2)
+						asm volatile("vadd.vv v27, v27, v13");
+					if(height < H_in - 3)
+						asm volatile("vadd.vv v28, v28, v14");
+					
+				}
+				else{  
+				//	to place the first value in the right register on first execution
+				// avoid the sum step and the reset of vectors
+					// v25 = popcount(v3  & f_packed[0])
+					asm volatile(".byte  0xD7, 0xCC, 0x32, 0x06");
+					if(height < H_in - 1)
+						// v26 = popcount(v4  & f_packed[0])
+						asm volatile(".byte  0x57, 0xCD, 0x42, 0x06");
+					if(height < H_in - 2)
+						// v27 = popcount(v5  & f_packed[0])
+						asm volatile(".byte  0xD7, 0xCD, 0x52, 0x06");
+					if(height < H_in - 3)
+						// v28 = popcount(v6  & f_packed[0])
+						asm volatile(".byte  0x57, 0xCE, 0x62, 0x06");
+					
+					// no addition because values are already in the right vd
+				}
+					
+				i__ += ENCOD_SIZE;	
+			}
+			
+			i_ += 4 * C_in * W_in;	
+				
+			asm volatile("vsse32.v v25, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			
+			if(height < H_in - 1){
+				o_ += ldo;	
+				asm volatile("vsse32.v v26, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			if(height < H_in - 2){
+				o_ += ldo;	
+				asm volatile("vsse32.v v27, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			}
+			
+			if(height < H_in - 3){
+				o_ += ldo;	
+				asm volatile("vsse32.v v28, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			o_ += ldo;
+			
+			}
+	}
+}
 
 
 
@@ -2590,6 +2716,891 @@ for (int width = 0 ; width < W_in ; width += TILE_SIZE_A1_7x7) // IF CONVOLUTION
 //                                                                      //
 //////////////////////////////////////////////////////////////////////////
 
+void ibsconv2d32_W1_A2_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
+
+int64_t const ldo = C_out * (W_in - F + 1);
+uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
+
+// number of elements is  [precW * (F*F + 1)* C_in / 32]
+int32_t f_packed[(F * F + 1) * (C_in >> 5)];
+
+int64_t vlen; //for now
+
+int8_t * f_ = f_ptr;
+
+
+
+bitpack_filter32_vec_1_to_32(f_, f_packed, F*F, C_in);
+
+if(H_in >= 3 && W_in >= 3)
+for (int width = 0 ; width < W_in ; width += TILE_SIZE_A2_3x3) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+{
+
+	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
+	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
+
+	if(width > W_in - TILE_SIZE_A2_3x3) 	// if we are at the right border of the input
+		vlen = W_in % TILE_SIZE_A2_3x3;		 	// we set the vector length to fit the last inputs
+	else
+		vlen = TILE_SIZE_A2_3x3;						// else we go full length
+	
+	int8_t *i__ = i_;
+	
+	int32_t * f_loop = f_packed;
+	
+	for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+	
+		f_loop = f_packed + channels * (F * F + 1);
+
+		bitpack32_vec_2_to_32_2H(i__, vlen, C_in, W_in); 
+		
+		
+		for(int f_w = 0; f_w < 3 ; f_w ++){		
+			
+			// Weight LSB and Activation LSB
+			asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
+			asm volatile("lw t1, (%0); addi %0, %0, -8"   : "+&r"(f_loop));
+
+			if(f_w > 0 || channels > 0){ 
+				
+				// v12 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xC6, 0x02, 0x06");
+				// v13 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xC6, 0x12, 0x06");
+				
+				asm volatile("vadd.vv v26, v26, v12");
+				asm volatile("vadd.vv v27, v27, v13");
+			}
+			else{  
+			//	to place the first value in the right register on first execution
+			// avoid the sum step and the reset of vectors
+			
+				// v26 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xCD, 0x02, 0x06");
+				// v27 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xCD, 0x12, 0x06");
+				
+				// no addition because values are already in the right vd
+			}
+
+			// v12 = popcount(v1  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x13, 0x06");
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v0, v0, 1");
+				asm volatile("vslidedown.vi v1, v1, 1");
+			}
+			
+			asm volatile("vadd.vv v26, v26, v12");
+						
+			
+			
+			
+			// Weight LSB and Activation bit 1
+			// so we don't have to reload filter
+			
+			// v12 = popcount(v2  & f_packed_0[0])
+			asm volatile(".byte  0x57, 0xC6, 0x22, 0x06");
+			// v13 = popcount(v3  & f_packed_0[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x32, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v3  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x33, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			#endif
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v2, v2, 1");
+				asm volatile("vslidedown.vi v3, v3, 1");
+			}
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			//////////////////////////////////////
+			
+				
+			}
+			
+			i__ += ENCOD_SIZE;
+		}
+		
+		i_ += (F - 1) * C_in * W_in;	
+
+		
+		for (int height = F - 1 ; height < H_in ; height += 4){
+
+			f_loop = f_packed;
+			
+			i__ = i_;
+			
+			
+			for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+			
+				f_loop = f_packed + channels * (F * F + 1);
+
+				bitpack32_vec_2_to_32_4H(i__, vlen, C_in, H_in - height, W_in); 
+				
+
+				for(int f_w = 0; f_w < 3 ; f_w ++){		
+				
+					// Weight LSB and Activation LSB
+					asm volatile("lw t0, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
+					asm volatile("lw t1, (%0); addi %0, %0, 12"   : "+&r"(f_loop));
+					asm volatile("lw t2, (%0); addi %0, %0, -20"  : "+&r"(f_loop));
+					
+					
+					// v12 = popcount(v0  & f_packed_0[2])
+					asm volatile(".byte  0x57, 0xC6, 0x03, 0x06");
+					// v13 = popcount(v1  & f_packed_0[2])
+					asm volatile(".byte  0xD7, 0xC6, 0x13, 0x06");
+
+					
+					
+					
+					if(f_w > 0 || channels > 0){
+
+						// v14 = popcount(v2  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC7, 0x23, 0x06");
+						// v15 = popcount(v3  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x33, 0x06");
+					
+						asm volatile("vadd.vv v22, v22, v12");
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+					}
+					else{
+						
+						// v24 = popcount(v2  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xCC, 0x23, 0x06");
+						// v25 = popcount(v3  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xCC, 0x33, 0x06");
+					
+						asm volatile("vadd.vv v22, v26, v12");
+						asm volatile("vadd.vv v23, v27, v13");
+						
+					}
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v0 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x46, 0x03, 0x06");
+						// v14 = popcount(v1 & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x47, 0x13, 0x06");
+						// v15 = popcount(v2 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x23, 0x06");
+
+						
+						
+						if(f_w > 0 || channels > 0){
+							// v16 = popcount(v3 & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x48, 0x33, 0x06");
+							
+							asm volatile("vadd.vv v23, v23, v13");
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+							asm volatile("vadd.vv v26, v26, v16");
+						}
+						else{
+							// v26 = popcount(v3 & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x4D, 0x33, 0x06");
+							
+							asm volatile("vadd.vv v23, v23, v13");
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+						}
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v0  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC7, 0x02, 0x06");
+						// v15 = popcount(v1  & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC7, 0x12, 0x06");
+						// v16 = popcount(v2  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x22, 0x06");
+						
+						
+						if(f_w > 0 || channels > 0){
+							// v17 = popcount(v3  & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xC8, 0x32, 0x06");
+							
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+							asm volatile("vadd.vv v26, v26, v16");
+							asm volatile("vadd.vv v27, v27, v17");
+						}
+						else{
+							// v27 = popcount(v3  & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xCD, 0x32, 0x06");
+							
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+							asm volatile("vadd.vv v26, v26, v16");
+						}
+							
+					}
+					
+					
+					
+					
+					// Weight LSB and Activation bit 1
+					// v12 = popcount(v4  & f_packed_0[2])
+					asm volatile(".byte  0x57, 0xC6, 0x43, 0x06");
+					// v13 = popcount(v5  & f_packed_0[2])
+					asm volatile(".byte  0xD7, 0xC6, 0x53, 0x06");
+					// v14 = popcount(v6  & f_packed_0[2])
+					asm volatile(".byte  0x57, 0xC7, 0x63, 0x06");
+					// v15 = popcount(v7  & f_packed_0[2])
+					asm volatile(".byte  0xD7, 0xC7, 0x73, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 1");
+					asm volatile("vsll.vi v13, v13, 1");
+					asm volatile("vsll.vi v14, v14, 1");
+					asm volatile("vsll.vi v15, v15, 1");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v4 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x46, 0x43, 0x06");
+						// v14 = popcount(v5 & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x47, 0x53, 0x06");
+						// v15 = popcount(v6 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x63, 0x06");
+						// v16 = popcount(v7 & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x48, 0x73, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 1");
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v4  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC7, 0x42, 0x06");
+						// v15 = popcount(v5  & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC7, 0x52, 0x06");
+						// v16 = popcount(v6  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x62, 0x06");
+						// v17 = popcount(v7  & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x72, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+						
+									
+					if(f_w < F - 1){
+						asm volatile("vslidedown.vi v0, v0, 1");
+						asm volatile("vslidedown.vi v4, v4, 1");
+						if(height < H_in - 1){
+							asm volatile("vslidedown.vi v1, v1, 1");
+							asm volatile("vslidedown.vi v5, v5, 1");
+						}
+						if(height < H_in - 2){	
+							asm volatile("vslidedown.vi v2, v2, 1");
+							asm volatile("vslidedown.vi v6, v6, 1");
+						}
+						if(height < H_in - 3){
+							asm volatile("vslidedown.vi v3, v3, 1");	
+							asm volatile("vslidedown.vi v7, v7, 1");
+						}
+					}
+					
+				}	
+				
+				i__ += ENCOD_SIZE;	
+			}
+			
+			i_ +=  4 * C_in * W_in;
+			
+			
+			asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vlen - F + 1));
+				
+			asm volatile("vsse32.v v22, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			
+			if(height < H_in - 1){
+				o_ += ldo;	
+				asm volatile("vsse32.v v23, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			if(height < H_in - 2){
+				o_ += ldo;	
+				asm volatile("vsse32.v v24, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			}
+			
+			if(height < H_in - 3){
+				o_ += ldo;	
+				asm volatile("vsse32.v v25, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			o_ += ldo;
+			
+			}
+	}
+}
+
+
+void ibsconv2d32_W1_A2_vec_5x5(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
+
+int64_t const ldo = C_out * (W_in - F + 1);
+uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
+
+// number of elements is  [precW * (F*F + 1)* C_in / 32]
+int32_t f_packed[(F * F + 1) * (C_in >> 5)];
+
+int64_t vlen; //for now
+
+int8_t * f_ = f_ptr;
+
+
+
+bitpack_filter32_vec_1_to_32(f_, f_packed, F*F, C_in);
+
+if(H_in >= F && W_in >= F)
+for (int width = 0 ; width < W_in ; width += TILE_SIZE_A2_5x5) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+{
+
+	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
+	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
+
+	if(width > W_in - TILE_SIZE_A2_5x5) 	// if we are at the right border of the input
+		vlen = W_in % TILE_SIZE_A2_5x5;		 	// we set the vector length to fit the last inputs
+	else
+		vlen = TILE_SIZE_A2_5x5;						// else we go full length
+	
+	int8_t *i__ = i_;
+	
+	int32_t * f_loop = f_packed;
+	
+	for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+	
+		f_loop = f_packed + channels * (F * F + 1);
+
+		bitpack32_vec_2_to_32_4H(i__, vlen, C_in, F, W_in); 
+		
+		
+		for(int f_w = 0; f_w < 5 ; f_w ++){		
+			
+			// Weight LSB and Activation LSB
+			asm volatile("lw t0, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
+			asm volatile("lw t1, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
+			asm volatile("lw t2, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
+			asm volatile("lw t3, (%0); addi %0, %0, -56"  : "+&r"(f_loop));
+
+			if(f_w > 0 || channels > 0){ 
+				
+				// v12 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xC6, 0x02, 0x06");
+				// v13 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xC6, 0x12, 0x06");
+				// v14 = popcount(v2  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xC7, 0x22, 0x06");
+				// v15 = popcount(v3  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xC7, 0x32, 0x06");
+				
+				asm volatile("vadd.vv v26, v26, v12");
+				asm volatile("vadd.vv v27, v27, v13");
+				asm volatile("vadd.vv v28, v28, v14");
+				asm volatile("vadd.vv v29, v29, v15");
+			}
+			else{  
+			//	to place the first value in the right register on first execution
+			// avoid the sum step and the reset of vectors
+			
+				// v26 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xCD, 0x02, 0x06");
+				// v27 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xCD, 0x12, 0x06");
+				// v28 = popcount(v2  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xCE, 0x22, 0x06");
+				// v29 = popcount(v3  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xCE, 0x32, 0x06");
+				
+				// no addition because values are already in the right vd
+			}
+
+			// v12 = popcount(v1  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x13, 0x06");
+			// v13 = popcount(v2  & f_packed_0[1])
+			asm volatile(".byte  0xD7, 0x46, 0x23, 0x06");
+			// v14 = popcount(v3  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x47, 0x33, 0x06");
+			
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+
+			
+			// v12 = popcount(v2  & f_packed_0[2])
+			asm volatile(".byte  0x57, 0xC6, 0x23, 0x06");
+			// v13 = popcount(v3  & f_packed_0[2])
+			asm volatile(".byte  0xD7, 0xC6, 0x33, 0x06");
+
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+
+			
+			// v12 = popcount(v3  & f_packed_0[3])
+			asm volatile(".byte  0x57, 0x46, 0x3E, 0x06");
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v0, v0, 1");
+				asm volatile("vslidedown.vi v1, v1, 1");
+				asm volatile("vslidedown.vi v2, v2, 1");
+				asm volatile("vslidedown.vi v3, v3, 1");
+			}	
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			// Weight LSB and Activation bit 1
+			// so we don't have to reload filter
+			
+			// v12 = popcount(v4  & f_packed_0[0])
+			asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
+			// v13 = popcount(v5  & f_packed_0[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x52, 0x06");
+			// v14 = popcount(v6  & f_packed_0[0])
+			asm volatile(".byte  0x57, 0xC7, 0x62, 0x06");
+			// v15 = popcount(v7  & f_packed_0[0])
+			asm volatile(".byte  0xD7, 0xC7, 0x72, 0x06");
+			
+			////// REPLACE WITH 6 VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			asm volatile("vsll.vi v14, v14, 1");
+			asm volatile("vsll.vi v15, v15, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			asm volatile("vadd.vv v29, v29, v15");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v5  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x53, 0x06");
+			// v13 = popcount(v6  & f_packed_0[1])
+			asm volatile(".byte  0xD7, 0x46, 0x63, 0x06");
+			// v14 = popcount(v7  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x47, 0x73, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			asm volatile("vsll.vi v14, v14, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			//////////////////////////////////////
+			
+			// v12 = popcount(v6  & f_packed_0[2])
+			asm volatile(".byte  0x57, 0xC6, 0x63, 0x06");
+			// v13 = popcount(v7  & f_packed_0[2])
+			asm volatile(".byte  0xD7, 0xC6, 0x73, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			#endif
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			////////////////////////////////////
+			
+			// v12 = popcount(v7  & f_packed_0[3])
+			asm volatile(".byte  0x57, 0x46, 0x7E, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			#endif
+			
+			if(f_w < F - 1){	
+				asm volatile("vslidedown.vi v4, v4, 1");
+				asm volatile("vslidedown.vi v5, v5, 1");
+				asm volatile("vslidedown.vi v6, v6, 1");
+				asm volatile("vslidedown.vi v7, v7, 1");
+			}
+					
+			asm volatile("vadd.vv v26, v26, v12");
+			/////////////////////////////////////
+			
+
+				
+			}
+			
+			i__ += ENCOD_SIZE;
+		}
+		
+		i_ += (F - 1) * C_in * W_in;	
+
+		
+		for (int height = F - 1 ; height < H_in ; height += 4){
+
+			f_loop = f_packed;
+			
+			i__ = i_;
+			
+			
+			for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+			
+				f_loop = f_packed + channels * (F * F + 1);
+
+				bitpack32_vec_2_to_32_4H(i__, vlen, C_in, H_in - height, W_in); 
+				
+
+				for(int f_w = 0; f_w < 5 ; f_w ++){		
+				
+					// Weight LSB and Activation LSB
+					asm volatile("lw t0, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
+					asm volatile("lw t1, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
+					asm volatile("lw t2, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
+					asm volatile("lw t3, (%0); addi %0, %0, 20"   : "+&r"(f_loop));
+					asm volatile("lw t4, (%0); addi %0, %0, -76"  : "+&r"(f_loop));
+					
+
+					// v12 = popcount(v0  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC6, 0x0E, 0x06");
+					// v13 = popcount(v1  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC6, 0x1E, 0x06");
+					// v14 = popcount(v2  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC7, 0x2E, 0x06");
+					// v15 = popcount(v3  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC7, 0x3E, 0x06");
+					
+					
+					
+					if(f_w > 0 || channels > 0){
+						asm volatile("vadd.vv v22, v22, v12");
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+					}
+					else{
+						asm volatile("vadd.vv v22, v26, v12");
+						asm volatile("vadd.vv v23, v27, v13");
+						asm volatile("vadd.vv v24, v28, v14");
+						asm volatile("vadd.vv v25, v29, v15");
+						}
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v0 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x46, 0x0E, 0x06");
+						// v14 = popcount(v1 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x47, 0x1E, 0x06");
+						// v15 = popcount(v2 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x47, 0x2E, 0x06");
+						// v16 = popcount(v3 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x48, 0x3E, 0x06");
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v26, v26, v16");
+						else
+							asm volatile("vadd.vv v26, v30, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v0  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC7, 0x03, 0x06");
+						// v15 = popcount(v1  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x13, 0x06");
+						// v16 = popcount(v2  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC8, 0x23, 0x06");
+						// v17 = popcount(v3  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC8, 0x33, 0x06");
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v27, v27, v17");
+						else
+							asm volatile("vadd.vv v27, v31, v17");
+							
+					}
+					
+					if(height < H_in - 3){
+						// v15 = popcount(v0  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x03, 0x06");
+						// v16 = popcount(v1  & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x48, 0x13, 0x06");
+						// v17 = popcount(v2  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x48, 0x23, 0x06");
+						
+						if(f_w > 0 || channels > 0)
+							// v18 = popcount(v3  & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x49, 0x33, 0x06");
+						else
+							// v28 = popcount(v3 & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x4E, 0x33, 0x06");
+						
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v28, v28, v18");
+							
+					}
+					
+					if(height < H_in - 4){
+						// v16 = popcount(v0 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x02, 0x06");
+						// v17 = popcount(v1 & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x12, 0x06");
+						// v18 = popcount(v2 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC9, 0x22, 0x06");
+						
+						if(f_w > 0 || channels > 0)
+							// v19 = popcount(v3 & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xC9, 0x32, 0x06");
+						else
+							// v29 = popcount(v3 & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xCE, 0x32, 0x06");
+							
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v29, v29, v19");
+					}
+					
+					
+							
+					
+					
+					
+					// Weight LSB and Activation bit 1
+					// v12 = popcount(v4  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC6, 0x4E, 0x06");
+					// v13 = popcount(v5  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC6, 0x5E, 0x06");
+					// v14 = popcount(v6  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC7, 0x6E, 0x06");
+					// v15 = popcount(v7  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC7, 0x7E, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 1");
+					asm volatile("vsll.vi v13, v13, 1");
+					asm volatile("vsll.vi v14, v14, 1");
+					asm volatile("vsll.vi v15, v15, 1");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v4 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x46, 0x4E, 0x06");
+						// v14 = popcount(v5 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x47, 0x5E, 0x06");
+						// v15 = popcount(v6 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x47, 0x6E, 0x06");
+						// v16 = popcount(v7 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x48, 0x7E, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 1");
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v4  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC7, 0x43, 0x06");
+						// v15 = popcount(v5  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x53, 0x06");
+						// v16 = popcount(v6  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC8, 0x63, 0x06");
+						// v17 = popcount(v7  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC8, 0x73, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+					if(height < H_in - 3){
+						// v15 = popcount(v4  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x43, 0x06");
+						// v16 = popcount(v5  & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x48, 0x53, 0x06");
+						// v17 = popcount(v6  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x48, 0x63, 0x06");
+						// v18 = popcount(v7  & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x49, 0x73, 0x06");
+							
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						asm volatile("vsll.vi v18, v18, 1");
+						#endif
+						
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+							
+					}
+					
+					if(height < H_in - 4){
+						// v16 = popcount(v4 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x42, 0x06");
+						// v17 = popcount(v5 & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x52, 0x06");
+						// v18 = popcount(v6 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC9, 0x62, 0x06");
+						// v19 = popcount(v7 & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC9, 0x72, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						asm volatile("vsll.vi v18, v18, 1");
+						asm volatile("vsll.vi v19, v19, 1");
+						#endif
+							
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+						asm volatile("vadd.vv v29, v29, v19");
+					}
+									
+					if(f_w < F - 1){
+						asm volatile("vslidedown.vi v0, v0, 1");
+						asm volatile("vslidedown.vi v4, v4, 1");
+						if(height < H_in - 1){
+							asm volatile("vslidedown.vi v1, v1, 1");
+							asm volatile("vslidedown.vi v5, v5, 1");
+						}
+						if(height < H_in - 2){	
+							asm volatile("vslidedown.vi v2, v2, 1");
+							asm volatile("vslidedown.vi v6, v6, 1");
+						}
+						if(height < H_in - 3){
+							asm volatile("vslidedown.vi v3, v3, 1");	
+							asm volatile("vslidedown.vi v7, v7, 1");
+						}
+					}
+					
+				}	
+				
+				i__ += ENCOD_SIZE;	
+			}
+			
+			i_ +=  4 * C_in * W_in;
+			
+			
+			asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vlen - F + 1));
+				
+			asm volatile("vsse32.v v22, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			
+			if(height < H_in - 1){
+				o_ += ldo;	
+				asm volatile("vsse32.v v23, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			if(height < H_in - 2){
+				o_ += ldo;	
+				asm volatile("vsse32.v v24, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			}
+			
+			if(height < H_in - 3){
+				o_ += ldo;	
+				asm volatile("vsse32.v v25, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			o_ += ldo;
+			
+			}
+	}
+}
+
 void ibsconv2d32_W1_A2_vec_7x7(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
 
 int64_t const ldo = C_out * (W_in - 6);
@@ -3323,14 +4334,1547 @@ for (int width = 0 ; width < W_in ; width += TILE_SIZE_A2_7x7) // IF CONVOLUTION
 
 void ibsconv2d32_W2_A2_vec_3x3(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
 
-// TO BE RE-DONE
+int64_t const ldo = C_out * (W_in - F + 1);
+uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
 
+// number of elements is  [precW * (F*F + 1)* C_in / 32]
+int32_t f_packed[2 * F * F * (C_in >> 5)];
+
+int64_t vlen; //for now
+
+int8_t * f_ = f_ptr;
+
+
+
+bitpack_filter32_vec_2_to_32(f_, f_packed, F*F, C_in);
+
+if(H_in >= 3 && W_in >= 3)
+for (int width = 0 ; width < W_in ; width += TILE_SIZE_A2_3x3) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+{
+
+	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
+	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
+
+	if(width > W_in - TILE_SIZE_A2_3x3) 	// if we are at the right border of the input
+		vlen = W_in % TILE_SIZE_A2_3x3;		 	// we set the vector length to fit the last inputs
+	else
+		vlen = TILE_SIZE_A2_3x3;						// else we go full length
+	
+	int8_t *i__ = i_;
+	
+	int32_t * f_loop = f_packed;
+	
+	for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+	
+		f_loop = f_packed + 2 * channels * F * F;
+
+		bitpack32_vec_2_to_32_2H(i__, vlen, C_in, W_in); 
+		
+		
+		for(int f_w = 0; f_w < 3 ; f_w ++){		
+			
+			// Weight LSB and Activation LSB
+			asm volatile("lw t0, (%0); addi %0, %0, 24"   : "+&r"(f_loop));
+			asm volatile("lw t1, (%0); addi %0, %0, -20"   : "+&r"(f_loop));
+
+			if(f_w > 0 || channels > 0){ 
+				
+				// v12 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xC6, 0x02, 0x06");
+				// v13 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xC6, 0x12, 0x06");
+				
+				asm volatile("vadd.vv v26, v26, v12");
+				asm volatile("vadd.vv v27, v27, v13");
+			}
+			else{  
+			//	to place the first value in the right register on first execution
+			// avoid the sum step and the reset of vectors
+			
+				// v26 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xCD, 0x02, 0x06");
+				// v27 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xCD, 0x12, 0x06");
+				
+				// no addition because values are already in the right vd
+			}
+
+			// v12 = popcount(v1  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x13, 0x06");
+			
+			asm volatile("vadd.vv v26, v26, v12");
+						
+			
+			
+			
+			// Weight LSB and Activation bit 1
+			// so we don't have to reload filter
+			
+			// A changer par v2 et v3
+			
+			// v12 = popcount(v2  & f_packed_0[0])
+			asm volatile(".byte  0x57, 0xC6, 0x22, 0x06");
+			// v13 = popcount(v3  & f_packed_0[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x32, 0x06");
+			
+			////// REPLACE WITH 6 VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v3  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x33, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			//////////////////////////////////////
+				
+			
+			
+			
+			
+			
+			
+			
+			// Weight bit 1 and Activation LSB	
+			asm volatile("lw t0, (%0); addi %0, %0, 24"   : "+&r"(f_loop));
+			asm volatile("lw t1, (%0); addi %0, %0, -20"   : "+&r"(f_loop));
+			
+			// v12 = popcount(v0  & f_packed_1[0])
+			asm volatile(".byte  0x57, 0xC6, 0x02, 0x06");
+			// v13 = popcount(v1  & f_packed_1[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x12, 0x06");
+			
+			////// REPLACE WITH 6 VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v1  & f_packed_1[1])
+			asm volatile(".byte  0x57, 0x46, 0x13, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			#endif
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v0, v0, 1");
+				asm volatile("vslidedown.vi v1, v1, 1");
+			}
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			//////////////////////////////////////
+	
+			
+			
+			
+			
+			
+			// Weight bit 1 and Activation bit 1
+			// so we don't have to reload filter
+			// v12 = popcount(v2  & f_packed_1[0])
+			asm volatile(".byte  0x57, 0xC6, 0x22, 0x06");
+			// v13 = popcount(v3  & f_packed_1[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x32, 0x06");
+			
+			////// REPLACE WITH 6 VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 2");
+			asm volatile("vsll.vi v13, v13, 2");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v3  & f_packed_1[1])
+			asm volatile(".byte  0x57, 0x46, 0x33, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 2");
+			#endif
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v2, v2, 1");
+				asm volatile("vslidedown.vi v3, v3, 1");
+			}
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			//////////////////////////////////////
+			
+			
+			
+		
+
+				
+			}
+			
+			i__ += ENCOD_SIZE;
+		}
+		
+		i_ += (F - 1) * C_in * W_in;	
+
+		
+		for (int height = F - 1 ; height < H_in ; height += 4){
+
+			f_loop = f_packed;
+			
+			i__ = i_;
+			
+			
+			for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+			
+				f_loop = f_packed + 2 * channels * F * F;
+
+				bitpack32_vec_2_to_32_4H(i__, vlen, C_in, H_in - height, W_in); 
+				
+
+				for(int f_w = 0; f_w < 3 ; f_w ++){		
+				
+					// Weight LSB and Activation LSB
+					asm volatile("lw t0, (%0); addi %0, %0, 24"   : "+&r"(f_loop));
+					asm volatile("lw t1, (%0); addi %0, %0, 24"   : "+&r"(f_loop));
+					asm volatile("lw t2, (%0); addi %0, %0, -44"  : "+&r"(f_loop));
+					
+					
+					// v12 = popcount(v0  & f_packed_0[2])
+					asm volatile(".byte  0x57, 0xC6, 0x03, 0x06");
+					// v13 = popcount(v1  & f_packed_0[2])
+					asm volatile(".byte  0xD7, 0xC6, 0x13, 0x06");
+
+					
+					
+					
+					if(f_w > 0 || channels > 0){
+
+						// v14 = popcount(v2  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC7, 0x23, 0x06");
+						// v15 = popcount(v3  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x33, 0x06");
+					
+						asm volatile("vadd.vv v22, v22, v12");
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+					}
+					else{
+						
+						// v24 = popcount(v2  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xCC, 0x23, 0x06");
+						// v25 = popcount(v3  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xCC, 0x33, 0x06");
+					
+						asm volatile("vadd.vv v22, v26, v12");
+						asm volatile("vadd.vv v23, v27, v13");
+						
+					}
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v0 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x46, 0x03, 0x06");
+						// v14 = popcount(v1 & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x47, 0x13, 0x06");
+						// v15 = popcount(v2 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x23, 0x06");
+
+						
+						
+						if(f_w > 0 || channels > 0){
+							// v16 = popcount(v3 & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x48, 0x33, 0x06");
+							
+							asm volatile("vadd.vv v23, v23, v13");
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+							asm volatile("vadd.vv v26, v26, v16");
+						}
+						else{
+							// v26 = popcount(v3 & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x4D, 0x33, 0x06");
+							
+							asm volatile("vadd.vv v23, v23, v13");
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+						}
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v0  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC7, 0x02, 0x06");
+						// v15 = popcount(v1  & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC7, 0x12, 0x06");
+						// v16 = popcount(v2  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x22, 0x06");
+						
+						
+						if(f_w > 0 || channels > 0){
+							// v17 = popcount(v3  & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xC8, 0x32, 0x06");
+							
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+							asm volatile("vadd.vv v26, v26, v16");
+							asm volatile("vadd.vv v27, v27, v17");
+						}
+						else{
+							// v27 = popcount(v3  & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xCD, 0x32, 0x06");
+							
+							asm volatile("vadd.vv v24, v24, v14");
+							asm volatile("vadd.vv v25, v25, v15");
+							asm volatile("vadd.vv v26, v26, v16");
+						}
+							
+					}
+					
+					
+					
+					
+					// Weight LSB and Activation bit 1
+					// v12 = popcount(v4  & f_packed_0[2])
+					asm volatile(".byte  0x57, 0xC6, 0x43, 0x06");
+					// v13 = popcount(v5  & f_packed_0[2])
+					asm volatile(".byte  0xD7, 0xC6, 0x53, 0x06");
+					// v14 = popcount(v6  & f_packed_0[2])
+					asm volatile(".byte  0x57, 0xC7, 0x63, 0x06");
+					// v15 = popcount(v7  & f_packed_0[2])
+					asm volatile(".byte  0xD7, 0xC7, 0x73, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 1");
+					asm volatile("vsll.vi v13, v13, 1");
+					asm volatile("vsll.vi v14, v14, 1");
+					asm volatile("vsll.vi v15, v15, 1");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v4 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x46, 0x43, 0x06");
+						// v14 = popcount(v5 & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x47, 0x53, 0x06");
+						// v15 = popcount(v6 & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x63, 0x06");
+						// v16 = popcount(v7 & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x48, 0x73, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 1");
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v4  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC7, 0x42, 0x06");
+						// v15 = popcount(v5  & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC7, 0x52, 0x06");
+						// v16 = popcount(v6  & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x62, 0x06");
+						// v17 = popcount(v7  & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x72, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+					
+					
+					
+					
+					
+					// Weight bit 1 and Activation LSB
+					asm volatile("lw t0, (%0); addi %0, %0, 24"   : "+&r"(f_loop));
+					asm volatile("lw t1, (%0); addi %0, %0, 24"   : "+&r"(f_loop));
+					asm volatile("lw t2, (%0); addi %0, %0, -44"   : "+&r"(f_loop));
+					
+					
+					// v12 = popcount(v0  & f_packed_1[2])
+					asm volatile(".byte  0x57, 0xC6, 0x03, 0x06");
+					// v13 = popcount(v1  & f_packed_1[2])
+					asm volatile(".byte  0xD7, 0xC6, 0x13, 0x06");
+					// v14 = popcount(v2  & f_packed_1[2])
+					asm volatile(".byte  0x57, 0xC7, 0x23, 0x06");
+					// v15 = popcount(v3  & f_packed_1[2])
+					asm volatile(".byte  0xD7, 0xC7, 0x33, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 1");
+					asm volatile("vsll.vi v13, v13, 1");
+					asm volatile("vsll.vi v14, v14, 1");
+					asm volatile("vsll.vi v15, v15, 1");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v0 & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x46, 0x03, 0x06");
+						// v14 = popcount(v1 & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x47, 0x13, 0x06");
+						// v15 = popcount(v2 & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x47, 0x23, 0x06");
+						// v16 = popcount(v3 & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x48, 0x33, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 1");
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v0  & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC7, 0x02, 0x06");
+						// v15 = popcount(v1  & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC7, 0x12, 0x06");
+						// v16 = popcount(v2  & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC8, 0x22, 0x06");
+						// v17 = popcount(v3  & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x32, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+						
+						
+						
+						
+					// Weight bit 1 and Activation bit 1
+					// v12 = popcount(v4  & f_packed_1[2])
+					asm volatile(".byte  0x57, 0xC6, 0x43, 0x06");
+					// v13 = popcount(v5  & f_packed_1[2])
+					asm volatile(".byte  0xD7, 0xC6, 0x53, 0x06");
+					// v14 = popcount(v6  & f_packed_1[2])
+					asm volatile(".byte  0x57, 0xC7, 0x63, 0x06");
+					// v15 = popcount(v7  & f_packed_1[2])
+					asm volatile(".byte  0xD7, 0xC7, 0x73, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 2");
+					asm volatile("vsll.vi v13, v13, 2");
+					asm volatile("vsll.vi v14, v14, 2");
+					asm volatile("vsll.vi v15, v15, 2");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v4 & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x46, 0x43, 0x06");
+						// v14 = popcount(v5 & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x47, 0x53, 0x06");
+						// v15 = popcount(v6 & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x47, 0x63, 0x06");
+						// v16 = popcount(v7 & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x48, 0x73, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 2");
+						asm volatile("vsll.vi v14, v14, 2");
+						asm volatile("vsll.vi v15, v15, 2");
+						asm volatile("vsll.vi v16, v16, 2");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v4  & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC7, 0x42, 0x06");
+						// v15 = popcount(v5  & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC7, 0x52, 0x06");
+						// v16 = popcount(v6  & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC8, 0x62, 0x06");
+						// v17 = popcount(v7  & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x72, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 2");
+						asm volatile("vsll.vi v15, v15, 2");
+						asm volatile("vsll.vi v16, v16, 2");
+						asm volatile("vsll.vi v17, v17, 2");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+						
+									
+					if(f_w < F - 1){
+						asm volatile("vslidedown.vi v0, v0, 1");
+						asm volatile("vslidedown.vi v4, v4, 1");
+						if(height < H_in - 1){
+							asm volatile("vslidedown.vi v1, v1, 1");
+							asm volatile("vslidedown.vi v5, v5, 1");
+						}
+						if(height < H_in - 2){	
+							asm volatile("vslidedown.vi v2, v2, 1");
+							asm volatile("vslidedown.vi v6, v6, 1");
+						}
+						if(height < H_in - 3){
+							asm volatile("vslidedown.vi v3, v3, 1");	
+							asm volatile("vslidedown.vi v7, v7, 1");
+						}
+					}
+					
+				}	
+				
+				i__ += ENCOD_SIZE;	
+			}
+			
+			i_ +=  4 * C_in * W_in;
+			
+			
+			asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vlen - F + 1));
+				
+			asm volatile("vsse32.v v22, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			
+			if(height < H_in - 1){
+				o_ += ldo;	
+				asm volatile("vsse32.v v23, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			if(height < H_in - 2){
+				o_ += ldo;	
+				asm volatile("vsse32.v v24, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			}
+			
+			if(height < H_in - 3){
+				o_ += ldo;	
+				asm volatile("vsse32.v v25, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			o_ += ldo;
+			
+			}
+	}
+}
+
+void ibsconv2d32_W2_A2_vec_5x5(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
+
+int64_t const ldo = C_out * (W_in - F + 1);
+uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
+
+// number of elements is  [precW * (F*F + 1)* C_in / 32]
+int32_t f_packed[2 * F * F * (C_in >> 5)];
+
+int64_t vlen; //for now
+
+int8_t * f_ = f_ptr;
+
+
+
+bitpack_filter32_vec_2_to_32(f_, f_packed, F*F, C_in);
+
+if(H_in >= F && W_in >= F)
+for (int width = 0 ; width < W_in ; width += TILE_SIZE_A2_5x5) // IF CONVOLUTION NEED TO BE TILED (C > TILE_SIZE)
+{
+
+	int8_t *i_ = i_ptr + width * C_in; 									// input pointer realtive to the tile (constant throughout the tile)
+	int32_t *o_ = o_ptr + width * C_out;									// output pointer relative to the tile	
+
+	if(width > W_in - TILE_SIZE_A2_5x5) 	// if we are at the right border of the input
+		vlen = W_in % TILE_SIZE_A2_5x5;		 	// we set the vector length to fit the last inputs
+	else
+		vlen = TILE_SIZE_A2_5x5;						// else we go full length
+	
+	int8_t *i__ = i_;
+	
+	int32_t * f_loop = f_packed;
+	
+	for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+	
+		f_loop = f_packed + 2 * channels * F * F;
+
+		bitpack32_vec_2_to_32_4H(i__, vlen, C_in, F, W_in); 
+		
+		
+		for(int f_w = 0; f_w < 5 ; f_w ++){		
+			
+			// Weight LSB and Activation LSB
+			asm volatile("lw t0, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+			asm volatile("lw t1, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+			asm volatile("lw t2, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+			asm volatile("lw t3, (%0); addi %0, %0, -116" : "+&r"(f_loop));
+
+			if(f_w > 0 || channels > 0){ 
+				
+				// v12 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xC6, 0x02, 0x06");
+				// v13 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xC6, 0x12, 0x06");
+				// v14 = popcount(v2  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xC7, 0x22, 0x06");
+				// v15 = popcount(v3  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xC7, 0x32, 0x06");
+				
+				asm volatile("vadd.vv v26, v26, v12");
+				asm volatile("vadd.vv v27, v27, v13");
+				asm volatile("vadd.vv v28, v28, v14");
+				asm volatile("vadd.vv v29, v29, v15");
+			}
+			else{  
+			//	to place the first value in the right register on first execution
+			// avoid the sum step and the reset of vectors
+			
+				// v26 = popcount(v0  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xCD, 0x02, 0x06");
+				// v27 = popcount(v1  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xCD, 0x12, 0x06");
+				// v28 = popcount(v2  & f_packed_0[0])
+				asm volatile(".byte  0x57, 0xCE, 0x22, 0x06");
+				// v29 = popcount(v3  & f_packed_0[0])
+				asm volatile(".byte  0xD7, 0xCE, 0x32, 0x06");
+				
+				// no addition because values are already in the right vd
+			}
+
+			// v12 = popcount(v1  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x13, 0x06");
+			// v13 = popcount(v2  & f_packed_0[1])
+			asm volatile(".byte  0xD7, 0x46, 0x23, 0x06");
+			// v14 = popcount(v3  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x47, 0x33, 0x06");
+			
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+
+			
+			// v12 = popcount(v2  & f_packed_0[2])
+			asm volatile(".byte  0x57, 0xC6, 0x23, 0x06");
+			// v13 = popcount(v3  & f_packed_0[2])
+			asm volatile(".byte  0xD7, 0xC6, 0x33, 0x06");
+
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+
+			
+			// v12 = popcount(v3  & f_packed_0[3])
+			asm volatile(".byte  0x57, 0x46, 0x3E, 0x06");
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			// Weight LSB and Activation bit 1
+			// so we don't have to reload filter
+			
+			// v12 = popcount(v4  & f_packed_0[0])
+			asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
+			// v13 = popcount(v5  & f_packed_0[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x52, 0x06");
+			// v14 = popcount(v6  & f_packed_0[0])
+			asm volatile(".byte  0x57, 0xC7, 0x62, 0x06");
+			// v15 = popcount(v7  & f_packed_0[0])
+			asm volatile(".byte  0xD7, 0xC7, 0x72, 0x06");
+			
+			////// REPLACE WITH 6 VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			asm volatile("vsll.vi v14, v14, 1");
+			asm volatile("vsll.vi v15, v15, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			asm volatile("vadd.vv v29, v29, v15");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v5  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x46, 0x53, 0x06");
+			// v13 = popcount(v6  & f_packed_0[1])
+			asm volatile(".byte  0xD7, 0x46, 0x63, 0x06");
+			// v14 = popcount(v7  & f_packed_0[1])
+			asm volatile(".byte  0x57, 0x47, 0x73, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			asm volatile("vsll.vi v14, v14, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			//////////////////////////////////////
+			
+			// v12 = popcount(v6  & f_packed_0[2])
+			asm volatile(".byte  0x57, 0xC6, 0x63, 0x06");
+			// v13 = popcount(v7  & f_packed_0[2])
+			asm volatile(".byte  0xD7, 0xC6, 0x73, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			#endif
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			////////////////////////////////////
+			
+			// v12 = popcount(v7  & f_packed_0[3])
+			asm volatile(".byte  0x57, 0x46, 0x7E, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			#endif
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			/////////////////////////////////////
+			
+
+			
+			
+			
+			
+			
+			
+			
+			
+			// Weight bit 1 and Activation LSB	
+			asm volatile("lw t0, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+			asm volatile("lw t1, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+			asm volatile("lw t2, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+			asm volatile("lw t3, (%0); addi %0, %0, -116" : "+&r"(f_loop));
+			
+			// v12 = popcount(v0  & f_packed_1[0])
+			asm volatile(".byte  0x57, 0xC6, 0x02, 0x06");
+			// v13 = popcount(v1  & f_packed_1[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x12, 0x06");
+			// v14 = popcount(v2  & f_packed_1[0])
+			asm volatile(".byte  0x57, 0xC7, 0x22, 0x06");
+			// v15 = popcount(v3  & f_packed_1[0])
+			asm volatile(".byte  0xD7, 0xC7, 0x32, 0x06");
+
+			
+			////// REPLACE WITH 6 VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			asm volatile("vsll.vi v14, v14, 1");
+			asm volatile("vsll.vi v15, v15, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			asm volatile("vadd.vv v29, v29, v15");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v1  & f_packed_1[1])
+			asm volatile(".byte  0x57, 0x46, 0x13, 0x06");
+			// v13 = popcount(v2  & f_packed_1[1])
+			asm volatile(".byte  0xD7, 0x46, 0x23, 0x06");
+			// v14 = popcount(v3  & f_packed_1[1])
+			asm volatile(".byte  0x57, 0x47, 0x33, 0x06");
+
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			asm volatile("vsll.vi v14, v14, 1");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			//////////////////////////////////////
+			
+			// v12 = popcount(v2  & f_packed_1[2])
+			asm volatile(".byte  0x57, 0xC6, 0x23, 0x06");
+			// v13 = popcount(v3  & f_packed_1[2])
+			asm volatile(".byte  0xD7, 0xC6, 0x33, 0x06");
+
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			asm volatile("vsll.vi v13, v13, 1");
+			#endif
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			////////////////////////////////////
+			
+			// v12 = popcount(v3  & f_packed_1[3])
+			asm volatile(".byte  0x57, 0x46, 0x3E, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 1");
+			#endif
+			
+			if(f_w < F - 1){
+				asm volatile("vslidedown.vi v0, v0, 1");
+				asm volatile("vslidedown.vi v1, v1, 1");
+				asm volatile("vslidedown.vi v2, v2, 1");
+				asm volatile("vslidedown.vi v3, v3, 1");
+			}	
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			/////////////////////////////////////
+
+			
+			
+			
+			
+			
+			
+			
+			
+			// Weight bit 1 and Activation bit 1
+			// so we don't have to reload filter
+			
+			// v12 = popcount(v4  & f_packed_1[0])
+			asm volatile(".byte  0x57, 0xC6, 0x42, 0x06");
+			// v13 = popcount(v5  & f_packed_1[0])
+			asm volatile(".byte  0xD7, 0xC6, 0x52, 0x06");
+			// v14 = popcount(v6  & f_packed_1[0])
+			asm volatile(".byte  0x57, 0xC7, 0x62, 0x06");
+			// v15 = popcount(v7  & f_packed_1[0])
+			asm volatile(".byte  0xD7, 0xC7, 0x72, 0x06");
+			
+			////// REPLACE WITH 6 VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 2");
+			asm volatile("vsll.vi v13, v13, 2");
+			asm volatile("vsll.vi v14, v14, 2");
+			asm volatile("vsll.vi v15, v15, 2");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			asm volatile("vadd.vv v29, v29, v15");
+			/////////////////////////////////////
+			
+			// v12 = popcount(v5  & f_packed_1[1])
+			asm volatile(".byte  0x57, 0x46, 0x53, 0x06");
+			// v13 = popcount(v6  & f_packed_1[1])
+			asm volatile(".byte  0xD7, 0x46, 0x63, 0x06");
+			// v14 = popcount(v7  & f_packed_1[1])
+			asm volatile(".byte  0x57, 0x47, 0x73, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 2");
+			asm volatile("vsll.vi v13, v13, 2");
+			asm volatile("vsll.vi v14, v14, 2");
+			#endif
+			
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			asm volatile("vadd.vv v28, v28, v14");
+			//////////////////////////////////////
+			
+			// v12 = popcount(v6  & f_packed_1[2])
+			asm volatile(".byte  0x57, 0xC6, 0x63, 0x06");
+			// v13 = popcount(v7  & f_packed_1[2])
+			asm volatile(".byte  0xD7, 0xC6, 0x73, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 2");
+			asm volatile("vsll.vi v13, v13, 2");
+			#endif
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			asm volatile("vadd.vv v27, v27, v13");
+			////////////////////////////////////
+			
+			// v12 = popcount(v7  & f_packed_1[3])
+			asm volatile(".byte  0x57, 0x46, 0x7E, 0x06");
+			
+			////// REPLACE WITH VSHACC   //////
+			#ifndef PERF_VHSACC
+			asm volatile("vsll.vi v12, v12, 2");
+			#endif
+			
+			if(f_w < F - 1){	
+				asm volatile("vslidedown.vi v4, v4, 1");
+				asm volatile("vslidedown.vi v5, v5, 1");
+				asm volatile("vslidedown.vi v6, v6, 1");
+				asm volatile("vslidedown.vi v7, v7, 1");
+			}
+
+				
+			asm volatile("vadd.vv v26, v26, v12");
+			/////////////////////////////////////
+			
+
+						
+
+				
+			}
+			
+			i__ += ENCOD_SIZE;
+		}
+		
+		i_ += (F - 1) * C_in * W_in;	
+
+		
+		for (int height = F - 1 ; height < H_in ; height += 4){
+
+			f_loop = f_packed;
+			
+			i__ = i_;
+			
+			
+			for(int channels = 0 ; channels < (C_in >> 5) ; channels ++){
+			
+				f_loop = f_packed + 2 * channels * F * F;
+
+				bitpack32_vec_2_to_32_4H(i__, vlen, C_in, H_in - height, W_in); 
+				
+
+				for(int f_w = 0; f_w < 5 ; f_w ++){		
+				
+					// Weight LSB and Activation LSB
+					asm volatile("lw t0, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t1, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t2, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t3, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t4, (%0); addi %0, %0, -156" : "+&r"(f_loop));
+					
+
+					// v12 = popcount(v0  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC6, 0x0E, 0x06");
+					// v13 = popcount(v1  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC6, 0x1E, 0x06");
+					// v14 = popcount(v2  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC7, 0x2E, 0x06");
+					// v15 = popcount(v3  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC7, 0x3E, 0x06");
+					
+					
+					
+					if(f_w > 0 || channels > 0){
+						asm volatile("vadd.vv v22, v22, v12");
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+					}
+					else{
+						asm volatile("vadd.vv v22, v26, v12");
+						asm volatile("vadd.vv v23, v27, v13");
+						asm volatile("vadd.vv v24, v28, v14");
+						asm volatile("vadd.vv v25, v29, v15");
+						}
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v0 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x46, 0x0E, 0x06");
+						// v14 = popcount(v1 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x47, 0x1E, 0x06");
+						// v15 = popcount(v2 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x47, 0x2E, 0x06");
+						// v16 = popcount(v3 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x48, 0x3E, 0x06");
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v26, v26, v16");
+						else
+							asm volatile("vadd.vv v26, v30, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v0  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC7, 0x03, 0x06");
+						// v15 = popcount(v1  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x13, 0x06");
+						// v16 = popcount(v2  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC8, 0x23, 0x06");
+						// v17 = popcount(v3  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC8, 0x33, 0x06");
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v27, v27, v17");
+						else
+							asm volatile("vadd.vv v27, v31, v17");
+							
+					}
+					
+					if(height < H_in - 3){
+						// v15 = popcount(v0  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x03, 0x06");
+						// v16 = popcount(v1  & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x48, 0x13, 0x06");
+						// v17 = popcount(v2  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x48, 0x23, 0x06");
+						
+						if(f_w > 0 || channels > 0)
+							// v18 = popcount(v3  & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x49, 0x33, 0x06");
+						else
+							// v28 = popcount(v3 & f_packed_0[1])
+							asm volatile(".byte  0x57, 0x4E, 0x33, 0x06");
+						
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v28, v28, v18");
+							
+					}
+					
+					if(height < H_in - 4){
+						// v16 = popcount(v0 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x02, 0x06");
+						// v17 = popcount(v1 & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x12, 0x06");
+						// v18 = popcount(v2 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC9, 0x22, 0x06");
+						
+						if(f_w > 0 || channels > 0)
+							// v19 = popcount(v3 & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xC9, 0x32, 0x06");
+						else
+							// v29 = popcount(v3 & f_packed_0[0])
+							asm volatile(".byte  0xD7, 0xCE, 0x32, 0x06");
+							
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+						
+						if(f_w > 0 || channels > 0)
+							asm volatile("vadd.vv v29, v29, v19");
+					}
+					
+					
+							
+					
+					
+					
+					// Weight LSB and Activation bit 1
+					// v12 = popcount(v4  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC6, 0x4E, 0x06");
+					// v13 = popcount(v5  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC6, 0x5E, 0x06");
+					// v14 = popcount(v6  & f_packed_0[4])
+					asm volatile(".byte  0x57, 0xC7, 0x6E, 0x06");
+					// v15 = popcount(v7  & f_packed_0[4])
+					asm volatile(".byte  0xD7, 0xC7, 0x7E, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 1");
+					asm volatile("vsll.vi v13, v13, 1");
+					asm volatile("vsll.vi v14, v14, 1");
+					asm volatile("vsll.vi v15, v15, 1");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v4 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x46, 0x4E, 0x06");
+						// v14 = popcount(v5 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x47, 0x5E, 0x06");
+						// v15 = popcount(v6 & f_packed_0[3])
+						asm volatile(".byte  0xD7, 0x47, 0x6E, 0x06");
+						// v16 = popcount(v7 & f_packed_0[3])
+						asm volatile(".byte  0x57, 0x48, 0x7E, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 1");
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v4  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC7, 0x43, 0x06");
+						// v15 = popcount(v5  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x53, 0x06");
+						// v16 = popcount(v6  & f_packed_0[2])
+						asm volatile(".byte  0x57, 0xC8, 0x63, 0x06");
+						// v17 = popcount(v7  & f_packed_0[2])
+						asm volatile(".byte  0xD7, 0xC8, 0x73, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+					if(height < H_in - 3){
+						// v15 = popcount(v4  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x47, 0x43, 0x06");
+						// v16 = popcount(v5  & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x48, 0x53, 0x06");
+						// v17 = popcount(v6  & f_packed_0[1])
+						asm volatile(".byte  0xD7, 0x48, 0x63, 0x06");
+						// v18 = popcount(v7  & f_packed_0[1])
+						asm volatile(".byte  0x57, 0x49, 0x73, 0x06");
+							
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						asm volatile("vsll.vi v18, v18, 1");
+						#endif
+						
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+							
+					}
+					
+					if(height < H_in - 4){
+						// v16 = popcount(v4 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC8, 0x42, 0x06");
+						// v17 = popcount(v5 & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x52, 0x06");
+						// v18 = popcount(v6 & f_packed_0[0])
+						asm volatile(".byte  0x57, 0xC9, 0x62, 0x06");
+						// v19 = popcount(v7 & f_packed_0[0])
+						asm volatile(".byte  0xD7, 0xC9, 0x72, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						asm volatile("vsll.vi v18, v18, 1");
+						asm volatile("vsll.vi v19, v19, 1");
+						#endif
+							
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+						asm volatile("vadd.vv v29, v29, v19");
+					}
+					
+					
+					
+					
+					
+					
+					
+					// Weight bit 1 and Activation LSB
+					asm volatile("lw t0, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t1, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t2, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t3, (%0); addi %0, %0, 40"   : "+&r"(f_loop));
+					asm volatile("lw t4, (%0); addi %0, %0, -156" : "+&r"(f_loop));
+					
+					
+					// v12 = popcount(v0  & f_packed_1[4])
+					asm volatile(".byte  0x57, 0xC6, 0x0E, 0x06");
+					// v13 = popcount(v1  & f_packed_1[4])
+					asm volatile(".byte  0xD7, 0xC6, 0x1E, 0x06");
+					// v14 = popcount(v2  & f_packed_1[4])
+					asm volatile(".byte  0x57, 0xC7, 0x2E, 0x06");
+					// v15 = popcount(v3  & f_packed_1[4])
+					asm volatile(".byte  0xD7, 0xC7, 0x3E, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 1");
+					asm volatile("vsll.vi v13, v13, 1");
+					asm volatile("vsll.vi v14, v14, 1");
+					asm volatile("vsll.vi v15, v15, 1");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v0 & f_packed_1[3])
+						asm volatile(".byte  0xD7, 0x46, 0x0E, 0x06");
+						// v14 = popcount(v1 & f_packed_1[3])
+						asm volatile(".byte  0x57, 0x47, 0x1E, 0x06");
+						// v15 = popcount(v2 & f_packed_1[3])
+						asm volatile(".byte  0xD7, 0x47, 0x2E, 0x06");
+						// v16 = popcount(v3 & f_packed_1[3])
+						asm volatile(".byte  0x57, 0x48, 0x3E, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 1");
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v0  & f_packed_1[2])
+						asm volatile(".byte  0x57, 0xC7, 0x03, 0x06");
+						// v15 = popcount(v1  & f_packed_1[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x13, 0x06");
+						// v16 = popcount(v2  & f_packed_1[2])
+						asm volatile(".byte  0x57, 0xC8, 0x23, 0x06");
+						// v17 = popcount(v3  & f_packed_1[2])
+						asm volatile(".byte  0xD7, 0xC8, 0x33, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 1");
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+					if(height < H_in - 3){
+						// v15 = popcount(v0  & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x47, 0x03, 0x06");
+						// v16 = popcount(v1  & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x48, 0x13, 0x06");
+						// v17 = popcount(v2  & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x48, 0x23, 0x06");
+						// v18 = popcount(v3  & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x49, 0x33, 0x06");
+							
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v15, v15, 1");
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						asm volatile("vsll.vi v18, v18, 1");
+						#endif
+						
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+							
+					}
+					
+					if(height < H_in - 4){
+						// v16 = popcount(v0 & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC8, 0x02, 0x06");
+						// v17 = popcount(v1 & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x12, 0x06");
+						// v18 = popcount(v2 & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC9, 0x22, 0x06");
+						// v19 = popcount(v3 & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC9, 0x32, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v16, v16, 1");
+						asm volatile("vsll.vi v17, v17, 1");
+						asm volatile("vsll.vi v18, v18, 1");
+						asm volatile("vsll.vi v19, v19, 1");
+						#endif
+							
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+						asm volatile("vadd.vv v29, v29, v19");
+					}
+											
+						
+						
+						
+						
+						
+					// Weight bit 1 and Activation bit 1
+					// v12 = popcount(v4  & f_packed_1[4])
+					asm volatile(".byte  0x57, 0xC6, 0x4E, 0x06");
+					// v13 = popcount(v5  & f_packed_1[4])
+					asm volatile(".byte  0xD7, 0xC6, 0x5E, 0x06");
+					// v14 = popcount(v6  & f_packed_1[4])
+					asm volatile(".byte  0x57, 0xC7, 0x6E, 0x06");
+					// v15 = popcount(v7  & f_packed_1[4])
+					asm volatile(".byte  0xD7, 0xC7, 0x7E, 0x06");
+					
+					#ifndef PERF_VHSACC
+					asm volatile("vsll.vi v12, v12, 2");
+					asm volatile("vsll.vi v13, v13, 2");
+					asm volatile("vsll.vi v14, v14, 2");
+					asm volatile("vsll.vi v15, v15, 2");
+					#endif
+						
+					asm volatile("vadd.vv v22, v22, v12");
+					asm volatile("vadd.vv v23, v23, v13");
+					asm volatile("vadd.vv v24, v24, v14");
+					asm volatile("vadd.vv v25, v25, v15");
+					
+					if(height < H_in - 1){
+						// v13 = popcount(v4 & f_packed_1[3])
+						asm volatile(".byte  0xD7, 0x46, 0x4E, 0x06");
+						// v14 = popcount(v5 & f_packed_1[3])
+						asm volatile(".byte  0x57, 0x47, 0x5E, 0x06");
+						// v15 = popcount(v6 & f_packed_1[3])
+						asm volatile(".byte  0xD7, 0x47, 0x6E, 0x06");
+						// v16 = popcount(v7 & f_packed_1[3])
+						asm volatile(".byte  0x57, 0x48, 0x7E, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v13, v13, 2");
+						asm volatile("vsll.vi v14, v14, 2");
+						asm volatile("vsll.vi v15, v15, 2");
+						asm volatile("vsll.vi v16, v16, 2");
+						#endif
+						
+						asm volatile("vadd.vv v23, v23, v13");
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+					}
+					
+					
+
+					if(height < H_in - 2){
+						// v14 = popcount(v4  & f_packed_1[2])
+						asm volatile(".byte  0x57, 0xC7, 0x43, 0x06");
+						// v15 = popcount(v5  & f_packed_1[2])
+						asm volatile(".byte  0xD7, 0xC7, 0x53, 0x06");
+						// v16 = popcount(v6  & f_packed_1[2])
+						asm volatile(".byte  0x57, 0xC8, 0x63, 0x06");
+						// v17 = popcount(v7  & f_packed_1[2])
+						asm volatile(".byte  0xD7, 0xC8, 0x73, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v14, v14, 2");
+						asm volatile("vsll.vi v15, v15, 2");
+						asm volatile("vsll.vi v16, v16, 2");
+						asm volatile("vsll.vi v17, v17, 2");
+						#endif
+						
+						asm volatile("vadd.vv v24, v24, v14");
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+							
+					}
+					
+					if(height < H_in - 3){
+						// v15 = popcount(v4  & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x47, 0x43, 0x06");
+						// v16 = popcount(v5  & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x48, 0x53, 0x06");
+						// v17 = popcount(v6  & f_packed_1[1])
+						asm volatile(".byte  0xD7, 0x48, 0x63, 0x06");
+						// v18 = popcount(v7  & f_packed_1[1])
+						asm volatile(".byte  0x57, 0x49, 0x73, 0x06");
+							
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v15, v15, 2");
+						asm volatile("vsll.vi v16, v16, 2");
+						asm volatile("vsll.vi v17, v17, 2");
+						asm volatile("vsll.vi v18, v18, 2");
+						#endif
+						
+						asm volatile("vadd.vv v25, v25, v15");
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+							
+					}
+					
+					if(height < H_in - 4){
+						// v16 = popcount(v4 & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC8, 0x42, 0x06");
+						// v17 = popcount(v5 & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC8, 0x52, 0x06");
+						// v18 = popcount(v6 & f_packed_1[0])
+						asm volatile(".byte  0x57, 0xC9, 0x62, 0x06");
+						// v19 = popcount(v7 & f_packed_1[0])
+						asm volatile(".byte  0xD7, 0xC9, 0x72, 0x06");
+						
+						#ifndef PERF_VHSACC
+						asm volatile("vsll.vi v16, v16, 2");
+						asm volatile("vsll.vi v17, v17, 2");
+						asm volatile("vsll.vi v18, v18, 2");
+						asm volatile("vsll.vi v19, v19, 2");
+						#endif
+							
+						asm volatile("vadd.vv v26, v26, v16");
+						asm volatile("vadd.vv v27, v27, v17");
+						asm volatile("vadd.vv v28, v28, v18");
+						asm volatile("vadd.vv v29, v29, v19");
+					}
+						
+						
+									
+					if(f_w < F - 1){
+						asm volatile("vslidedown.vi v0, v0, 1");
+						asm volatile("vslidedown.vi v4, v4, 1");
+						if(height < H_in - 1){
+							asm volatile("vslidedown.vi v1, v1, 1");
+							asm volatile("vslidedown.vi v5, v5, 1");
+						}
+						if(height < H_in - 2){	
+							asm volatile("vslidedown.vi v2, v2, 1");
+							asm volatile("vslidedown.vi v6, v6, 1");
+						}
+						if(height < H_in - 3){
+							asm volatile("vslidedown.vi v3, v3, 1");	
+							asm volatile("vslidedown.vi v7, v7, 1");
+						}
+					}
+					
+				}	
+				
+				i__ += ENCOD_SIZE;	
+			}
+			
+			i_ +=  4 * C_in * W_in;
+			
+			
+			asm volatile("vsetvli zero, %0, e32, m1, ta, ma" ::"r"(vlen - F + 1));
+				
+			asm volatile("vsse32.v v22, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			
+			if(height < H_in - 1){
+				o_ += ldo;	
+				asm volatile("vsse32.v v23, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			if(height < H_in - 2){
+				o_ += ldo;	
+				asm volatile("vsse32.v v24, (%0), %1" : "+&r"(o_) : "r"(stride_o));	
+			}
+			
+			if(height < H_in - 3){
+				o_ += ldo;	
+				asm volatile("vsse32.v v25, (%0), %1" : "+&r"(o_) : "r"(stride_o));
+			}
+			
+			o_ += ldo;
+			
+			}
+	}
 }
 
 
 void ibsconv2d32_W2_A2_vec_7x7(int32_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
 
-int64_t const ldo = C_out * (W_in - 6);
+int64_t const ldo = C_out * (W_in - F + 1);
 uint64_t const stride_o = C_out << 2;//C_out * (W_in - 2);
 
 // number of elements is  [precW * (F*F + 1)* C_in / 32]
