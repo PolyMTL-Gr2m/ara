@@ -8,7 +8,7 @@ https://github.com/f0uriest/keras2c
 
 #pragma once
 #include <stdlib.h>
-
+#include <stdint.h>
 
 /**
  * Rank of largest keras2c tensors.
@@ -23,7 +23,7 @@ https://github.com/f0uriest/keras2c
 struct k2c_tensor
 {
     /** Pointer to array of tensor values flattened in row major order. */
-    float * array;
+    int8_t  * array;
 
     /** Rank of the tensor (number of dimensions). */
     size_t ndim;

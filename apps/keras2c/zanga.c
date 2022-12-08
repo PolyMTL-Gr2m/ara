@@ -2,6 +2,7 @@
  #include <string.h> 
 #include "./include/k2c_include.h" 
 #include "./include/k2c_tensor_include.h" 
+#include <stdint.h>
 
 #ifndef SPIKE
 #include "printf.h"
@@ -10,13 +11,13 @@
 
 void zanga(k2c_tensor* input_1_input, k2c_tensor* dense_output) { 
 printf("starting from zanga.c \n");
-size_t conv2d_stride[2] = {1,1}; 
-size_t conv2d_dilation[2] = {1,1}; 
+int8_t conv2d_stride[2] = {1,1}; 
+int8_t conv2d_dilation[2] = {1,1}; 
 printf("zanga setting up output array \n");
-float conv2d_output_array[21632] = {0}; 
+int8_t conv2d_output_array[21632] = {0}; 
 printf("zanga setting up kernel array \n");
 k2c_tensor conv2d_output = {&conv2d_output_array[0],3,21632,{26,26,32, 1, 1}}; 
-float conv2d_kernel_array[288] = {
+int8_t conv2d_kernel_array[288] = {
 +5.16253188e-02f,-1.06500655e-01f,-4.47007149e-01f,-1.87237024e-01f,+2.21528381e-01f,
 -3.32534432e-01f,-6.76552057e-02f,+1.09231077e-01f,+4.38235521e-01f,+7.75387809e-02f,
 +1.91495404e-01f,-3.10003877e-01f,-1.30078599e-01f,+1.36957720e-01f,+2.08638862e-01f,
@@ -76,7 +77,7 @@ float conv2d_kernel_array[288] = {
 -2.13321373e-01f,+7.10286722e-02f,-4.25185055e-01f,+8.21751505e-02f,+1.16577573e-01f,
 +9.45638195e-02f,-2.78309196e-01f,+2.94628829e-01f,}; 
 k2c_tensor conv2d_kernel = {&conv2d_kernel_array[0],4,288,{ 3, 3, 1,32, 1}}; 
-float conv2d_bias_array[32] = {
+int8_t conv2d_bias_array[32] = {
 -1.42195180e-01f,-3.43134557e-03f,-3.25768180e-02f,-3.60935517e-02f,-1.17364205e-01f,
 +4.98576649e-02f,-1.21094391e-01f,-1.54997021e-01f,+1.59471706e-01f,-3.98801342e-02f,
 -6.90061226e-03f,-1.26220018e-01f,-6.17648363e-02f,-1.42275710e-02f,-3.40548865e-02f,
@@ -87,17 +88,17 @@ float conv2d_bias_array[32] = {
 k2c_tensor conv2d_bias = {&conv2d_bias_array[0],1,32,{32, 1, 1, 1, 1}}; 
 
  
-size_t max_pooling2d_stride[2] = {2,2}; 
-size_t max_pooling2d_pool_size[2] = {2,2}; 
-float max_pooling2d_output_array[5408] = {0}; 
+int8_t max_pooling2d_stride[2] = {2,2}; 
+int8_t max_pooling2d_pool_size[2] = {2,2}; 
+int8_t max_pooling2d_output_array[5408] = {0}; 
 k2c_tensor max_pooling2d_output = {&max_pooling2d_output_array[0],3,5408,{13,13,32, 1, 1}}; 
 
 
-size_t conv2d_1_stride[2] = {1,1}; 
-size_t conv2d_1_dilation[2] = {1,1}; 
-float conv2d_1_output_array[7744] = {0}; 
+int8_t conv2d_1_stride[2] = {1,1}; 
+int8_t conv2d_1_dilation[2] = {1,1}; 
+int8_t conv2d_1_output_array[7744] = {0}; 
 k2c_tensor conv2d_1_output = {&conv2d_1_output_array[0],3,7744,{11,11,64, 1, 1}}; 
-float conv2d_1_kernel_array[18432] = {
+int8_t conv2d_1_kernel_array[18432] = {
 -1.39097601e-01f,-3.44530493e-02f,+3.85315195e-02f,+1.71235967e-02f,+4.24533449e-02f,
 +5.78826927e-02f,-1.13871045e-01f,-6.84381500e-02f,-3.64392214e-02f,-1.47843165e-02f,
 +8.54210183e-03f,+3.43987942e-02f,-6.09653955e-03f,+1.04978345e-02f,+1.47856906e-01f,
@@ -3786,7 +3787,7 @@ float conv2d_1_kernel_array[18432] = {
 +1.05150588e-01f,-1.66387886e-01f,+1.13180876e-01f,+7.11348802e-02f,+1.63555518e-01f,
 -2.66153842e-01f,-6.31320357e-01f,}; 
 k2c_tensor conv2d_1_kernel = {&conv2d_1_kernel_array[0],4,18432,{ 3, 3,32,64, 1}}; 
-float conv2d_1_bias_array[64] = {
+int8_t conv2d_1_bias_array[64] = {
 +4.14355546e-02f,-1.27708882e-01f,-2.74996236e-02f,+4.17033359e-02f,-4.26989496e-02f,
 -1.08427979e-01f,+5.51636890e-02f,+5.78693002e-02f,-3.16634588e-02f,+3.71959060e-03f,
 +4.84306067e-02f,-4.79190834e-02f,-1.26571491e-01f,-9.28381681e-02f,-2.50824075e-02f,
@@ -3803,15 +3804,15 @@ float conv2d_1_bias_array[64] = {
 k2c_tensor conv2d_1_bias = {&conv2d_1_bias_array[0],1,64,{64, 1, 1, 1, 1}}; 
 
  
-size_t max_pooling2d_1_stride[2] = {2,2}; 
-size_t max_pooling2d_1_pool_size[2] = {2,2}; 
-float max_pooling2d_1_output_array[1600] = {0}; 
+int8_t max_pooling2d_1_stride[2] = {2,2}; 
+int8_t max_pooling2d_1_pool_size[2] = {2,2}; 
+int8_t max_pooling2d_1_output_array[1600] = {0}; 
 k2c_tensor max_pooling2d_1_output = {&max_pooling2d_1_output_array[0],3,1600,{ 5, 5,64, 1, 1}}; 
 
 
-float flatten_output_array[1600] = {0}; 
+int8_t flatten_output_array[1600] = {0}; 
 k2c_tensor flatten_output = {&flatten_output_array[0],1,1600,{1600,   1,   1,   1,   1}}; 
-float dense_kernel_array[16000] = {
+int8_t dense_kernel_array[16000] = {
 +5.91111854e-02f,-4.30112050e-05f,-3.13670456e-01f,+8.06770101e-02f,+1.65001992e-02f,
 -3.45344961e-01f,+1.41790077e-01f,-1.76581182e-02f,+6.17330819e-02f,-2.61157215e-01f,
 -7.01159015e-02f,+8.26536864e-02f,+7.81559125e-02f,-2.60964297e-02f,+6.34259963e-03f,
@@ -7015,12 +7016,12 @@ float dense_kernel_array[16000] = {
 }; 
 printf("setting up tesnor dense array\n");
 k2c_tensor dense_kernel = {&dense_kernel_array[0],2,16000,{1600,  10,   1,   1,   1}}; 
-float dense_bias_array[10] = {
+int8_t dense_bias_array[10] = {
 +7.16197342e-02f,+2.33686268e-01f,-4.26376686e-02f,-5.05905710e-02f,-1.01458795e-01f,
 -8.27897713e-02f,-2.19898690e-02f,+2.59703845e-02f,-5.18082455e-03f,+8.33097473e-03f,
 }; 
 k2c_tensor dense_bias = {&dense_bias_array[0],1,10,{10, 1, 1, 1, 1}}; 
-float dense_fwork[17600] = {0}; 
+int8_t dense_fwork[17600] = {0}; 
 
  printf("inside zanga starting conv2d\n");
 k2c_conv2d(&conv2d_output,input_1_input,&conv2d_kernel, 
@@ -7037,7 +7038,7 @@ printf("starting output tensor\n");
 k2c_tensor dropout_output; 
 dropout_output.ndim = flatten_output.ndim; // copy data into output struct 
 dropout_output.numel = flatten_output.numel; 
-memcpy(dropout_output.shape,flatten_output.shape,K2C_MAX_NDIM*sizeof(size_t));  
+memcpy(dropout_output.shape,flatten_output.shape,K2C_MAX_NDIM*sizeof(int8_t));  
 dropout_output.array = &flatten_output.array[0]; // rename for clarity 
 k2c_dense(dense_output,&dropout_output,&dense_kernel, 
 	&dense_bias,k2c_softmax,dense_fwork); 

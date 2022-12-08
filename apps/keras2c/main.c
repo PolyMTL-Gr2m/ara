@@ -3,14 +3,16 @@
 //#include <time.h> 
 #include "./include/k2c_include.h" 
 #include "zanga.h" 
+#include <stdint.h>
+
 #ifndef SPIKE
 #include "printf.h"
 #endif
-float maxabs(k2c_tensor *tensor1, k2c_tensor *tensor2);
+int8_t maxabs(k2c_tensor *tensor1, k2c_tensor *tensor2);
 //struct timeval GetTimeStamp(); 
 static int errno;
 int *__errno(void) { return &errno; }  
-float test1_input_1_input_array[784] = {
+int8_t test1_input_1_input_array[784] = {
 +1.16388706e+00f,+7.34766147e-01f,+3.47428278e-01f,+1.11875066e+00f,+4.08644260e-01f,
 +9.12278961e-01f,-4.10378115e-01f,-4.79494125e-01f,+1.12120698e+00f,-6.95615004e-01f,
 +8.02666932e-01f,-1.72080636e+00f,+2.20966958e-01f,-1.72980692e+00f,-1.28372248e+00f,
@@ -169,17 +171,17 @@ float test1_input_1_input_array[784] = {
 +1.24135756e+00f,+6.40200218e-01f,-1.07564435e+00f,-1.27029153e+00f,-2.25682324e-01f,
 -5.14708204e-01f,+3.20746993e-01f,+1.26740569e+00f,+1.61392732e+00f,}; 
 k2c_tensor test1_input_1_input = {&test1_input_1_input_array[0],3,784,{28,28, 1, 1, 1}}; 
-float keras_dense_test1_array[10] = {
+int8_t keras_dense_test1_array[10] = {
 +3.05216294e-03f,+5.65140635e-06f,+1.01458073e-01f,+8.30170792e-03f,+3.17942875e-04f,
 +2.32607871e-03f,+3.86957289e-03f,+2.51471056e-06f,+8.80598247e-01f,+6.80025187e-05f,
 }; 
 k2c_tensor keras_dense_test1 = {&keras_dense_test1_array[0],1,10,{10, 1, 1, 1, 1}}; 
-float c_dense_test1_array[10] = {0}; 
+int8_t c_dense_test1_array[10] = {0}; 
 k2c_tensor c_dense_test1 = {&c_dense_test1_array[0],1,10,{10, 1, 1, 1, 1}}; 
 int main(){
- float errors[1];
- size_t num_tests = 1; 
-size_t num_outputs = 1; 
+ int8_t errors[1];
+ int8_t num_tests = 1; 
+int8_t num_outputs = 1; 
 zanga_initialize(); 
 //clock_t t0 = clock(); 
 printf("main file starting CNN\n" );
@@ -188,8 +190,8 @@ printf("finnished CNN main file" );
 //printf("Average time over 1 tests: %e s \n", 
 // ((double)t1-t0)/(double)CLOCKS_PER_SEC/(double)1); 
 errors[0] = maxabs(&keras_dense_test1,&c_dense_test1); 
-float maxerror = errors[0]; 
-for(size_t i=1; i< num_tests*num_outputs;i++){ 
+int8_t maxerror = errors[0]; 
+for(int8_t i=1; i< num_tests*num_outputs;i++){ 
 if (errors[i] > maxerror) { 
 maxerror = errors[i];}} 
 printf("Max absolute error for 1 tests: %f \n", maxerror);
@@ -199,13 +201,13 @@ return 1;}
 return 0;
 } 
 
-float maxabs(k2c_tensor *tensor1, k2c_tensor *tensor2){ 
+int8_t maxabs(k2c_tensor *tensor1, k2c_tensor *tensor2){ 
 
-    float x = 0; 
+    int8_t x = 0; 
 
-    float y = 0; 
+    int8_t y = 0; 
 
-    for(size_t i=0; i<tensor1->numel; i++){
+    for(int8_t i=0; i<tensor1->numel; i++){
 
     y = fabsf(tensor1->array[i]-tensor2->array[i]);
     if (y>x) {x=y;}}

@@ -12,8 +12,9 @@ https://github.com/f0uriest/keras2c
 #include "../string.h"
 #include "k2c_include.h"
 #include "fmatmul.h"
+#include <stdint.h>
 //#include "../../common/printf.h"
-//#include "printf.h"
+//#include "printf.h"F
 #ifndef SPIKE
 #include "printf.h"
 #endif
@@ -29,13 +30,12 @@ https://github.com/f0uriest/keras2c
  * :param outcols: number of cols of C and B.
  * :param innderdim: number of cols of A and rows of B
  */
-void k2c_matmul(float * C, const float * A, const float * B, const size_t outrows,
+void k2c_matmul(int8_t  * C, const int8_t  * A, const int8_t  * B, const size_t outrows,
                 const size_t outcols, const size_t innerdim) {
-	 memset(C, 0, outrows*outcols*sizeof(C[0])); 
-	fmatmul(C, A, B, outrows, outcols, innerdim);
-	//printf("finished matmul\n");
+
     // make sure output is empty
-	return;
+    memset(C, 0, outrows*outcols*sizeof(C[0]));
+
     for (size_t i = 0 ; i < outrows; ++i) {
         const size_t outrowidx = i*outcols;
         const size_t inneridx = i*innerdim;
@@ -62,25 +62,12 @@ void k2c_matmul(float * C, const float * A, const float * B, const size_t outrow
  * :param outcols: number of cols of C, B and d.
  * :param innderdim: number of cols of A and rows of B
  */
-void k2c_affine_matmul(float * C, const float * A, const float * B, const float * d,
-                       const size_t outrows,const size_t outcols, const size_t innerdim){
+void k2c_affine_matmul(int8_t  * C, const int8_t  * A, const int8_t  * B, const int8_t  * d,
+                       const size_t outrows,const size_t outcols, const size_t innerdim) {
 
     // make sure output is empty
     memset(C, 0, outrows*outcols*sizeof(C[0]));
-    /*
-	fmatmul(C, A, B, outrows, outcols, innerdim);
-	printf("matmul done\n" );
-	for (size_t i = 0 ; i < outrows; ++i) {
-		size_t outrowidx = i*outcols;
-		size_t inneridx = i*innerdim;
-		for (size_t j = 0;  j < outcols; ++j) {
-		C[outrowidx+j] += d[j];
-		}
-	}
-	printf("finished c=a.b+d\n" );
-	return;
-	*/
-		
+
     for (size_t i = 0 ; i < outrows; ++i) {
         const size_t outrowidx = i*outcols;
         const size_t inneridx = i*innerdim;
@@ -90,7 +77,7 @@ void k2c_affine_matmul(float * C, const float * A, const float * B, const float 
             }
             C[outrowidx+j] += d[j];
         }
-    } 
+    }
 }
 
 
@@ -148,7 +135,7 @@ void k2c_idx2sub(const size_t idx, size_t * sub, const size_t * shape, const siz
  * :param fwork: array of working space, size(fwork) = size(A) + size(B)
  */
 void k2c_dot(k2c_tensor* C, const k2c_tensor* A, const k2c_tensor* B, const size_t * axesA,
-             const size_t * axesB, const size_t naxes, const int normalize, float * fwork) {
+             const size_t * axesB, const size_t naxes, const int normalize, int8_t  * fwork) {
 
     size_t permA[K2C_MAX_NDIM];
     size_t permB[K2C_MAX_NDIM];
@@ -163,8 +150,8 @@ void k2c_dot(k2c_tensor* C, const k2c_tensor* A, const k2c_tensor* B, const size
     size_t newshpB[K2C_MAX_NDIM];
     const size_t ndimA = A->ndim;
     const size_t ndimB = B->ndim;
-    float *reshapeA = &fwork[0];   // temp working storage
-    float *reshapeB = &fwork[A->numel];
+    int8_t  *reshapeA = &fwork[0];   // temp working storage
+    int8_t  *reshapeB = &fwork[A->numel];
     size_t Asub[K2C_MAX_NDIM];
     size_t Bsub[K2C_MAX_NDIM];
     // find which axes are free (ie, not being summed over)
@@ -250,8 +237,8 @@ void k2c_dot(k2c_tensor* C, const k2c_tensor* A, const k2c_tensor* B, const size
 
     if (normalize) {
 
-        float sum;
-        float inorm;
+        int8_t  sum;
+        int8_t  inorm;
         for (size_t i=0; i<free_axesA; ++i) {
             sum = 0;
             for (size_t j=0; j<prod_axesA; ++j) {
@@ -312,7 +299,7 @@ void k2c_flip(k2c_tensor *A, const size_t axis) {
     const size_t step = 1;
     size_t k = 0;
     size_t idx = 0;
-    float temp;
+    int8_t  temp;
 
     size_t reduced_size = 1;
     for (size_t i=axis; i<ndim; ++i) {
@@ -348,8 +335,8 @@ void * malloc(size_t input)
  * :param array_size: how many values to read from the file.
  * :return: pointer to allocated array.
  */
-float* k2c_read_array(const char* filename, const size_t array_size) {
-    float* ptr = (float*) malloc(array_size * sizeof(float));
+int8_t * k2c_read_array(const char* filename, const size_t array_size) {
+    int8_t * ptr = (int8_t *) malloc(array_size * sizeof(int8_t ));
     if (!ptr) {
         printf("cannot allocate memory %s \n", filename);
         exit(-1);

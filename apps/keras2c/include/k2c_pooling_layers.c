@@ -11,6 +11,9 @@ https://github.com/f0uriest/keras2c
 #include <string.h>
 #include "k2c_include.h"
 #include "fpooling_tensor32.h"
+#include "ipooling_tensor8.h"
+
+#include <stdint.h>
 //#include "../../common/printf.h"
 #ifndef SPIKE
 #include "printf.h"
@@ -26,13 +29,13 @@ https://github.com/f0uriest/keras2c
 void k2c_global_max_pooling(k2c_tensor* output, const k2c_tensor* input) {
     fmax_pool32(output->array, input->array, input->shape[0], input->shape[1], input->shape[2], 3);
     /* 
-    const size_t in_chan = input->shape[input->ndim-1];
-    for (size_t i=0; i<in_chan; ++i) {
+    const int8_t in_chan = input->shape[input->ndim-1];
+    for (int8_t i=0; i<in_chan; ++i) {
         output->array[i] = input->array[i];
     }
 
-    for (size_t i=0; i<input->numel; i+=in_chan) {
-        for (size_t j=0; j<in_chan; ++j) {
+    for (int8_t i=0; i<input->numel; i+=in_chan) {
+        for (int8_t j=0; j<in_chan; ++j) {
             if (output->array[j]<input->array[i+j]) {
                 output->array[j] = input->array[i+j];
             }
@@ -51,12 +54,12 @@ void k2c_global_max_pooling(k2c_tensor* output, const k2c_tensor* input) {
  */
 void k2c_global_avg_pooling(k2c_tensor* output, const k2c_tensor* input) {
 
-    const size_t in_chan = input->shape[input->ndim-1];
+    const int8_t in_chan = input->shape[input->ndim-1];
     memset(output->array,0,output->numel*sizeof(input->array[0]));
-    const float num_inv = 1.0f/(input->numel/in_chan);
+    const int8_t num_inv = 1.0f/(input->numel/in_chan);
 
-    for (size_t i=0; i<input->numel; i+=in_chan) {
-        for (size_t j=0; j<in_chan; ++j) {
+    for (int8_t i=0; i<input->numel; i+=in_chan) {
+        for (int8_t j=0; j<in_chan; ++j) {
             output->array[j] += input->array[i+j]*num_inv;
         }
     }
@@ -98,13 +101,16 @@ void k2c_maxpool1d(k2c_tensor* output, const k2c_tensor* input, const size_t poo
  */
 void k2c_maxpool2d(k2c_tensor* output, const k2c_tensor* input, const size_t * pool_size,
                    const size_t * stride) {
-
-	//printf("starting maxpooling2d\n");
     const size_t channels = input->shape[2];
+
+	printf("in include/pooling_layers.c\n");
     // i,j,l output indices
     /// i, k, m input indices
-    fmax_pool32(output->array, input->array, input->shape[0], input->shape[1], input->shape[2], 7);
-    /* 
+    imax_pool8(output->array, input->array, input->shape[0], input->shape[1], input->shape[2], 3);
+
+    // i,j,l output indices
+    /// i, k, m input indices
+    /*
     for (size_t i=0; i< channels; ++i) {
         for (size_t j=0, k=0; j<output->shape[1]*channels;
                 j+=channels, k+=channels*stride[1]) {
@@ -123,6 +129,7 @@ void k2c_maxpool2d(k2c_tensor* output, const k2c_tensor* input, const size_t * p
         }
     }
     */
+    
 }
 
 
@@ -148,7 +155,7 @@ void k2c_avgpool1d(k2c_tensor* output, const k2c_tensor* input, const size_t poo
                     ++count;
                 }
             }
-            output->array[i+j] /= (float)count;
+            output->array[i+j] /= (size_t)count;
         }
     }
 }
@@ -165,17 +172,17 @@ void k2c_avgpool1d(k2c_tensor* output, const k2c_tensor* input, const size_t poo
 void k2c_avgpool2d(k2c_tensor* output, const k2c_tensor* input, const size_t * pool_size,
                    const size_t * stride) {
     memset(output->array,0,output->numel*sizeof(output->array[0]));
-    const size_t channels = input->shape[2];
+    const int8_t channels = input->shape[2];
     // i,j,l output indices
     /// i, k, m input indices
-    for (size_t i=0; i< channels; ++i) {
-        for (size_t j=0, k=0; j<output->shape[1]*channels;
+    for (int8_t i=0; i< channels; ++i) {
+        for (int8_t j=0, k=0; j<output->shape[1]*channels;
                 j+=channels, k+=channels*stride[1]) {
-            for (size_t l=0, m=0; l<output->numel; l+=channels*output->shape[1],
+            for (int8_t l=0, m=0; l<output->numel; l+=channels*output->shape[1],
                     m+=channels*input->shape[1]*stride[0]) {
-                size_t count = 0;
-                for (size_t n=0; n<pool_size[1]*channels; n+=channels) {
-                    for (size_t p=0; p<pool_size[0]*channels*input->shape[1];
+                int8_t count = 0;
+                for (int8_t n=0; n<pool_size[1]*channels; n+=channels) {
+                    for (int8_t p=0; p<pool_size[0]*channels*input->shape[1];
                             p+=channels*input->shape[1]) {
                         if (-HUGE_VALF < input->array[m+k+i+n+p]) {
                             output->array[l+j+i] += input->array[m+k+i+n+p];
@@ -183,7 +190,7 @@ void k2c_avgpool2d(k2c_tensor* output, const k2c_tensor* input, const size_t * p
                         }
                     }
                 }
-                output->array[l+j+i] /= (float)count;
+                output->array[l+j+i] /= (int8_t)count;
             }
         }
     }

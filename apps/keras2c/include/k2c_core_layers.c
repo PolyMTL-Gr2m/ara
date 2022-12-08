@@ -10,6 +10,7 @@ https://github.com/f0uriest/keras2c
 #include <stdio.h>
 #include <string.h>
 #include "k2c_include.h"
+#include <stdint.h>
 //#include "../../common/printf.h"
 
 #ifndef SPIKE
@@ -26,8 +27,9 @@ https://github.com/f0uriest/keras2c
  * :param fwork: array of working space, size(fwork) = size(input) + size(kernel)
  */
 void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* kernel,
-               const k2c_tensor* bias, k2c_activationType *activation, float * fwork) {
-	printf("k2c_dense\n");
+               const k2c_tensor* bias, k2c_activationType *activation, int8_t  * fwork) {
+                printf("In k2cdense\n");
+
     if (input->ndim <=2) {
         size_t outrows;
 
@@ -66,7 +68,7 @@ void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* ke
  * :param kernel: kernel tensor.
  */
 void k2c_flatten(k2c_tensor *output, const k2c_tensor* input) {
-    printf("now in flatten\n");
+
     memcpy(output->array, input->array, input->numel*sizeof(input->array[0]));
     for (size_t i=0; i<input->ndim; ++i) {
         output->shape[i] = 1;

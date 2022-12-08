@@ -6,14 +6,15 @@ Licensed under MIT License
 https://github.com/f0uriest/keras2c
  */
 
-
+#include <stdint.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "k2c_include.h"
 #include "fpooling_tensor32.h"
 #include "fReLu_tensor32.h"
-
+#include "../common/irelu_tensor8.h"
+#include "../common/iconv2d_tensor8.h"
 //#include "../../common/printf.h"
 #ifndef SPIKE
 #include "printf.h"
@@ -29,7 +30,7 @@ https://github.com/f0uriest/keras2c
  * :param fill: value to fill in padded areas.
  * :param pad: array[2] of how many rows to pad. Order is {before dim 1, after dim 1}.
  */
-void k2c_pad1d(k2c_tensor* output, const k2c_tensor* input, const float fill,
+void k2c_pad1d(k2c_tensor* output, const k2c_tensor* input, const int8_t  fill,
                const size_t * pad) {
 
     const size_t in_width = input->shape[1];
@@ -53,6 +54,7 @@ void k2c_pad1d(k2c_tensor* output, const k2c_tensor* input, const float fill,
 }
 
 
+
 /**
  * 2D (spatial) Padding.
  *
@@ -61,16 +63,17 @@ void k2c_pad1d(k2c_tensor* output, const k2c_tensor* input, const float fill,
  * :param fill: value to fill in padded areas.
  * :param pad: array[4] of how many rows/cols to pad. Order is {before dim 1, after dim 1, before dim 2, after dim 2}.
  */
-void k2c_pad2d(k2c_tensor* output, const k2c_tensor* input, const float fill,
+void k2c_pad2d(k2c_tensor* output, const k2c_tensor* input, const int8_t  fill,
                const size_t * pad) {
-
+    printf("In k2c pad\n");
+            
     const size_t in_height = input->shape[0];
     const size_t in_width = input->shape[1];
     const size_t in_channels = input->shape[2];
     const size_t pad_top = pad[0];
     const size_t pad_left = pad[2];
     const size_t pad_right = pad[3];
-
+    printf("In k2cpad\n");
     // set output array to fill value
     if (fabs(fill) < 1e-6) {
         // fill is ~zero, use memset
@@ -103,7 +106,7 @@ void k2c_pad2d(k2c_tensor* output, const k2c_tensor* input, const float fill,
  * :param fill: value to fill in padded areas.
  * :param pad: array[6] of how many rows/cols to pad. Order is {before dim 1, after dim 1, before dim 2, after dim 2, before dim 3, after dim 3}.
  */
-void k2c_pad3d(k2c_tensor* output, const k2c_tensor* input, const float fill,
+void k2c_pad3d(k2c_tensor* output, const k2c_tensor* input, const int8_t  fill,
                const size_t * pad) {
 
     const size_t dim1 = input->shape[0];
@@ -194,7 +197,7 @@ void k2c_conv1d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
  * :param activation: activation function to apply to output.
  */
 void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* kernel,
-		const k2c_tensor* bias, const size_t * stride, const size_t * dilation,
+                const k2c_tensor* bias, const size_t * stride, const size_t * dilation,
                 k2c_activationType *activation) {
 	//extern double f[] __attribute__((aligned(4 * NR_LANES)));
 	//printf("starting conv2d\n");
@@ -207,12 +210,12 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
     const size_t out_channels = output->shape[2];
     const size_t in_channels = input->shape[2];
     
-    /*
-    printf("strating vectrozied conv2d\n");
     
-    fconv2d_tensor32(output->array, input->array, kernel->array,input->shape[0], input->shape[1],in_channels,kernel->shape[0],2);
+    //printf("strating vectrozied conv2d\n");
+    iconv2d_tensor8(output->array, input->array, kernel->array,input->shape[0], input->shape[1],in_channels,kernel->shape[0],2);
+    //fconv2d_tensor32(output->array, input->array, kernel->array,input->shape[0], input->shape[1],in_channels,kernel->shape[0],2);
     //this where I do the printing for vectorized conv2d
-    
+    /*
     for( unsigned long var = 0; var < output->numel; var++)
     {
         printf("%f,",output->array[var]);
@@ -222,6 +225,8 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
     printf("ending vectorized conv2d\n");
 	
     */
+    /*
+    printf("starting conv2d\n");
     for (size_t x0=0; x0 < out_rows; ++x0) {
         for (size_t x1=0; x1 < out_cols; ++x1) {
             for (size_t z0=0; z0 < kernel->shape[0]; ++z0) {
@@ -242,6 +247,8 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
             }
         }
     }
+    */
+    
     /*
     //this where I do the printing for scalar conv2d
     for( unsigned long var = 0; var < output->numel; var++)
@@ -250,8 +257,13 @@ void k2c_conv2d(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* k
     }
     printf("\n");
     */
+    printf(" starting k2c bias add\n");
     k2c_bias_add(output,bias);
+    //printf("starting Irelu tensor\n");
+    //iReLu_tensor8(output->array, input->array,input->shape[0], input->shape[1], input->shape[2]);
     //fReLu_tensor32(output->array, input->array,input->shape[0], input->shape[1], input->shape[2]);
+    printf(" starting activation\n");
+
     activation(output->array,output->numel);
 }
 
