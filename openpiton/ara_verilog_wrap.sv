@@ -379,6 +379,11 @@ module ara_verilog_wrap
   //  NOC Bridge         //
   /////////////////////////
 
+
+  /////////////////////////
+  //  NOC Bridge         //
+  /////////////////////////
+
   soc_narrow_lite_req_t  axi_lite_noc_req;
   soc_narrow_lite_resp_t axi_lite_noc_resp;
 
