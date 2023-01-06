@@ -420,8 +420,40 @@ module ara_verilog_wrap
     .en_default_mst_port_i('0                  ),
     .default_mst_port_i   ('0                  )
   );
+
+  /////////////////////////
+  //  Control registers  //
+  /////////////////////////
+
   soc_narrow_lite_req_t  axi_lite_ctrl_registers_req;
   soc_narrow_lite_resp_t axi_lite_ctrl_registers_resp;
+  logic [63:0] event_trigger;
+
+  axi_dw_converter #(
+    .AxiSlvPortDataWidth(AxiWideDataWidth    ),
+    .AxiMstPortDataWidth(AxiNarrowDataWidth  ),
+    .AxiAddrWidth       (AxiAddrWidth        ),
+    .AxiIdWidth         (AxiSocIdWidth       ),
+    .AxiMaxReads        (2                   ),
+    .ar_chan_t          (soc_wide_ar_chan_t  ),
+    .mst_r_chan_t       (soc_narrow_r_chan_t ),
+    .slv_r_chan_t       (soc_wide_r_chan_t   ),
+    .aw_chan_t          (soc_narrow_aw_chan_t),
+    .b_chan_t           (soc_narrow_b_chan_t ),
+    .mst_w_chan_t       (soc_narrow_w_chan_t ),
+    .slv_w_chan_t       (soc_wide_w_chan_t   ),
+    .axi_mst_req_t      (soc_narrow_req_t    ),
+    .axi_mst_resp_t     (soc_narrow_resp_t   ),
+    .axi_slv_req_t      (soc_wide_req_t      ),
+    .axi_slv_resp_t     (soc_wide_resp_t     )
+  ) i_axi_slave_ctrl_dwc (
+    .clk_i     (clk_i                       ),
+    .rst_ni    (rst_ni                      ),
+    .slv_req_i (periph_wide_axi_req[CTRL]   ),
+    .slv_resp_o(periph_wide_axi_resp[CTRL]  ),
+    .mst_req_o (periph_narrow_axi_req[CTRL] ),
+    .mst_resp_i(periph_narrow_axi_resp[CTRL])
+  );
 
   axi_to_axi_lite #(
     .AxiAddrWidth   (AxiAddrWidth          ),
@@ -464,8 +496,39 @@ module ara_verilog_wrap
     .event_trigger_o      (event_trigger)
   );
 
+
+  /////////////////////////
+  //  NOC Bridge         //
+  /////////////////////////
+
   soc_narrow_lite_req_t  axi_lite_noc_req;
   soc_narrow_lite_resp_t axi_lite_noc_resp;
+
+  axi_dw_converter #(
+    .AxiSlvPortDataWidth(AxiWideDataWidth    ),
+    .AxiMstPortDataWidth(AxiNarrowDataWidth  ),
+    .AxiAddrWidth       (AxiAddrWidth        ),
+    .AxiIdWidth         (AxiSocIdWidth       ),
+    .AxiMaxReads        (2                   ),
+    .ar_chan_t          (soc_wide_ar_chan_t  ),
+    .mst_r_chan_t       (soc_narrow_r_chan_t ),
+    .slv_r_chan_t       (soc_wide_r_chan_t   ),
+    .aw_chan_t          (soc_narrow_aw_chan_t),
+    .b_chan_t           (soc_narrow_b_chan_t ),
+    .mst_w_chan_t       (soc_narrow_w_chan_t ),
+    .slv_w_chan_t       (soc_wide_w_chan_t   ),
+    .axi_mst_req_t      (soc_narrow_req_t    ),
+    .axi_mst_resp_t     (soc_narrow_resp_t   ),
+    .axi_slv_req_t      (soc_wide_req_t      ),
+    .axi_slv_resp_t     (soc_wide_resp_t     )
+  ) i_axi_slave_ctrl_dwc (
+    .clk_i     (clk_i                       ),
+    .rst_ni    (rst_ni                      ),
+    .slv_req_i (periph_wide_axi_req[NOC]    ),
+    .slv_resp_o(periph_wide_axi_resp[NOC]   ),
+    .mst_req_o (periph_narrow_axi_req[NOC]  ),
+    .mst_resp_i(periph_narrow_axi_resp[NOC] )
+  );
 
   axi_to_axi_lite #(
     .AxiAddrWidth   (AxiAddrWidth          ),
