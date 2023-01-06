@@ -533,4 +533,4 @@ axilite_noc_bridge #(
     .m_axi_bready   (axi_lite_noc_req.b_ready  )
 )
 
-endmodule : ara_system
+endmodule : ara_verilog_wrap
