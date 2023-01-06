@@ -54,15 +54,23 @@ module ara_verilog_wrap
     input                       reset_l,      // this is an openpiton-specific name, do not change (hier. paths in TB use this)
     output                      spc_grst_l,   // this is an openpiton-specific name, do not change (hier. paths in TB use this)
     // Core ID, Cluster ID and boot address are considered more or less static
-    input  [riscv::VLEN-1:0]               boot_addr_i,  // reset boot address
-    input  [riscv::XLEN-1:0]               hart_id_i,    // hart id in a multicore environment (reflected in a CSR)
+    input  [riscv::VLEN-1:0]    boot_addr_i,  // reset boot address
+    input  [riscv::XLEN-1:0]    hart_id_i,    // hart id in a multicore environment (reflected in a CSR)
     // Interrupt inputs
     input  [1:0]                irq_i,        // level sensitive IR lines, mip & sip (async)
     input                       ipi_i,        // inter-processor interrupts (async)
     // Timer facilities
     input                       time_irq_i,   // timer interrupt in (async)
     input                       debug_req_i,  // debug request (async)
-  
+
+    // NOC Signals
+    input  [`NOC_DATA_WIDTH-1:0] noc2_valid_in ,
+    input  [`NOC_DATA_WIDTH-1:0] noc2_data_in  ,
+    output [`NOC_DATA_WIDTH-1:0] noc2_ready_out,
+    output [`NOC_DATA_WIDTH-1:0] noc2_valid_out,
+    output [`NOC_DATA_WIDTH-1:0] noc2_data_out ,
+    input  [`NOC_DATA_WIDTH-1:0] noc2_ready_in ,
+
   `ifdef PITON_ARIANE
     // L15 (memory side)
     output [$size(wt_cache_pkg::l15_req_t)-1:0]  l15_req_o,
@@ -74,7 +82,8 @@ module ara_verilog_wrap
   `endif
    );
   
-  // assign bitvector to packed struct and vice versa
+
+   // assign bitvector to packed struct and vice versa
   `ifdef PITON_ARIANE
     // L15 (memory side)
     wt_cache_pkg::l15_req_t  l15_req;
@@ -485,12 +494,12 @@ axilite_noc_bridge #(
 ) axi_noc_bridge (
     .clk            (clk_i),
     .rst            (rst_ni),
-    .noc2_valid_in  (),
-    .noc2_data_in   (),
-    .noc2_ready_out (),
-    .noc2_valid_out (),
-    .noc2_data_out  (),
-    .noc2_ready_in  (),
+    .noc2_valid_in  (noc2_valid_in           ),
+    .noc2_data_in   (noc2_data_in            ),
+    .noc2_ready_out (noc2_ready_out          ),
+    .noc2_valid_out (noc2_valid_out          ),
+    .noc2_data_out  (noc2_data_out           ),
+    .noc2_ready_in  (noc2_ready_in           ),
     .noc3_valid_in  (),
     .noc3_data_in   (),
     .noc3_ready_out (),
