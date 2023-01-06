@@ -356,9 +356,6 @@ module ara_verilog_wrap
   `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
 
   // Buses
-  system_req_t  system_axi_req_spill;
-  system_resp_t system_axi_resp_spill;
-  system_resp_t system_axi_resp_spill_del;
   system_req_t  system_axi_req;
   system_resp_t system_axi_resp;
 
@@ -389,7 +386,7 @@ module ara_verilog_wrap
   axi_pkg::xbar_rule_64_t [NrAXISlaves-1:0] routing_rules;
   assign routing_rules = '{
     '{idx: CTRL, start_addr: CTRLBase, end_addr: CTRLBase + CTRLLength},
-    '{idx: NOC, start_addr: DRAMBase, end_addr: DRAMBase + DRAMLength}
+    '{idx: NOC, start_addr: NOCL2Base, end_addr: NOCL2Base + NOCL2Length}
   };
 
   axi_xbar #(
