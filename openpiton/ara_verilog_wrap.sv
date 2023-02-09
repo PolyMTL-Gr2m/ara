@@ -123,7 +123,10 @@ module ara_verilog_wrap
     assign axi_req_o = axi_req;
     assign axi_resp  = axi_resp_i;
   `endif
-  
+
+  //`ifndef ARIANE_ACCELERATOR_PORT
+  //  `define ARIANE_ACCELERATOR_PORT
+  //`endif
 
   `include "axi/assign.svh"
   `include "axi/typedef.svh"
