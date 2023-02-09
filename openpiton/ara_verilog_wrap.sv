@@ -11,7 +11,6 @@
 // Author: MohammadHossein AskariHemmat
 // Date: 19.12.2022
 // Description: Ara Top-level wrapper to connect to OpenPiton NoC.
-
 module ara_verilog_wrap
   import axi_pkg::*; 
   import ara_pkg::*;
@@ -98,26 +97,60 @@ module ara_verilog_wrap
     assign axi_req_o = axi_req;
     assign axi_resp  = axi_resp_i;
   `endif
-  
+
+  //`ifndef ARIANE_ACCELERATOR_PORT
+  //  `define ARIANE_ACCELERATOR_PORT
+  //`endif
 
   `include "axi/assign.svh"
   `include "axi/typedef.svh"
   
-    ///////////
-    //  AXI  //
-    ///////////
-    // AXI Typedefs
+
+  localparam int unsigned AxiStrbWidth = AxiDataWidth / 32'd8;
+  typedef logic [AxiIdWidth-1:0] axi_id_t;
+  typedef logic [AxiAddrWidth-1:0] axi_addr_t;
+  typedef logic [AxiUserWidth-1:0] axi_user_t;
+  typedef logic [AxiDataWidth-1:0] axi_data_t;
+  typedef logic [AxiStrbWidth-1:0] axi_strb_t;
+  ///////////
+  //  AXI  //
+  ///////////
+  // Ariane's AXI port data width
+  localparam AxiNarrowDataWidth = 64;
+  localparam AxiNarrowStrbWidth = AxiNarrowDataWidth / 8;
+  // Ara's AXI port data width
+  localparam AxiWideDataWidth   = AxiDataWidth;
+  localparam AXiWideStrbWidth   = AxiWideDataWidth / 8;
+
+  localparam AxiSocIdWidth  = AxiIdWidth - $clog2(NrAXIMasters);
+  localparam AxiCoreIdWidth = AxiSocIdWidth - 1;
+
+  // Internal types
+  typedef logic [AxiNarrowDataWidth-1:0] axi_narrow_data_t;
+  typedef logic [AxiNarrowStrbWidth-1:0] axi_narrow_strb_t;
+  typedef logic [AxiSocIdWidth-1:0] axi_soc_id_t;
+  typedef logic [AxiCoreIdWidth-1:0] axi_core_id_t;
+
+  ///////////
+  //  AXI  //
+  ///////////
+  // AXI Typedefs
   `AXI_TYPEDEF_ALL(system, axi_addr_t, axi_id_t, axi_data_t, axi_strb_t, axi_user_t)
-    `AXI_TYPEDEF_ALL(ara_axi, axi_addr_t, axi_core_id_t, axi_data_t, axi_strb_t, axi_user_t)
-    `AXI_TYPEDEF_ALL(ariane_axi, axi_addr_t, axi_core_id_t, axi_narrow_data_t, axi_narrow_strb_t,
-      axi_user_t)
-    `AXI_TYPEDEF_ALL(soc_narrow, axi_addr_t, axi_soc_id_t, axi_narrow_data_t, axi_narrow_strb_t,
-      axi_user_t)
-    `AXI_TYPEDEF_ALL(soc_wide, axi_addr_t, axi_soc_id_t, axi_data_t, axi_strb_t, axi_user_t)
-    `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
+  `AXI_TYPEDEF_ALL(ara_axi, axi_addr_t, axi_core_id_t, axi_data_t, axi_strb_t, axi_user_t)
+  //`AXI_TYPEDEF_ALL(ariane_axi, axi_addr_t, axi_core_id_t, axi_narrow_data_t, axi_narrow_strb_t,
+  //  axi_user_t)
+  `AXI_TYPEDEF_ALL(soc_narrow, axi_addr_t, axi_soc_id_t, axi_narrow_data_t, axi_narrow_strb_t,
+  axi_user_t)
+  `AXI_TYPEDEF_ALL(soc_wide, axi_addr_t, axi_soc_id_t, axi_data_t, axi_strb_t, axi_user_t)
+  `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
   
-    //ara_axi_req_t  ara_axi_req;
-    //ara_axi_resp_t ara_axi_resp;
+  //ara_axi_req_t  ara_axi_req;
+  //ara_axi_resp_t ara_axi_resp;
+
+
+
+  
+   
   
     //////////////////////
     //  Ara and Ariane  //
@@ -133,7 +166,7 @@ module ara_verilog_wrap
     accelerator_resp_t                    acc_resp;
     logic                                 acc_resp_valid;
     logic                                 acc_resp_ready;
-    logic                                 acc_cons_en;
+    logic                                 acc_cons_en; // unused
     logic              [AxiAddrWidth-1:0] inval_addr;
     logic                                 inval_valid;
     logic                                 inval_ready;
@@ -228,7 +261,7 @@ module ara_verilog_wrap
     /////////////////////////////
     // ariane instance
     /////////////////////////////
-  
+    localparam Axi64BitCompliant = 1'b0; // for compiling correct 
     localparam ariane_pkg::ariane_cfg_t ArianeOpenPitonCfg = '{
       RASDepth:              RASDepth,
       BTBEntries:            BTBEntries,
@@ -245,13 +278,14 @@ module ara_verilog_wrap
       CachedRegionAddrBase:  CachedRegionAddrBase,
       CachedRegionLength:    CachedRegionLength,
       // cache config
-      Axi64BitCompliant:     1'b0,
+      AxiCompliant:     Axi64BitCompliant, // Not sure it's a typo (Original: Axi64BitCompliant:1'b0 )
       SwapEndianess:         SwapEndianess,
       // debug
       DmBaseAddress:         DmBaseAddress,
       NrPMPEntries:          NrPMPEntries
     };
-  
+
+    
     ariane #(
       .ArianeCfg ( ArianeOpenPitonCfg )
     ) ariane (
@@ -283,7 +317,7 @@ module ara_verilog_wrap
   `endif
     );
 
-    logic                    scan_enable_i;
+  logic  scan_enable_i;
   assign scan_enable_i = 0;
 
   ara #(
@@ -291,11 +325,11 @@ module ara_verilog_wrap
     .FPUSupport  (FPUSupport      ),
     .AxiDataWidth(AxiWideDataWidth),
     .AxiAddrWidth(AxiAddrWidth    ),
-    .axi_ar_t    (ara_axi_ar_t    ),
-    .axi_r_t     (ara_axi_r_t     ),
-    .axi_aw_t    (ara_axi_aw_t    ),
-    .axi_w_t     (ara_axi_w_t     ),
-    .axi_b_t     (ara_axi_b_t     ),
+    .axi_ar_t    (ara_axi_ar_chan_t    ),
+    .axi_r_t     (ara_axi_r_chan_t     ),
+    .axi_aw_t    (ara_axi_aw_chan_t    ),
+    .axi_w_t     (ara_axi_w_chan_t     ),
+    .axi_b_t     (ara_axi_b_chan_t     ),
     .axi_req_t   (ara_axi_req_t   ),
     .axi_resp_t  (ara_axi_resp_t  )
   ) i_ara (
@@ -322,7 +356,7 @@ module ara_verilog_wrap
 
   typedef enum int unsigned {
     NOC = 0,
-    CTRL  = 2
+    CTRL  = 1
   } axi_slaves_e;
   localparam NrAXISlaves = CTRL + 1;
 
@@ -330,31 +364,14 @@ module ara_verilog_wrap
   // 1GByte of DDR (split between two chips on Genesys2)
   localparam logic [63:0] DRAMLength = 64'h40000000;
   localparam logic [63:0] CTRLLength = 64'h1000;
+  localparam logic [63:0] NOCL2Length = 64'h1000;
 
   typedef enum logic [63:0] {
     DRAMBase = 64'h8000_0000,
-    CTRLBase = 64'hD000_0000
+    CTRLBase = 64'hD000_0000, 
+    NOCL2Base = 64'hD00_1000
   } soc_bus_start_e;
-  ///////////
-  //  AXI  //
-  ///////////
-  // Ariane's AXI port data width
-  localparam AxiNarrowDataWidth = 64;
-  localparam AxiNarrowStrbWidth = AxiNarrowDataWidth / 8;
-  // Ara's AXI port data width
-  localparam AxiWideDataWidth   = AxiDataWidth;
-  localparam AXiWideStrbWidth   = AxiWideDataWidth / 8;
 
-  localparam AxiSocIdWidth  = AxiIdWidth - $clog2(NrAXIMasters);
-  localparam AxiCoreIdWidth = AxiSocIdWidth - 1;
-
-  // Internal types
-  typedef logic [AxiNarrowDataWidth-1:0] axi_narrow_data_t;
-  typedef logic [AxiNarrowStrbWidth-1:0] axi_narrow_strb_t;
-  typedef logic [AxiSocIdWidth-1:0] axi_soc_id_t;
-  typedef logic [AxiCoreIdWidth-1:0] axi_core_id_t;
-
-  
 
   // Buses
   system_req_t  system_axi_req;
@@ -444,7 +461,7 @@ module ara_verilog_wrap
     .axi_mst_resp_t     (soc_narrow_resp_t   ),
     .axi_slv_req_t      (soc_wide_req_t      ),
     .axi_slv_resp_t     (soc_wide_resp_t     )
-  ) i_axi_slave_ctrl_dwc (
+  ) i_axi_slave_ctrl_dwc_csr (
     .clk_i     (clk_i                       ),
     .rst_ni    (rst_ni                      ),
     .slv_req_i (periph_wide_axi_req[CTRL]   ),
@@ -465,7 +482,7 @@ module ara_verilog_wrap
     .full_resp_t    (soc_narrow_resp_t     ),
     .lite_req_t     (soc_narrow_lite_req_t ),
     .lite_resp_t    (soc_narrow_lite_resp_t)
-  ) i_axi_to_axi_lite (
+  ) i_axi_to_axi_lite_csr (
     .clk_i     (clk_i                        ),
     .rst_ni    (rst_ni                       ),
     .test_i    (1'b0                         ),
@@ -519,7 +536,7 @@ module ara_verilog_wrap
     .axi_mst_resp_t     (soc_narrow_resp_t   ),
     .axi_slv_req_t      (soc_wide_req_t      ),
     .axi_slv_resp_t     (soc_wide_resp_t     )
-  ) i_axi_slave_ctrl_dwc (
+  ) i_axi_slave_ctrl_dwc_noc (
     .clk_i     (clk_i                       ),
     .rst_ni    (rst_ni                      ),
     .slv_req_i (periph_wide_axi_req[NOC]    ),
@@ -540,7 +557,7 @@ module ara_verilog_wrap
     .full_resp_t    (soc_narrow_resp_t     ),
     .lite_req_t     (soc_narrow_lite_req_t ),
     .lite_resp_t    (soc_narrow_lite_resp_t)
-  ) i_axi_to_axi_lite (
+  ) i_axi_to_axi_lite_noc (
     .clk_i     (clk_i                        ),
     .rst_ni    (rst_ni                       ),
     .test_i    (1'b0                         ),
@@ -550,8 +567,8 @@ module ara_verilog_wrap
     .mst_resp_i(axi_lite_noc_resp            )
   );
 
-axilite_noc_bridge #(
-  .AXI_LITE_DATA_WIDTH (     64     ),
+/*axilite_noc_bridge #(
+  .AXI_LITE_DATA_WIDTH (     64     )
 ) axi_noc_bridge (
     .clk            (clk_i),
     .rst            (rst_ni),
@@ -592,6 +609,6 @@ axilite_noc_bridge #(
     .m_axi_bresp    (axi_lite_noc_resp.b.resp  ),
     .m_axi_bvalid   (axi_lite_noc_resp.b_valid ),
     .m_axi_bready   (axi_lite_noc_req.b_ready  )
-)
+);*/
 
 endmodule : ara_verilog_wrap
