@@ -5,7 +5,6 @@
 +incdir+../../../include
 
 
-
 ../hardware/include/rvv_pkg.sv
 ../hardware/include/ara_pkg.sv
 ../openpiton/sync_fifo.v 
