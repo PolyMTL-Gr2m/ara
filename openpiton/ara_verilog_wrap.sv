@@ -55,6 +55,10 @@ module ara_verilog_wrap
     // Core ID, Cluster ID and boot address are considered more or less static
     input  [riscv::VLEN-1:0]    boot_addr_i,  // reset boot address
     input  [riscv::XLEN-1:0]    hart_id_i,    // hart id in a multicore environment (reflected in a CSR)
+    input wire [`NOC_CHIPID_WIDTH-1:0]  default_chipid,
+    input wire [`NOC_X_WIDTH-1:0]       default_coreid_x,
+    input wire [`NOC_Y_WIDTH-1:0]       default_coreid_y,
+    
     // Interrupt inputs
     input  [1:0]                irq_i,        // level sensitive IR lines, mip & sip (async)
     input                       ipi_i,        // inter-processor interrupts (async)
@@ -63,12 +67,14 @@ module ara_verilog_wrap
     input                       debug_req_i,  // debug request (async)
 
     // NOC Signals
-    input  [`NOC_DATA_WIDTH-1:0] noc2_valid_in ,
-    input  [`NOC_DATA_WIDTH-1:0] noc2_data_in  ,
-    output [`NOC_DATA_WIDTH-1:0] noc2_ready_out,
     output [`NOC_DATA_WIDTH-1:0] noc2_valid_out,
     output [`NOC_DATA_WIDTH-1:0] noc2_data_out ,
     input  [`NOC_DATA_WIDTH-1:0] noc2_ready_in ,
+
+    input  [`NOC_DATA_WIDTH-1:0] noc3_valid_in ,
+    input  [`NOC_DATA_WIDTH-1:0] noc3_data_in  ,
+    output [`NOC_DATA_WIDTH-1:0] noc3_ready_out,
+
 
   `ifdef PITON_ARIANE
     // L15 (memory side)
@@ -355,22 +361,21 @@ module ara_verilog_wrap
   localparam NrAXIMasters = 1; // Actually masters, but slaves on the crossbar
 
   typedef enum int unsigned {
-    NOC = 0,
-    CTRL  = 1
+    NOC = 0
   } axi_slaves_e;
-  localparam NrAXISlaves = CTRL + 1;
+  localparam NrAXISlaves = NOC + 1;
 
   // Memory Map
   // 1GByte of DDR (split between two chips on Genesys2)
-  localparam logic [63:0] DRAMLength = 64'h40000000;
-  localparam logic [63:0] CTRLLength = 64'h1000;
-  localparam logic [63:0] NOCL2Length = 64'h1000;
+  // localparam logic [63:0] DRAMLength = 64'h40000000; // unused since xbar cancelled 
+  // localparam logic [63:0] CTRLLength = 64'h1000; // unused since xbar cancelled 
+  // localparam logic [63:0] NOCL2Length = 64'h1000; // unused since xbar cancelled 
 
-  typedef enum logic [63:0] {
+  /*typedef enum logic [63:0] {
     DRAMBase = 64'h8000_0000,
     CTRLBase = 64'hD000_0000, 
     NOCL2Base = 64'hD00_1000
-  } soc_bus_start_e;
+  } soc_bus_start_e;*/
 
 
   // Buses
@@ -386,7 +391,7 @@ module ara_verilog_wrap
   //  Crossbar  //
   ////////////////
 
-  localparam axi_pkg::xbar_cfg_t XBarCfg = '{
+  /*localparam axi_pkg::xbar_cfg_t XBarCfg = '{
     NoSlvPorts        : NrAXIMasters,
     NoMstPorts        : NrAXISlaves,
     MaxMstTrans       : 4,
@@ -434,12 +439,12 @@ module ara_verilog_wrap
     .addr_map_i           (routing_rules       ),
     .en_default_mst_port_i('0                  ),
     .default_mst_port_i   ('0                  )
-  );
+  );*/
 
   /////////////////////////
   //  Control registers  //
   /////////////////////////
-
+  /*
   soc_narrow_lite_req_t  axi_lite_ctrl_registers_req;
   soc_narrow_lite_resp_t axi_lite_ctrl_registers_resp;
   logic [63:0] event_trigger;
@@ -505,12 +510,12 @@ module ara_verilog_wrap
     .axi_lite_slave_req_i (axi_lite_ctrl_registers_req ),
     .axi_lite_slave_resp_o(axi_lite_ctrl_registers_resp),
     .hw_cnt_en_o          (hw_cnt_en_o                 ),
-    .dram_base_addr_o     (/* Unused */                ),
-    .dram_end_addr_o      (/* Unused */                ),
+    .dram_base_addr_o     (// Unsed                    ),
+    .dram_end_addr_o      (/* Unsed                    ),
     .exit_o               (exit_o                      ),
     .event_trigger_o      (event_trigger)
   );
-
+  */
 
   /////////////////////////
   //  NOC Bridge         //
@@ -567,31 +572,31 @@ module ara_verilog_wrap
     .mst_resp_i(axi_lite_noc_resp            )
   );
 
-/*axilite_noc_bridge #(
+axilite_noc_bridge #(
   .AXI_LITE_DATA_WIDTH (     64     )
 ) axi_noc_bridge (
     .clk            (clk_i),
     .rst            (rst_ni),
-    .noc2_valid_in  (noc2_valid_in           ),
-    .noc2_data_in   (noc2_data_in            ),
-    .noc2_ready_out (noc2_ready_out          ),
+    .noc2_valid_in  (           ),
+    .noc2_data_in   (            ),
+    .noc2_ready_out (          ),
     .noc2_valid_out (noc2_valid_out          ),
     .noc2_data_out  (noc2_data_out           ),
     .noc2_ready_in  (noc2_ready_in           ),
-    .noc3_valid_in  (),
-    .noc3_data_in   (),
-    .noc3_ready_out (),
+    .noc3_valid_in  (noc3_valid_in),
+    .noc3_data_in   (noc3_data_in),
+    .noc3_ready_out (noc3_ready_out),
     .noc3_valid_out (),
     .noc3_data_out  (),
     .noc3_ready_in  (),
-    .src_chipid     (),
-    .src_xpos       (),
-    .src_ypos       (),
-    .src_fbits      (),
-    .dest_chipid    (),
-    .dest_xpos      (),
-    .dest_ypos      (),
-    .dest_fbits     (),
+    .src_chipid     (default_chipid), // 14 // 0
+    .src_xpos       (default_coreid_x), // 8  // 1
+    .src_ypos       (default_coreid_y), // 8  // 1
+    .src_fbits      (`NOC_FBITS_ARA), // 4
+    .dest_chipid    (14'b1000_0000_0000_00), // 14 // 
+    .dest_xpos      (8'd0), // 8
+    .dest_ypos      (8'd0), // 8
+    .dest_fbits     (`NOC_FBITS_MEM), //4
     .m_axi_awaddr   (axi_lite_noc_req.aw.addr  ),
     .m_axi_awvalid  (axi_lite_noc_req.aw_valid ),
     .m_axi_awready  (axi_lite_noc_resp.aw_ready),
@@ -609,6 +614,6 @@ module ara_verilog_wrap
     .m_axi_bresp    (axi_lite_noc_resp.b.resp  ),
     .m_axi_bvalid   (axi_lite_noc_resp.b_valid ),
     .m_axi_bready   (axi_lite_noc_req.b_ready  )
-);*/
+);
 
 endmodule : ara_verilog_wrap
