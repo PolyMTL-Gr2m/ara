@@ -186,6 +186,14 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         VMADD: begin
           for (int l = 0; l < 1; l++) result_o[64*l +: 64] = mul_res.w128[l][63:0] + opc.w64[l];
         end
+        /*************************************************************************************************/
+        VSHAC: for (int l = 0; l < 1; l++) result_o[64*l +: 64] = (opb.w64[l] << opa.w64[l]) + opc.w64[l];
+        // 64-bit behaviour (hence the 1 value loop) 
+        // opb is vs2
+        // opa is vs1 or rs1
+        // opc is vd
+        // behaviour for every element: vd <- vs2 << vs1 + vd
+        /*************************************************************************************************/
         VNMSAC,
         VNMSUB: begin
           for (int l = 0; l < 1; l++) result_o[64*l +: 64] = -mul_res.w128[l][63:0] + opc.w64[l];
@@ -223,6 +231,14 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         // Single-Width integer multiply-add instructions
         VMACC,
         VMADD: for (int l = 0; l < 2; l++) result_o[32*l +: 32] = mul_res.w64[l][31:0] + opc.w32[l];
+        /*************************************************************************************************/
+        VSHAC: for (int l = 0; l < 2; l++) result_o[32*l +: 32] = (opb.w32[l] << opa.w32[l]) + opc.w32[l];
+        // 32-bit behaviour (hence the 2 value loop) 
+        // opb is vs2
+        // opa is vs1 or rs1
+        // opc is vd
+        // behaviour for every element: vd <- vs2 << vs1 + vd
+        /*************************************************************************************************/
         VNMSAC,
         VNMSUB: for (int l = 0; l < 2; l++) begin
             result_o[32*l +: 32] = -mul_res.w64[l][31:0] + opc.w32[l];
@@ -260,6 +276,14 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         // Single-Width integer multiply-add instructions
         VMACC,
         VMADD: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0] + opc.w16[l];
+        /*************************************************************************************************/
+        VSHAC: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = (opb.w16[l] << opa.w16[l]) + opc.w16[l];
+        // 16-bit behaviour (hence the 4 value loop) 
+        // opb is vs2
+        // opa is vs1 or rs1
+        // opc is vd
+        // behaviour for every element: vd <- vs2 << vs1 + vd
+        /*************************************************************************************************/
         VNMSAC,
         VNMSUB: for (int l = 0; l < 4; l++) begin
             result_o[16*l +: 16] = -mul_res.w32[l][15:0] + opc.w16[l];
@@ -297,6 +321,14 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         // Single-Width integer multiply-add instructions
         VMACC,
         VMADD: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0] + opc.w8[l];
+        /*************************************************************************************************/
+        VSHAC: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = (opb.w8[l] << opa.w8[l]) + opc.w8[l];
+        // 8-bit behaviour (hence the 8 value loop) 
+        // opb is vs2
+        // opa is vs1 or rs1
+        // opc is vd
+        // behaviour for every element: vd <- vs2 << vs1 + vd
+        /*************************************************************************************************/
         VNMSAC,
         VNMSUB: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = -mul_res.w16[l][7:0] + opc.w8[l];
         default: result_o = '0;

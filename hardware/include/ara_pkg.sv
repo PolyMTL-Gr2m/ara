@@ -125,7 +125,7 @@ package ara_pkg;
     // Integer Reductions
     VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX, VWREDSUMU, VWREDSUM,
     // Mul/Mul-Add
-    VMUL, VMULH, VMULHU, VMULHSU, VMACC, VNMSAC, VMADD, VNMSUB,
+    VMUL, VMULH, VMULHU, VMULHSU, VMACC, VSHAC, VNMSAC, VMADD, VNMSUB,
     // Fixed point multiplication
     VSMUL,
     // Div

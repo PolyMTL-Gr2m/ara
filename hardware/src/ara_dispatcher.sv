@@ -1426,6 +1426,18 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.op        = ara_pkg::VMACC;
                     ara_req_d.use_vd_op = 1'b1;
                   end
+                  
+                  // We define the func6 value of vshac
+                  // since the one after vmacc is free, we use this one
+                  // we put use_vd_op at 1 because we need to use vd as an operand
+                  
+                  6'b101110: begin
+                    ara_req_d.op        = ara_pkg::VSHAC;
+                    ara_req_d.use_vd_op = 1'b1;
+                  end
+                  /*******************************************/
+                  
+                  
                   6'b101111: begin
                     ara_req_d.op        = ara_pkg::VNMSAC;
                     ara_req_d.use_vd_op = 1'b1;
@@ -1657,6 +1669,18 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.op        = ara_pkg::VMACC;
                     ara_req_d.use_vd_op = 1'b1;
                   end
+                  
+                  // We define the func6 value of vshac
+                  // since the one after vmacc is free, we use this one
+                  // we put use_vd_op at 1 because we need to use vd as an operand
+                  
+                  6'b101110: begin
+                    ara_req_d.op        = ara_pkg::VSHAC;
+                    ara_req_d.use_vd_op = 1'b1;
+                  end
+                  /*******************************************/
+                  
+                  
                   6'b101111: begin
                     ara_req_d.op        = ara_pkg::VNMSAC;
                     ara_req_d.use_vd_op = 1'b1;
