@@ -226,7 +226,8 @@ module ara_verilog_wrap
     /////////////////////////////
     // synchronizers
     /////////////////////////////
-  
+    
+    logic rst_ni;
     logic [1:0] irq;
     logic ipi, time_irq, debug_req;
   
@@ -236,6 +237,8 @@ module ara_verilog_wrap
       .presyncdata ( rst_n      ),
       .syncdata    ( spc_grst_l )
     );
+
+    assign rst_ni = spc_grst_l;
   
     // interrupts
     for (genvar k=0; k<$size(irq_i); k++) begin
