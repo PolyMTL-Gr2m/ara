@@ -24,7 +24,7 @@ module ara_verilog_wrap
     parameter int unsigned               AxiDataWidth          = 32*NrLanes,
     parameter int unsigned               AxiAddrWidth          = 64,
     parameter int unsigned               AxiUserWidth          = 1,
-    parameter int unsigned               AxiIdWidth            = 5,
+    parameter int unsigned               AxiIdWidth            = 5, // only one slave and one master
     // Ariane Cache
     parameter int unsigned               RASDepth              = 2,
     parameter int unsigned               BTBEntries            = 32,
@@ -128,8 +128,10 @@ module ara_verilog_wrap
   localparam AxiWideDataWidth   = AxiDataWidth;
   localparam AXiWideStrbWidth   = AxiWideDataWidth / 8;
 
-  localparam AxiSocIdWidth  = AxiIdWidth - $clog2(NrAXIMasters);
-  localparam AxiCoreIdWidth = AxiSocIdWidth - 1;
+  //localparam AxiSocIdWidth  = AxiIdWidth - $clog2(NrAXIMasters);
+  //localparam AxiCoreIdWidth = AxiSocIdWidth - 1;
+  localparam AxiSocIdWidth  = AxiIdWidth;
+  localparam AxiCoreIdWidth = AxiIdWidth;
 
   // Internal types
   typedef logic [AxiNarrowDataWidth-1:0] axi_narrow_data_t;
@@ -150,8 +152,11 @@ module ara_verilog_wrap
   `AXI_TYPEDEF_ALL(soc_wide, axi_addr_t, axi_soc_id_t, axi_data_t, axi_strb_t, axi_user_t)
   `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
   
-  //ara_axi_req_t  ara_axi_req;
-  //ara_axi_resp_t ara_axi_resp;
+
+  system_req_t system_axi_req;
+  system_resp_t system_axi_resp;
+  ara_axi_req_t  ara_axi_req;
+  ara_axi_resp_t ara_axi_resp;
 
 
 
@@ -356,17 +361,35 @@ module ara_verilog_wrap
     .axi_req_o       (ara_axi_req   ),
     .axi_resp_i      (ara_axi_resp  )
   );
+  
+  // axi_cut #(
+  //   .ar_chan_t   (system_ar_chan_t     ),
+  //   .aw_chan_t   (system_aw_chan_t     ),
+  //   .b_chan_t    (system_b_chan_t      ),
+  //   .r_chan_t    (system_r_chan_t      ),
+  //   .w_chan_t    (system_w_chan_t      ),
+  //   .req_t       (system_req_t         ),
+  //   .resp_t      (system_resp_t        )
+  // ) i_system_cut (
+  //   .clk_i       (clk_i),
+  //   .rst_ni      (rst_ni),
+  //   .slv_req_i   (ara_axi_req),
+  //   .slv_resp_o  (ara_axi_resp),
+  //   .mst_req_o   (system_axi_req),
+  //   .mst_resp_i  (system_axi_resp)
+  // );
+
 
   //////////////////////
   //  Memory Regions  //
   //////////////////////
 
-  localparam NrAXIMasters = 1; // Actually masters, but slaves on the crossbar
+  // localparam NrAXIMasters = 1; // Actually masters, but slaves on the crossbar
 
-  typedef enum int unsigned {
-    NOC = 0
-  } axi_slaves_e;
-  localparam NrAXISlaves = NOC + 1;
+  // typedef enum int unsigned {
+  //   NOC = 0
+  // } axi_slaves_e;
+  // localparam NrAXISlaves = NOC + 1;
 
   // Memory Map
   // 1GByte of DDR (split between two chips on Genesys2)
@@ -382,13 +405,20 @@ module ara_verilog_wrap
 
 
   // Buses
-  system_req_t  system_axi_req;
-  system_resp_t system_axi_resp;
+  //system_req_t  system_axi_req;
+  //system_resp_t system_axi_resp;
 
-  soc_wide_req_t    [NrAXISlaves-1:0] periph_wide_axi_req;
-  soc_wide_resp_t   [NrAXISlaves-1:0] periph_wide_axi_resp;
-  soc_narrow_req_t  [NrAXISlaves-1:0] periph_narrow_axi_req;
-  soc_narrow_resp_t [NrAXISlaves-1:0] periph_narrow_axi_resp;
+  // soc_wide_req_t    [NrAXISlaves-1:0] periph_wide_axi_req;
+  // soc_wide_resp_t   [NrAXISlaves-1:0] periph_wide_axi_resp;
+  // soc_narrow_req_t  [NrAXISlaves-1:0] periph_narrow_axi_req;
+  // soc_narrow_resp_t [NrAXISlaves-1:0] periph_narrow_axi_resp;
+
+  //soc_wide_req_t    periph_wide_axi_req;
+  //soc_wide_resp_t   periph_wide_axi_resp;
+  soc_narrow_req_t  periph_narrow_axi_req;
+  soc_narrow_resp_t periph_narrow_axi_resp;
+
+
 
   ////////////////
   //  Crossbar  //
@@ -531,26 +561,33 @@ module ara_verilog_wrap
     .AxiSlvPortDataWidth(AxiWideDataWidth    ),
     .AxiMstPortDataWidth(AxiNarrowDataWidth  ),
     .AxiAddrWidth       (AxiAddrWidth        ),
-    .AxiIdWidth         (AxiSocIdWidth       ),
-    .AxiMaxReads        (2                   ),
-    .ar_chan_t          (soc_wide_ar_chan_t  ),
+    .AxiIdWidth         (AxiCoreIdWidth       ),
+    .AxiMaxReads        (2                  ),
+    //.ar_chan_t          (soc_wide_ar_chan_t  ),
+    .ar_chan_t          (ara_axi_ar_chan_t  ),
     .mst_r_chan_t       (soc_narrow_r_chan_t ),
-    .slv_r_chan_t       (soc_wide_r_chan_t   ),
+    //.slv_r_chan_t       (soc_wide_r_chan_t   ),
+    .slv_r_chan_t       (ara_axi_r_chan_t   ),
     .aw_chan_t          (soc_narrow_aw_chan_t),
     .b_chan_t           (soc_narrow_b_chan_t ),
     .mst_w_chan_t       (soc_narrow_w_chan_t ),
-    .slv_w_chan_t       (soc_wide_w_chan_t   ),
+    //.slv_w_chan_t       (soc_wide_w_chan_t   ),
+    .slv_w_chan_t       (ara_axi_w_chan_t   ),
     .axi_mst_req_t      (soc_narrow_req_t    ),
     .axi_mst_resp_t     (soc_narrow_resp_t   ),
-    .axi_slv_req_t      (soc_wide_req_t      ),
-    .axi_slv_resp_t     (soc_wide_resp_t     )
+    //.axi_slv_req_t      (soc_wide_req_t      ),
+    //.axi_slv_resp_t     (soc_wide_resp_t     )
+    .axi_slv_req_t      (ara_axi_req_t      ),
+    .axi_slv_resp_t     (ara_axi_resp_t     )
   ) i_axi_slave_ctrl_dwc_noc (
     .clk_i     (clk_i                       ),
     .rst_ni    (rst_ni                      ),
-    .slv_req_i (periph_wide_axi_req[NOC]    ),
-    .slv_resp_o(periph_wide_axi_resp[NOC]   ),
-    .mst_req_o (periph_narrow_axi_req[NOC]  ),
-    .mst_resp_i(periph_narrow_axi_resp[NOC] )
+    //.slv_req_i (periph_wide_axi_req[NOC]    ),
+    //.slv_resp_o(periph_wide_axi_resp[NOC]   ),
+    .slv_req_i (ara_axi_req                 ),
+    .slv_resp_o(ara_axi_resp                ),
+    .mst_req_o (periph_narrow_axi_req  ),
+    .mst_resp_i(periph_narrow_axi_resp )
   );
 
   axi_to_axi_lite #(
@@ -569,8 +606,8 @@ module ara_verilog_wrap
     .clk_i     (clk_i                        ),
     .rst_ni    (rst_ni                       ),
     .test_i    (1'b0                         ),
-    .slv_req_i (periph_narrow_axi_req[NOC]   ),
-    .slv_resp_o(periph_narrow_axi_resp[NOC]  ),
+    .slv_req_i (periph_narrow_axi_req   ),
+    .slv_resp_o(periph_narrow_axi_resp  ),
     .mst_req_o (axi_lite_noc_req             ),
     .mst_resp_i(axi_lite_noc_resp            )
   );
@@ -579,7 +616,7 @@ axilite_noc_bridge #(
   .AXI_LITE_DATA_WIDTH (     64     )
 ) axi_noc_bridge (
     .clk            (clk_i),
-    .rst            (rst_ni),
+    .rst            (!rst_ni),
     .noc2_valid_in  (           ),
     .noc2_data_in   (            ),
     .noc2_ready_out (          ),

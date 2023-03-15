@@ -182,7 +182,7 @@ initial begin
 end
 always @(posedge clk)
 begin
-    if ((type_fifo_out == `MSG_TYPE_STORE) && noc2_valid_out && noc2_ready_in)
+    if (noc2_valid_out && noc2_ready_in)
     begin
         $fwrite(file3, "noc2_data_out %064x\n", noc2_data_out);
         $fflush(file3);
@@ -241,7 +241,7 @@ noc_response_axilite #(
 );
 
 
-assign noc3_ready_out = 1'b1;
+//assign noc3_ready_out = 1'b1;
 
 //assign write_channel_ready = !awaddr_fifo_full && !wdata_fifo_full;
 assign write_channel_ready = !awaddr_fifo_full && !wdata_fifo_full && !wstrb_fifo_full;
@@ -249,7 +249,8 @@ assign m_axi_awready = write_channel_ready && !type_fifo_full;
 assign m_axi_wready = write_channel_ready && !type_fifo_full;
 assign m_axi_arready = !araddr_fifo_full && !type_fifo_full;
 
-assign axi2noc_msg_type_store = m_axi_awvalid && m_axi_wvalid;
+//assign axi2noc_msg_type_store = m_axi_awvalid && m_axi_wvalid;
+assign axi2noc_msg_type_store = m_axi_awvalid;
 assign axi2noc_msg_type_load = m_axi_arvalid;
 assign axi2noc_msg_type = (axi2noc_msg_type_store) ? `MSG_TYPE_STORE :
                             (axi2noc_msg_type_load) ? `MSG_TYPE_LOAD :
@@ -510,6 +511,7 @@ begin
     end
     else begin
         noc_cnt <= (noc_last_header | noc_last_data)  ? 3'b0 :
+                    (noc_cnt == 3'b0 && fifo_has_packet) ? noc_cnt + 1: 
                     (fifo_has_packet && noc2_ready_in) ? noc_cnt + 1 : noc_cnt;
     end
 end
@@ -547,10 +549,10 @@ begin
     else begin
         case (flit_state)
             `MSG_STATE_IDLE: begin
-                if ((fifo_has_packet && type_fifo_out == `MSG_TYPE_STORE) && noc2_ready_in)
+                if ((fifo_has_packet && type_fifo_out == `MSG_TYPE_STORE))
                     //flit_state <= `MSG_STATE_HEADER;
                     flit_state <= `MSG_STATE_WAIT_STRB;
-                else if ((fifo_has_packet && type_fifo_out == `MSG_TYPE_LOAD) && noc2_ready_in)
+                else if ((fifo_has_packet && type_fifo_out == `MSG_TYPE_LOAD))
                     flit_state <= `MSG_STATE_HEADER;
             end
             `MSG_STATE_WAIT_STRB:begin

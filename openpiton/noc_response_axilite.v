@@ -252,7 +252,8 @@ wire                                empty;
 wire [AXI_LITE_DATA_WIDTH-1:0]      rdata;
 
 reg                                 wval;
-reg [AXI_LITE_DATA_WIDTH-1:0]       wdata;           
+reg [AXI_LITE_DATA_WIDTH-1:0]       wdata;  
+reg [AXI_LITE_DATA_WIDTH-1:0]       data;         
 
 /* fifo for read data */
 sync_fifo #(
@@ -271,7 +272,7 @@ sync_fifo #(
 );
 
 assign noc_ready_out = !full;
-assign ren = (!empty && m_axi_rready);
+assign ren = (m_axi_rvalid && m_axi_rready);
 
 generate
     if (AXI_LITE_DATA_WIDTH == `NOC_DATA_WIDTH) begin
@@ -288,7 +289,7 @@ generate
         end        
     end
     else if (AXI_LITE_DATA_WIDTH >= `NOC_DATA_WIDTH) begin
-        reg [AXI_LITE_DATA_WIDTH-1:0]                      data;
+        
         always @(posedge clk)
         begin
             if (rst) begin
@@ -300,7 +301,7 @@ generate
 
                 if (msg_state_f == MSG_STATE_DATA && noc_io_go && !full)
                 begin
-                    data[msg_counter_f*`NOC_DATA_WIDTH +: `NOC_DATA_WIDTH] = noc_data_in;
+                    data[msg_counter_f*`NOC_DATA_WIDTH +: `NOC_DATA_WIDTH] <= noc_data_in;
                 end
 
                 if (msg_data_done) begin
@@ -312,8 +313,8 @@ generate
     end
 endgenerate
 
-assign m_axi_rvalid = ren;
-assign m_axi_rdata = rdata;
+assign m_axi_rvalid = !empty;
+assign m_axi_rdata = m_axi_rvalid ? rdata : {AXI_LITE_DATA_WIDTH{1'b0}};
 assign m_axi_rresp = {AXI_LITE_RESP_WIDTH{1'b0}};
 
 endmodule
