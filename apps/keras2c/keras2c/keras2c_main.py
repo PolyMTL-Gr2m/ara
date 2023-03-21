@@ -28,7 +28,7 @@ __maintainer__ = "Rory Conlin, https://github.com/f0uriest/keras2c"
 __email__ = "wconlin@princeton.edu"
 
 
-def model2c(model, function_name, malloc=False, verbose=True):
+def model2c(model, function_name, malloc=False, verbose=True,datatype='float '):
     """Generates C code for model
 
     Writes main function definition to "function_name.c" and a public header 
@@ -55,7 +55,7 @@ def model2c(model, function_name, malloc=False, verbose=True):
     if verbose:
         print('Gathering Weights')
     stack_vars, malloc_vars, static_vars = Weights2C(
-        model, function_name, malloc).write_weights(verbose)
+        model, function_name, malloc,datatype ).write_weights(verbose)
     stateful = len(static_vars) > 0
     layers = Layers2C(model, malloc).write_layers(verbose)
 
@@ -65,12 +65,12 @@ def model2c(model, function_name, malloc=False, verbose=True):
     function_signature += ', '.join(['k2c_tensor* ' +
                                      out_nm + '_output' for out_nm in model_outputs])
     if len(malloc_vars.keys()):
-        function_signature += ',' + ','.join(['float* ' +
+        function_signature += ',' + ','.join([datatype + '* ' +
                                               key for key in malloc_vars.keys()])
     function_signature += ')'
 
-    init_sig, init_fun = gen_function_initialize(function_name, malloc_vars)
-    term_sig, term_fun = gen_function_terminate(function_name, malloc_vars)
+    init_sig, init_fun = gen_function_initialize(function_name, malloc_vars, datatype)
+    term_sig, term_fun = gen_function_terminate(function_name, malloc_vars, datatype)
     reset_sig, reset_fun = gen_function_reset(function_name)
 
     with open(function_name + '.c', 'x+') as source:
@@ -126,7 +126,7 @@ def gen_function_reset(function_name):
     return reset_sig, reset_fun
 
 
-def gen_function_initialize(function_name, malloc_vars):
+def gen_function_initialize(function_name, malloc_vars, datatype='float '):
     """Writes an initialize function
 
     Initialize function is used to load variables into memory and do other start up tasks
@@ -141,7 +141,7 @@ def gen_function_initialize(function_name, malloc_vars):
     """
 
     init_sig = 'void ' + function_name + '_initialize('
-    init_sig += ','.join(['float** ' +
+    init_sig += ','.join([datatype+'** ' +
                           key + ' \n' for key in malloc_vars.keys()])
     init_sig += ')'
 
@@ -157,7 +157,7 @@ def gen_function_initialize(function_name, malloc_vars):
     return init_sig, init_fun
 
 
-def gen_function_terminate(function_name, malloc_vars):
+def gen_function_terminate(function_name, malloc_vars, datatype='float '):
     """Writes a terminate function
 
     Terminate function is used to deallocate memory after completion
@@ -172,7 +172,7 @@ def gen_function_terminate(function_name, malloc_vars):
     """
 
     term_sig = 'void ' + function_name + '_terminate('
-    term_sig += ','.join(['float* ' +
+    term_sig += ','.join([datatype + '* ' +
                           key for key in malloc_vars.keys()])
     term_sig += ')'
 
@@ -185,7 +185,7 @@ def gen_function_terminate(function_name, malloc_vars):
     return term_sig, term_fun
 
 
-def k2c(model, function_name, malloc=False, num_tests=10, verbose=True):
+def k2c(model, function_name, malloc=False, num_tests=10, verbose=True, datatype='float '):
     """Converts keras model to C code and generates test suite
 
     Args:
@@ -218,14 +218,14 @@ def k2c(model, function_name, malloc=False, num_tests=10, verbose=True):
         print('All checks passed')
 
     malloc_vars, stateful = model2c(
-        model, function_name, malloc, verbose)
+        model, function_name, malloc, verbose, datatype)
 
     s = 'Done \n'
     s += "C code is in '" + function_name + \
         ".c' with header file '" + function_name + ".h' \n"
     if num_tests > 0:
         make_test_suite(model, function_name, malloc_vars,
-                        num_tests, stateful, verbose)
+                        num_tests, stateful, verbose, datatype=datatype)
         s += "Tests are in '" + function_name + "_test_suite.c' \n"
     if malloc:
         s += "Weight arrays are in .csv files of the form 'model_name_layer_name_array_type.csv' \n"

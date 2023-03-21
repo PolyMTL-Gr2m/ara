@@ -23,7 +23,7 @@ https://github.com/f0uriest/keras2c
 struct k2c_tensor
 {
     /** Pointer to array of tensor values flattened in row major order. */
-    int8_t  * array;
+    int8_t * array;
 
     /** Rank of the tensor (number of dimensions). */
     size_t ndim;
@@ -36,3 +36,37 @@ struct k2c_tensor
 };
 
 typedef struct k2c_tensor k2c_tensor;
+
+struct k2c_tensor_float
+{
+    /** Pointer to array of tensor values flattened in row major order. */
+    float * array;
+
+    /** Rank of the tensor (number of dimensions). */
+    size_t ndim;
+
+    /** Number of elements in the tensor. */
+    size_t numel;
+
+    /** Array, size of the tensor in each dimension. */
+    size_t shape[K2C_MAX_NDIM];
+};
+
+typedef struct k2c_tensor_float k2c_tensor_float;
+
+struct k2c_tensor_int
+{
+    /** Pointer to array of tensor values flattened in row major order. */
+    int * array;
+
+    /** Rank of the tensor (number of dimensions). */
+    size_t ndim;
+
+    /** Number of elements in the tensor. */
+    size_t numel;
+
+    /** Array, size of the tensor in each dimension. */
+    size_t shape[K2C_MAX_NDIM];
+};
+
+typedef struct k2c_tensor_int k2c_tensor_int;

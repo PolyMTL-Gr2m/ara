@@ -90,7 +90,7 @@ void k2c_average(k2c_tensor* output, const size_t num_tensors,...) {
 
     va_list args;
     const k2c_tensor *arrptr;
-    const int8_t  num_tensors_inv = 1.0f/num_tensors;
+    const float num_tensors_inv = 1.0f/num_tensors;
 
     va_start (args, num_tensors);
     memset(output->array, 0, output->numel*sizeof(output->array[0]));

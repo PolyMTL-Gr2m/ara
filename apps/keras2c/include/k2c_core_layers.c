@@ -11,11 +11,7 @@ https://github.com/f0uriest/keras2c
 #include <string.h>
 #include "k2c_include.h"
 #include <stdint.h>
-//#include "../../common/printf.h"
 
-#ifndef SPIKE
-#include "printf.h"
-#endif
 /**
  * Dense (fully connected) Layer.
  *
@@ -27,8 +23,7 @@ https://github.com/f0uriest/keras2c
  * :param fwork: array of working space, size(fwork) = size(input) + size(kernel)
  */
 void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* kernel,
-               const k2c_tensor* bias, k2c_activationType *activation, int8_t  * fwork) {
-                printf("In k2cdense\n");
+               const k2c_tensor* bias, k2c_activationType *activation, int8_t * fwork) {
 
     if (input->ndim <=2) {
         size_t outrows;
@@ -42,9 +37,18 @@ void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* ke
         const size_t outcols = kernel->shape[1];
         const size_t innerdim = kernel->shape[0];
         const size_t outsize = outrows*outcols;
+        /*
+        
+        printf(" input %d and %d and %d and %d\n", input->array[0], input->array[1], input->array[2], input->array[3]);
+        printf(" kernel %d and %d and %d and %d\n", kernel->array[0], kernel->array[1], kernel->array[2], kernel->array[3]);
+        printf(" bias %d and %d and %d and %d\n", bias->array[0], bias->array[1], bias->array[2], bias->array[3]);
+        printf(" starting k2c_affine\n");
+        */
         k2c_affine_matmul(output->array,input->array,kernel->array,bias->array,
                           outrows,outcols,innerdim);
+        
         activation(output->array,outsize);
+        printf(" output %d and %d and %d and %d\n", output->array[0], output->array[1], output->array[2], output->array[3]);
     }
     else {
         const size_t axesA[1] = {input->ndim-1};
