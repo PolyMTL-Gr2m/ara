@@ -20,7 +20,7 @@
 #define enable_vec() do { asm volatile ("csrs mstatus, %[bits];" :: [bits] "r" (MSTATUS_VS & (MSTATUS_VS >> 1))); } while (0);
 #define enable_fp()  do { asm volatile ("csrs mstatus, %[bits];" :: [bits] "r" (MSTATUS_FS & (MSTATUS_FS >> 1))); } while (0);
 #else
-#include <printf.h>
+#include <stdio.h>
 
 // The FP and V extensions are activated in the crt0 script
 #define enable_vec()
@@ -52,27 +52,20 @@ int test_case;
 // by comparing with golden_vtype value used as a reference. Also check for
 // illegal values of vlmul and vsew which violtate: ELEN >= SEW/LMUL
 #define check_vtype_vl(casenum, vtype, golden_vtype, avl, vl, vsew, vlmul)                                                     \
-  printf("Checking vtype and vl #%d...\n", casenum); \
   if((vlmul==5 && (vsew == 1 || vsew == 2 || vsew ==3)) || (vlmul==6 && (vsew == 2 || vsew ==3)) || (vlmul==7 && vsew==3)){   \
   if((vtype != 0x8000000000000000) || (vl != 0)){    \
-  printf("FAILED. Got vtype = %lx, expected vtype = 8000000000000000. avl = %lx, vl = %lx.\n", vtype,avl, vl);     \
   return;                                                  \
   }}                                                        \
   else if (vtype != golden_vtype || avl != vl) {                                                                        \
-    printf("FAILED. Got vtype = %lx, expected vtype = %lx. avl = %lx, vl = %lx.\n", vtype, golden_vtype, avl, vl); \
     num_failed++;                                                                                                  \
     return;                                                                                                        \
   }                                                                                                                \
-  printf("PASSED.\n");
 
 #define check_vxsat(casenum, vxsat, golden_vxsat)                                                                  \
-  printf("Checking vxsat #%d...\n", casenum);                                                               \
   if (vxsat != golden_vxsat) {                                                                        \
-    printf("FAILED. Got vxsat = %lx, expected vxsat = %lx.\n", vxsat, golden_vxsat); \
     num_failed++;                                                                                                  \
     return;                                                                                                        \
   }                                                                                                                \
-  printf("PASSED.\n");
 
 // In order to avoid that scalar loads run ahead of vector stores,
 // we use an instruction to ensure that all vector stores have been
@@ -91,74 +84,58 @@ int test_case;
   do {                                                              \
     MEMORY_BARRIER;                                                 \
     if (num_failed > 0) {                                           \
-      printf("ERROR: %s failed %d tests!\n", __FILE__, num_failed); \
       return num_failed;                                            \
     }                                                               \
     else {                                                          \
-      printf("PASSED: %s!\n", __FILE__);                            \
       return 0;                                                     \
     }                                                               \
   } while(0);                                                       \
 
 // Check the result against a scalar golden value
 #define XCMP(casenum,act,exp)                                           \
-  printf("Checking the results of the test case %d:\n", casenum);       \
   if (act != exp) {                                                     \
-    printf("Index %d FAILED. Got %d, expected %d.\n", casenum, act, exp);\
     num_failed++;                                                       \
     return;                                                             \
   }                                                                     \
-  printf("PASSED.\n");                                                  \
 
 // Check the result against a floating-point scalar golden value
 #define FCMP(casenum,act,exp)                                           \
   if(act != exp) {                                                      \
-    printf("Index %d FAILED. Got %lf, expected %lf.\n",casenum, act, exp);       \
     num_failed++;                                                       \
     return;                                                             \
   }                                                                     \
-  printf("PASSED.\n");
 
 // Check the results against a vector of golden values
 #define VCMP(T,str,casenum,vexp,act...)                                               \
   T vact[] = {act};                                                                   \
-  printf("Checking the results of the test case %d:\n", casenum);                     \
   MEMORY_BARRIER;                                                                     \
   for (unsigned int i = 0; i < sizeof(vact)/sizeof(T); i++) {                         \
     if (vexp[i] != vact[i]) {                                                         \
-      printf("Index %d FAILED. Got "#str", expected "#str".\n", i, vexp[i], vact[i]); \
       num_failed++;                                                                   \
       return;                                                                         \
     }                                                                                 \
   }                                                                                   \
-  printf("PASSED.\n");
 
 //Macro used to compare large number of elements
 #define LVCMP(T,str,casenum,elements, vexp ,vact)                                     \
-  printf("Checking the results of the test case %d:\n", casenum);                     \
   MEMORY_BARRIER;                                                                     \
   for (unsigned int i = 0; i < elements; i++) {                                       \
     if (vexp[i] != vact[i]) {                                                         \
-      printf("Index %d FAILED. Got "#str", expected "#str".\n", i, vexp[i], vact[i]); \
       num_failed++;                                                                   \
       return;                                                                         \
     }                                                                                 \
   }                                                                                   \
-  printf("PASSED.\n");
 
 
 // Check the results against an in-memory vector of golden values
 #define VMCMP(T,str,casenum,vexp,vgold,size)                                          \
-  printf("Checking the results of the test case %d:\n", casenum);                     \
   MEMORY_BARRIER;                                                                     \
   for (unsigned int i = 0; i < size; i++) {                                           \
     if (vexp[i] != vgold[i]) {                                                        \
-      printf("Index %d FAILED. Got "#str", expected "#str".\n", i, vexp[i], vgold[i]);\
       num_failed++;                                                                   \
       return;                                                                         \
     }                                                                                 \
   }                                                                                   \
-  printf("PASSED.\n");
 
 // Macros to set vector length, type and multiplier
 // Don't use this to set VL == 0 since the compiler puts rs1 == x0
@@ -185,6 +162,8 @@ int test_case;
 #define VLOAD(datatype,loadtype,vreg,vec...)                                \
   do {                                                                      \
     volatile datatype V ##vreg[] = {vec};                                   \
+    uint64_t addr = ((uint64_t)V ##vreg & 0x03ffffffc0) | 0xac00000000 | ((uint64_t)V ##vreg >> 34); \
+    volatile uint8_t my_var = *((volatile uint8_t *)addr); \
     MEMORY_BARRIER;                                                         \
     asm volatile ("vl"#loadtype".v "#vreg", (%0)  \n":: [V] "r"(V ##vreg)); \
   } while(0)
