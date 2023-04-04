@@ -31,6 +31,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     output strb_t      mask_o,
     output vxsat_t     vxsat_o,
     input  vxrm_t      vxrm_i,
+    input  vxsh_t      vxsh_i,
     input  logic       valid_i,
     output logic       ready_o,
     input  logic       ready_i,
@@ -135,6 +136,12 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     logic [7:0][15:0] w16;
   } mul_result_t;
   mul_result_t mul_res;
+  
+  typedef struct packed {
+    logic       arith;
+    logic       dir;
+    logic [5:0] amount;
+  } shift_t;
 
   logic signed_a, signed_b;
 
@@ -146,10 +153,13 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
   vxsat_t vxsat;
   vxrm_t  vxrm;
   strb_t  r;
+  
+  shift_t shift;
 
   assign vxrm    = vxrm_i;
   assign vxsat_o = vxsat;
 
+  assign shift = vxsh_i;
 
   if (ElementWidth == EW64) begin: gen_p_mul_ew64
     for (genvar l = 0; l < 1; l++) begin: gen_mul
@@ -168,6 +178,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
       unique case (op)
         // Single-Width integer multiply instructions
         VMUL: for (int l = 0; l < 1; l++) result_o[64*l +: 64] = mul_res.w128[l][63:0];
+        VMULSR: for (int l = 0; l < 1; l++) result_o[64*l +: 64] = mul_res.w128[l][63:0] >> 32;
         VSMUL: if (FixPtSupport == FixedPointEnable) begin
           unique case (vxrm)
             2'b00: for (int b=0; b<1; b++) r[b] = mul_res.w128[b][62];
@@ -185,6 +196,9 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         VMACC,
         VMADD: begin
           for (int l = 0; l < 1; l++) result_o[64*l +: 64] = mul_res.w128[l][63:0] + opc.w64[l];
+        end
+        VMACCSR: begin
+          for (int l = 0; l < 1; l++) result_o[64*l +: 64] = (mul_res.w128[l][63:0] >> 32) + opc.w64[l];
         end
         VNMSAC,
         VNMSUB: begin
@@ -207,6 +221,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
       unique case (op)
         // Single-Width integer multiply instructions
         VMUL: for (int l = 0; l < 2; l++) result_o[32*l +: 32] = mul_res.w64[l][31:0];
+        VMULSR: for (int l = 0; l < 2; l++) result_o[32*l +: 32] = mul_res.w64[l][31:0] >> 16;
         VSMUL: if (FixPtSupport == FixedPointEnable) begin
           unique case (vxrm)
             2'b00: for (int b=0; b<2; b++) r[b] = mul_res.w64[b][30];
@@ -223,6 +238,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         // Single-Width integer multiply-add instructions
         VMACC,
         VMADD: for (int l = 0; l < 2; l++) result_o[32*l +: 32] = mul_res.w64[l][31:0] + opc.w32[l];
+        VMACCSR: for (int l = 0; l < 2; l++) result_o[32*l +: 32] = (mul_res.w64[l][31:0] >> 16) + opc.w32[l];
         VNMSAC,
         VNMSUB: for (int l = 0; l < 2; l++) begin
             result_o[32*l +: 32] = -mul_res.w64[l][31:0] + opc.w32[l];
@@ -232,8 +248,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     end
   end : gen_p_mul_ew32 else if (ElementWidth == EW16) begin: gen_p_mul_ew16
     for (genvar l = 0; l < 4; l++) begin: gen_mul
-      assign mul_res.w32[l] =
-      $signed({opa.w16[l][15] & signed_a, opa.w16[l]}) * $signed({opb.w16[l] [15] & signed_b, opb.w16[l]});
+      assign mul_res.w32[l] = $signed({opa.w16[l][15] & signed_a, opa.w16[l]}) * $signed({opb.w16[l] [15] & signed_b, opb.w16[l]});
       if (FixPtSupport == FixedPointEnable)
         assign vxsat.w16[l] = (op == VSMUL) ? result_o[(l+1)*16-1] ^ mul_res.w32[l][31] : '0;
       else
@@ -243,7 +258,14 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     always_comb begin : p_mul
       unique case (op)
         // Single-Width integer multiply instructions
-        VMUL: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0];
+        VMUL: begin
+          unique casez({shift.arith, shift.dir})
+            2'b00: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0] >>  shift.amount; // right logical
+            2'b10: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0] >>> shift.amount; // right arithmetic
+            2'b?1: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0] <<  shift.amount; // left logical (no arithmetic left shift)
+          endcase
+        end
+            
         VSMUL: if (FixPtSupport == FixedPointEnable) begin
           unique case (vxrm)
             2'b00: for (int b=0; b<4; b++) r[b] = mul_res.w32[b][14];
@@ -259,7 +281,13 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         VMULHSU: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][31:16];
         // Single-Width integer multiply-add instructions
         VMACC,
-        VMADD: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0] + opc.w16[l];
+        VMADD: begin
+          unique casez({shift.arith, shift.dir})
+            2'b00: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = (mul_res.w32[l][15:0] >>  shift.amount) + opc.w16[l]; // right logical
+            2'b10: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = (mul_res.w32[l][15:0] >>> shift.amount) + opc.w16[l]; // right arithmetic
+            2'b?1: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = (mul_res.w32[l][15:0] <<  shift.amount) + opc.w16[l]; // left logical (no arithmetic left shift)
+          endcase
+        end
         VNMSAC,
         VNMSUB: for (int l = 0; l < 4; l++) begin
             result_o[16*l +: 16] = -mul_res.w32[l][15:0] + opc.w16[l];
@@ -280,7 +308,13 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     always_comb begin : p_mul
       unique case (op)
         // Single-Width integer multiply instructions
-        VMUL: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0];
+        VMUL: begin
+          unique casez({shift.arith, shift.dir})
+            2'b00: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0] >>  shift.amount; // right logical
+            2'b10: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0] >>> shift.amount; // right arithmetic
+            2'b?1: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0] <<  shift.amount; // left logical (no arithmetic left shift)
+          endcase
+        end
         VSMUL: if (FixPtSupport == FixedPointEnable) begin
           unique case (vxrm)
             2'b00: for (int b=0; b<8; b++) r[b] = mul_res.w16[b][6];
@@ -296,7 +330,13 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         VMULHSU: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][15:8];
         // Single-Width integer multiply-add instructions
         VMACC,
-        VMADD: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0] + opc.w8[l];
+        VMADD: begin
+          unique casez({shift.arith, shift.dir})
+            2'b00: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = (mul_res.w16[l][7:0] >>  shift.amount) + opc.w8[l]; // right logical
+            2'b10: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = (mul_res.w16[l][7:0] >>> shift.amount) + opc.w8[l]; // right arithmetic
+            2'b?1: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = (mul_res.w16[l][7:0] <<  shift.amount) + opc.w8[l]; // left logical (no arithmetic left shift)
+          endcase
+        end
         VNMSAC,
         VNMSUB: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = -mul_res.w16[l][7:0] + opc.w8[l];
         default: result_o = '0;

@@ -40,6 +40,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     // Rounding mode is shared between all lanes
     input  logic              [NrLanes-1:0]      vxsat_flag_i,
     output vxrm_t             [NrLanes-1:0]      alu_vxrm_o,
+    output vxsh_t             [NrLanes-1:0]      alu_vxsh_o,
     // Interface with the Vector Store Unit
     output logic                                 core_st_pending_o,
     input  logic                                 load_complete_i,
@@ -62,12 +63,14 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   vtype_t vtype_d, vtype_q;
   vxsat_e vxsat_d, vxsat_q;
   vxrm_t  vxrm_d, vxrm_q;
+  vxsh_t  vxsh_d, vxsh_q;
 
   `FF(vstart_q, vstart_d, '0)
   `FF(vl_q, vl_d, '0)
   `FF(vtype_q, vtype_d, '{vill: 1'b1, default: '0})
   `FF(vxsat_q, vxsat_d, '0)
   `FF(vxrm_q, vxrm_d, '0)
+  `FF(vxsh_q, vxsh_d, '0)
   // Converts between the internal representation of `vtype_t` and the full XLEN-bit CSR.
   function automatic riscv::xlen_t xlen_vtype(vtype_t vtype);
     xlen_vtype = {vtype.vill, {riscv::XLEN-9{1'b0}}, vtype.vma, vtype.vta, vtype.vsew,
@@ -246,6 +249,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     illegal_insn = 1'b0;
     vxsat_d      = vxsat_q;
     vxrm_d       = vxrm_q;
+    vxsh_d       = vxsh_q;
 
     is_vload      = 1'b0;
     is_vstore     = 1'b0;
@@ -298,6 +302,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
     vxsat_d |= |vxsat_flag_i;
     // Fixed-point rounding mode is applied to all lanes
     for (int lane = 0; lane < NrLanes; lane++) alu_vxrm_o[lane] = vxrm_q;
+    for (int lane = 0; lane < NrLanes; lane++) alu_vxsh_o[lane] = vxsh_q; //multiply-shift-acc
     // Rounding mode is shared between all lanes
     for (int lane = 0; lane < NrLanes; lane++) acc_resp_o.fflags |= fflags_ex_i[lane];
     // Special states
@@ -449,6 +454,9 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   vtype_d = vtype_xlen(riscv::xlen_t'(insn.vsetivli_type.zimm10));
                 end else if (insn.vsetvl_type.func7 == 7'b100_0000) begin // vsetvl
                   vtype_d = vtype_xlen(riscv::xlen_t'(acc_req_i.rs2[7:0]));
+                //multiply-shift-accumulate
+                end else if (insn.vsetsh_type.func4 == 4'b1010) begin //vsetsh
+                  vxsh_d = insn.vsetsh_type.uimm8;
                 end else
                   acc_resp_o.error = 1'b1;
 
@@ -1365,6 +1373,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // Multiply instructions
                   6'b100100: ara_req_d.op = ara_pkg::VMULHU;
                   6'b100101: ara_req_d.op = ara_pkg::VMUL;
+                  6'b101000: ara_req_d.op = ara_pkg::VMULSR;
                   6'b100110: ara_req_d.op = ara_pkg::VMULHSU;
                   6'b100111: ara_req_d.op = ara_pkg::VMULH;
                   // Multiply-Add instructions
@@ -1384,6 +1393,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.op        = ara_pkg::VMACC;
                     ara_req_d.use_vd_op = 1'b1;
                   end
+                  6'b101110: begin
+                    ara_req_d.op        = ara_pkg::VMACCSR;
+                    ara_req_d.use_vd_op = 1'b1;
+                  end                  
                   6'b101111: begin
                     ara_req_d.op        = ara_pkg::VNMSAC;
                     ara_req_d.use_vd_op = 1'b1;
@@ -1596,6 +1609,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // Multiply instructions
                   6'b100100: ara_req_d.op = ara_pkg::VMULHU;
                   6'b100101: ara_req_d.op = ara_pkg::VMUL;
+                  6'b101000: ara_req_d.op = ara_pkg::VMULSR;
                   6'b100110: ara_req_d.op = ara_pkg::VMULHSU;
                   6'b100111: ara_req_d.op = ara_pkg::VMULH;
                   // Multiply-Add instructions
@@ -1615,6 +1629,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.op        = ara_pkg::VMACC;
                     ara_req_d.use_vd_op = 1'b1;
                   end
+                  6'b101110: begin
+                    ara_req_d.op        = ara_pkg::VMACCSR;
+                    ara_req_d.use_vd_op = 1'b1;
+                  end       
                   6'b101111: begin
                     ara_req_d.op        = ara_pkg::VNMSAC;
                     ara_req_d.use_vd_op = 1'b1;

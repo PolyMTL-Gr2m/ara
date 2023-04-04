@@ -39,6 +39,7 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     // Interface with the dispatcher
     output logic                                           vxsat_flag_o,
     input  vxrm_t                                          alu_vxrm_i,
+    input  vxsh_t                                          alu_vxsh_i,
     output logic     [4:0]                                 fflags_ex_o,
     output logic                                           fflags_ex_valid_o,
     // Interface with the sequencer
@@ -366,6 +367,8 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     // Interface with Dispatcher
     .vxsat_flag_o         (vxsat_flag_o                           ),
     .alu_vxrm_i           (alu_vxrm_i                             ),
+    //multiply-shift-accumulate
+    .alu_vxsh_i           (alu_vxsh_i                             ),
     // Interface with CVA6
     .fflags_ex_o          (fflags_ex_o                            ),
     .fflags_ex_valid_o    (fflags_ex_valid_o                      ),

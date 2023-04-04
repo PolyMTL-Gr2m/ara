@@ -29,6 +29,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     // Interface with Dispatcher
     output logic                         mfpu_vxsat_o,
     input  vxrm_t                        mfpu_vxrm_i,
+    //multiply-shift-accumulate
+    input  vxsh_t                        mfpu_vxsh_i,
     // Interface with CVA6
     output logic           [4:0]         fflags_ex_o,
     output logic                         fflags_ex_valid_o,
@@ -339,6 +341,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .op_i       (vmul_simd_op_gated            ),
     .vxsat_o    (mfpu_vxsat[EW64]              ),
     .vxrm_i     (mfpu_vxrm_i                   ),
+    //multiply-shift-accumulate
+    .vxsh_i     (mfpu_vxsh_i                   ),
     .result_o   (vmul_simd_result[EW64]        ),
     .mask_o     (vmul_simd_mask[EW64]          ),
     .valid_i    (vmul_simd_in_valid_gated[EW64]),
@@ -361,6 +365,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .op_i       (vmul_simd_op_gated            ),
     .vxsat_o    (mfpu_vxsat[EW32]              ),
     .vxrm_i     (mfpu_vxrm_i                   ),
+    //multiply-shift-accumulate
+    .vxsh_i     (mfpu_vxsh_i                   ),
     .result_o   (vmul_simd_result[EW32]        ),
     .mask_o     (vmul_simd_mask[EW32]          ),
     .valid_i    (vmul_simd_in_valid_gated[EW32]),
@@ -384,6 +390,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .result_o   (vmul_simd_result[EW16]        ),
     .vxsat_o    (mfpu_vxsat[EW16]              ),
     .vxrm_i     (mfpu_vxrm_i                   ),
+    //multiply-shift-accumulate
+    .vxsh_i     (mfpu_vxsh_i                   ),
     .mask_o     (vmul_simd_mask[EW16]          ),
     .valid_i    (vmul_simd_in_valid_gated[EW16]),
     .ready_o    (vmul_simd_in_ready[EW16]      ),
@@ -405,6 +413,8 @@ module vmfpu import ara_pkg::*; import rvv_pkg::*; import fpnew_pkg::*;
     .op_i       (vmul_simd_op_gated            ),
     .vxsat_o    (mfpu_vxsat[EW8]               ),
     .vxrm_i     (mfpu_vxrm_i                   ),
+    //multiply-shift-accumulate
+    .vxsh_i     (mfpu_vxsh_i                   ),
     .result_o   (vmul_simd_result[EW8]         ),
     .mask_o     (vmul_simd_mask[EW8]           ),
     .valid_i    (vmul_simd_in_valid_gated[EW8] ),

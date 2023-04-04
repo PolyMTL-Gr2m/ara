@@ -125,7 +125,7 @@ package ara_pkg;
     // Integer Reductions
     VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX, VWREDSUMU, VWREDSUM,
     // Mul/Mul-Add
-    VMUL, VMULH, VMULHU, VMULHSU, VMACC, VNMSAC, VMADD, VNMSUB,
+    VMUL, VMULSR, VMULH, VMULHU, VMULHSU, VMACC, VMACCSR, VNMSAC, VMADD, VNMSUB,
     // Fixed point multiplication
     VSMUL,
     // Div
@@ -1933,5 +1933,12 @@ package ara_pkg;
     endcase
     return vfrsqrt7_o;
   endfunction : vfrsqrt7_fp64
+  
+  
+  ///////////////////////////////////////
+  ////// Multiply-shift-accumulate //////
+  ///////////////////////////////////////
+
+  typedef logic [7:0]  vxsh_t;
 
 endpackage : ara_pkg

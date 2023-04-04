@@ -87,6 +87,9 @@ module ara import ara_pkg::*; #(
   logic      [NrLanes-1:0]      fflags_ex_valid;
   logic      [NrLanes-1:0]      vxsat_flag;
   vxrm_t     [NrLanes-1:0]      alu_vxrm;
+  
+  // Multiply-shift-accumulate custom instr.
+  vxsh_t     [NrLanes-1:0]      alu_vxsh;
 
   ara_dispatcher #(
     .NrLanes(NrLanes)
@@ -110,6 +113,7 @@ module ara import ara_pkg::*; #(
     // Interface with the lanes
     .vxsat_flag_i      (vxsat_flag      ),
     .alu_vxrm_o        (alu_vxrm        ),
+    .alu_vxsh_o        (alu_vxsh        ),
     .fflags_ex_i       (fflags_ex       ),
     .fflags_ex_valid_i (fflags_ex_valid ),
     // Interface with the Vector Store Unit
@@ -250,6 +254,7 @@ module ara import ara_pkg::*; #(
       // Interface with the dispatcher
       .vxsat_flag_o                    (vxsat_flag[lane]                    ),
       .alu_vxrm_i                      (alu_vxrm[lane]                      ),
+      .alu_vxsh_i                      (alu_vxsh[lane]                      ),
       .fflags_ex_o                     (fflags_ex[lane]                     ),
       .fflags_ex_valid_o               (fflags_ex_valid[lane]               ),
       // Interface with the sequencer

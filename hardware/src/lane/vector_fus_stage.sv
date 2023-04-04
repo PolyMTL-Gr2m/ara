@@ -27,6 +27,7 @@ module vector_fus_stage import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg
     // Interface with Dispatcher
     output logic                              vxsat_flag_o,
     input  vxrm_t                             alu_vxrm_i,
+    input  vxsh_t                             alu_vxsh_i,
     // Interface with CVA6
     output logic           [4:0]              fflags_ex_o,
     output logic                              fflags_ex_valid_o,
@@ -157,6 +158,8 @@ module vector_fus_stage import ara_pkg::*; import rvv_pkg::*; import cf_math_pkg
     // Interface with Dispatcher
     .mfpu_vxsat_o         (mfpu_vxsat                      ),
     .mfpu_vxrm_i          (alu_vxrm_i                      ),
+    // multiply-shift-accumualte
+    .mfpu_vxsh_i          (alu_vxsh_i                      ),
     // Interface with CVA6
     .fflags_ex_o          (fflags_ex_o                     ),
     .fflags_ex_valid_o    (fflags_ex_valid_o               ),

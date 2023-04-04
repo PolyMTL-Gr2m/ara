@@ -142,6 +142,22 @@ package rvv_pkg;
     logic [11:7] rd;
     logic [6:0] opcode;
   } vsetvl_type_t;
+  
+//////////////////////////////
+// MULTIPLY-SHIFT-ACCUMULATE
+  typedef struct packed {
+    logic [31:28] func4;
+    logic [27:20] uimm8;
+    logic [19:15] rs1;
+    opcodev_func3_e func3;
+    logic [11:7] rd;
+    logic [6:0] opcode;
+  } vsetsh_type_t;
+  
+//  | 1010 | UIMM8 | rs1 | func3 | rd | opcode|
+//  31  28/27   20/19 15/14   11/10 7/6      0
+
+/////////////////////////////
 
   typedef union packed {
     logic [31:0] instr ;
@@ -152,6 +168,8 @@ package rvv_pkg;
     vsetvli_type_t vsetvli_type;
     vsetivli_type_t vsetivli_type;
     vsetvl_type_t vsetvl_type;
+    vsetsh_type_t vsetsh_type;
+    //multiply-shift-accumulate
   } rvv_instruction_t;
 
   ////////////////////////////
