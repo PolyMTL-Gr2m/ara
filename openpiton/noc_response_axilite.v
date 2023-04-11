@@ -10,6 +10,9 @@ module noc_response_axilite #(
     // shift unaligned read data
     parameter ALIGN_RDATA          = 1,
     parameter AXI_LITE_DATA_WIDTH  = 512,
+    parameter MSG_TYPE_INVAL       = 2'd0, // Invalid Message
+    parameter MSG_TYPE_LOAD        = 2'd1,// Load Request
+    parameter MSG_TYPE_STORE       = 2'd2, // Store Request
     parameter AXI_LITE_RESP_WIDTH  = 2
 ) (
     // Clock + Reset
@@ -36,6 +39,9 @@ module noc_response_axilite #(
     output  reg                                   m_axi_bvalid,
     input wire                                    m_axi_bready,
 
+    input wire [2:0]                             transaction_type_wr_data, 
+    input wire                                   transaction_type_wr,
+
     // this does not belong to axi lite and is non-standard
     output  reg  [`C_M_AXI_LITE_SIZE_WIDTH-1:0]   w_reqbuf_size,
     output  reg  [`C_M_AXI_LITE_SIZE_WIDTH-1:0]   r_reqbuf_size
@@ -51,11 +57,8 @@ localparam MSG_STATE_HEADER_0   = 3'd1; // Header 0
 localparam MSG_STATE_HEADER_1   = 3'd2; // Header 1
 localparam MSG_STATE_HEADER_2   = 3'd3; // Header 2
 localparam MSG_STATE_DATA       = 3'd4; // Data Lines
+localparam MSG_STATE_STORE      = 3'd5; // for the fifo read when store happens
 
-// Types for Incoming Piton Messages
-localparam MSG_TYPE_INVAL       = 2'd0; // Invalid Message
-localparam MSG_TYPE_LOAD        = 2'd1; // Load Request
-localparam MSG_TYPE_STORE       = 2'd2; // Store Request
 
 // States for Buffer Status
 localparam BUF_STATUS_INCOMP    = 2'd0; // Buffer not yet filled by one complete request/response
@@ -170,6 +173,32 @@ reg  [`MSG_LENGTH_WIDTH-1:0] msg_counter_next;
 reg  [`MSG_LENGTH_WIDTH-1:0] msg_counter_f;
 
 
+wire store_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_NODATA_ACK;
+wire load_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_DATA_ACK;
+
+reg [2:0] transaction_type_rd_data; 
+logic transaction_type_rd; 
+logic transaction_fifo_empty;
+logic transaction_fifo_full; 
+
+
+/* fifo for storing transaction type */
+sync_fifo #(
+	.DSIZE(3),
+	.ASIZE(5),
+	.MEMSIZE(16) // should be 2 ^ (ASIZE-1)
+) type_fifo (
+	.rdata(transaction_type_rd_data),
+	.empty(transaction_fifo_empty),
+	.clk(clk),
+	.ren(transaction_type_rd),
+	.wdata(transaction_type_wr_data),
+	.full(transaction_fifo_full),
+	.wval(transaction_type_wr),
+	.reset(rst)
+);
+
+
 // Should we read data from noc_data_in?
 assign noc_io_go = noc_valid_in && noc_ready_out;
 
@@ -192,8 +221,10 @@ begin
     msg_data_done = 1'b0;
     m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
     m_axi_bvalid = 1'b0;
+    transaction_type_rd = 0;
     case (msg_state_f)
         MSG_STATE_HEADER_0: begin
+        `ifdef ARA_REQ2MEM
             if (noc_io_go && (noc_data_in[`MSG_TYPE] == `MSG_TYPE_NC_LOAD_MEM_ACK)) begin
                 
                 if (noc_data_in[`MSG_LENGTH] == `MSG_LENGTH_WIDTH'd0) 
@@ -224,6 +255,24 @@ begin
                 msg_counter_next = `MSG_LENGTH_WIDTH'd0;
                 msg_payload_len = noc_data_in[`MSG_LENGTH];
             end
+        `else 
+            if (noc_io_go && (load_ack)) begin
+                
+                if (transaction_type_rd_data[2:1] == MSG_TYPE_STORE && (~transaction_fifo_empty)) 
+                begin
+                    msg_state_next = MSG_STATE_STORE;
+                    m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
+                    m_axi_bvalid = 1'b1;
+                end
+                else if (transaction_type_rd_data[2:1] == MSG_TYPE_LOAD && (~transaction_fifo_empty))
+                begin
+                    msg_state_next = MSG_STATE_DATA;
+                end
+                else msg_state_next = MSG_STATE_HEADER_0;
+                msg_counter_next = `MSG_LENGTH_WIDTH'd0;
+                msg_payload_len = noc_data_in[`MSG_LENGTH];
+            end
+        `endif 
         end
         MSG_STATE_DATA: begin
             if (msg_counter_f >= msg_payload_len) begin
@@ -231,11 +280,20 @@ begin
                 msg_state_next = MSG_STATE_HEADER_0;
                 msg_payload_len = `MSG_LENGTH_WIDTH'd0;
                 msg_counter_next = `MSG_LENGTH_WIDTH'd0;
+                transaction_type_rd = 1;
             end
             else begin
                 msg_counter_next = (noc_io_go) ? msg_counter_f + 1'b1 : msg_counter_f;
             end
         end
+        MSG_STATE_STORE:begin 
+            msg_state_next = MSG_STATE_HEADER_0;
+            m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
+            m_axi_bvalid = 1'b0;
+            transaction_type_rd = 1;
+            msg_counter_next = `MSG_LENGTH_WIDTH'd0;
+            msg_payload_len = `MSG_LENGTH_WIDTH'd0;
+        end 
     endcase
 end
 
@@ -279,11 +337,11 @@ generate
         always @(posedge clk)
         begin
             if (rst) begin
-                wval <= 
+                wval <= 0;
                 wdata <= {AXI_LITE_DATA_WIDTH{1'b0}};
             end
             else begin
-                wval <= (msg_state_f == MSG_STATE_DATA && noc_io_go && !full);
+                wval <= (msg_state_f == MSG_STATE_DATA && noc_io_go && !full && msg_counter_f[0] == transaction_type_rd_data[0]);
                 wdata <= noc_data_in;
             end
         end        

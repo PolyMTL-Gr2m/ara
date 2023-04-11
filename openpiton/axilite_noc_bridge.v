@@ -123,6 +123,7 @@ wire                                    wdata_fifo_empty;
 wire [`C_M_AXI_LITE_ADDR_WIDTH-1:0]     wdata_fifo_out;
 reg                                     wdata_fifo_ren;
 
+logic                                   word_select;
 wire                                    araddr_fifo_wval;
 wire                                    araddr_fifo_full;
 wire [`C_M_AXI_LITE_ADDR_WIDTH-1:0]     araddr_fifo_wdata;
@@ -219,7 +220,10 @@ end
 
 /******** Where the magic happens ********/
 noc_response_axilite #(
-    .AXI_LITE_DATA_WIDTH(AXI_LITE_DATA_WIDTH)
+    .AXI_LITE_DATA_WIDTH(AXI_LITE_DATA_WIDTH),
+    .MSG_TYPE_INVAL(`MSG_TYPE_INVAL), 
+    .MSG_TYPE_STORE(`MSG_TYPE_STORE), 
+    .MSG_TYPE_LOAD(`MSG_TYPE_LOAD)
 ) noc_response_axilite(
     .clk(clk),
     .rst(rst),
@@ -236,6 +240,8 @@ noc_response_axilite #(
     .m_axi_bresp(m_axi_bresp),
     .m_axi_bvalid(m_axi_bvalid),
     .m_axi_bready(m_axi_bready),
+    .transaction_type_wr_data({type_fifo_out, word_select}), 
+    .transaction_type_wr(type_fifo_ren),
     .w_reqbuf_size(),
     .r_reqbuf_size()
 );
@@ -329,6 +335,9 @@ assign wdata_fifo_ren = (noc_store_done && !wdata_fifo_empty);
 /****************/ 
 // declaration for strobe to mask conversion 
 // control intreface signal
+
+wire [AXI_LITE_DATA_WIDTH/8 - 1: 0] fifo_out_mux;
+
 wire [2:0] pmesh_data_size;
 wire [5:0] pmesh_addr;
 
@@ -343,7 +352,6 @@ wire wstrb_fifoside_ready;
 wire wstrb_outputside_valid;
 wire wstrb_outputside_ready;
 
-wire [AXI_LITE_DATA_WIDTH/8 - 1: 0] fifo_out_mux;
 strb2mask strb2mask_ins (
     .clk (clk),
     .rst (rst),
@@ -355,7 +363,7 @@ strb2mask strb2mask_ins (
     .d_channel_ready(wstrb_outputside_ready), 
     .d_channel_valid(wstrb_outputside_valid)
 );
-assign fifo_out_mux = (wstrb_fifo_empty) ? 8'b1111_1111 : wstrb_fifo_out;
+assign fifo_out_mux = (wstrb_fifo_empty) ? 8'b0000_0000 : wstrb_fifo_out;
 
 sync_fifo #(
 	.DSIZE(AXI_LITE_DATA_WIDTH/8),
@@ -433,7 +441,7 @@ sync_fifo #(
 	.wval(araddr_fifo_wval),
 	.reset(rst)
 );
-
+assign word_select = (type_fifo_out == `MSG_TYPE_LOAD) ? (araddr_fifo_out[3:0] >> 3) : 0;  
 assign araddr_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign araddr_fifo_wdata = m_axi_araddr;
 assign araddr_fifo_ren = (noc_load_done && !araddr_fifo_empty);
@@ -451,9 +459,13 @@ assign araddr_fifo_ren = (noc_load_done && !araddr_fifo_empty);
 assign fifo_has_packet = (type_fifo_out == `MSG_TYPE_STORE) ? (!awaddr_fifo_empty && !wdata_fifo_empty && !wstrb_fifo_empty) :
                            (type_fifo_out == `MSG_TYPE_LOAD) ? !araddr_fifo_empty : 1'b0;
 
-assign noc_store_done = noc_last_data && type_fifo_out == `MSG_TYPE_STORE && ~wstrb_outputside_valid;
+`ifdef ARA_REQ2MEM
+    assign noc_store_done = noc_last_data && type_fifo_out == `MSG_TYPE_STORE && ~wstrb_outputside_valid;
+`else 
+    assign noc_store_done = noc_last_data && type_fifo_out == `MSG_TYPE_STORE;
+`endif
 //assign noc_store_done = noc_last_data && type_fifo_out == `MSG_TYPE_STORE
-assign noc_load_done = noc_last_header && type_fifo_out == `MSG_TYPE_LOAD;
+assign noc_load_done = noc_last_data && type_fifo_out == `MSG_TYPE_LOAD;
 
 
 
@@ -481,19 +493,35 @@ always @(*)
 begin
     case (type_fifo_out)
         `MSG_TYPE_STORE: begin
+        `ifdef ARA_REQ2MEM
             msg_type = `MSG_TYPE_NC_STORE_REQ; // axilite peripheral is writing to the memory?
-            msg_length = 2'd2 + NOC_PAYLOAD_LEN; // 2 extra headers + 1 data
             msg_data_size = buf_pmesh_data_size; // fix it for now
             //msg_data_size = 3'b001;
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, awaddr_fifo_out[`PHY_ADDR_WIDTH-1:3], buf_pmesh_addr[2:0]};
+        `else 
+            msg_type = `MSG_TYPE_SWAPWB_REQ;
+            // msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now
+            msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now
+            //msg_data_size = 3'b001;
+            msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, awaddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
+        `endif
+            msg_length = 3'd2 + NOC_PAYLOAD_LEN; // 2 extra headers + 1 data
         end
 
         `MSG_TYPE_LOAD: begin
+        `ifdef ARA_REQ2MEM
             msg_type = `MSG_TYPE_NC_LOAD_REQ; // axilite peripheral is reading from the memory?
-            msg_length = 2'd2; // only 2 extra headers
             msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now. 
             //msg_data_size = 3'b001;
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
+        `else 
+            msg_type = `MSG_TYPE_SWAPWB_REQ;
+            //msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now. 
+            msg_data_size = `MSG_DATA_SIZE_16B; // fix it for now.
+            //msg_data_size = 3'b001;
+            msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
+        `endif
+            msg_length = 3'd4; // only 2 extra headers
         end
         
         default: begin
@@ -534,8 +562,10 @@ begin
     if (noc2_ready_in) begin
         noc_last_header = (flit_state == `MSG_STATE_HEADER &&
                                     noc_cnt == `NOC_HDR_LEN) ? 1'b1 : 1'b0;
+        // noc_last_data = (flit_state == `MSG_STATE_NOC_DATA &&
+        //                             noc_cnt == NOC_PAYLOAD_LEN-1) ? 1'b1 : 1'b0;
         noc_last_data = (flit_state == `MSG_STATE_NOC_DATA &&
-                                    noc_cnt == NOC_PAYLOAD_LEN-1) ? 1'b1 : 1'b0;
+                                    noc_cnt == msg_length - 3) ? 1'b1 : 1'b0;
     end
 end
 
@@ -562,15 +592,19 @@ begin
             `MSG_STATE_HEADER: begin
                 if (noc_last_header && type_fifo_out == `MSG_TYPE_STORE)
                     flit_state <= `MSG_STATE_NOC_DATA;
-                else if (noc_load_done)
-                    flit_state <= `MSG_STATE_IDLE;
+                else if (noc_last_header && type_fifo_out == `MSG_TYPE_LOAD)
+                    flit_state <= `MSG_STATE_NOC_DATA;
+                    //flit_state <= `MSG_STATE_IDLE;
             end
 
             `MSG_STATE_NOC_DATA: begin
                 if (noc_store_done)
                     flit_state <= `MSG_STATE_IDLE;
+                else if (noc_load_done)
+                    flit_state <= `MSG_STATE_IDLE;
                 else 
-                    flit_state <= `MSG_STATE_WAIT_STRB;
+                    //flit_state <= `MSG_STATE_WAIT_STRB;
+                    flit_state <= `MSG_STATE_NOC_DATA;
             end
         endcase
     end
@@ -582,6 +616,7 @@ begin
     msg_options_1 = {`MSG_OPTIONS_1_WIDTH{1'b0}};
     msg_options_2 = 16'b0;
     msg_options_3 = 30'b0;
+    flit[63:0] = 0;
     case (flit_state)
         `MSG_STATE_HEADER: begin
             case (noc_cnt)
@@ -598,25 +633,41 @@ begin
                 end
 
                 3'b010: begin
+                `ifdef ARA_REQ2MEM
                     flit[`MSG_ADDR_] = msg_address;
                     flit[`MSG_OPTIONS_2_] = msg_options_2;
                     flit[`MSG_DATA_SIZE_] = msg_data_size;
+                `else 
+                    flit[`MSG_ADDR_] = msg_address;
+                    //flit[`MSG_OPTIONS_2_] = msg_options_2;
+                    flit[`MSG_DATA_SIZE_] = msg_data_size;
+                    flit[`MSG_AMO_MASK0_] = (type_fifo_out == `MSG_TYPE_STORE) ? fifo_out_mux : 8'b0;
+                `endif 
                     flit_ready = 1'b1;                  
                 end
 
                 3'b011: begin
+                `ifdef ARA_REQ2MEM
                     flit[`MSG_SRC_CHIPID_] = src_chipid;
                     flit[`MSG_SRC_X_] = src_xpos;
                     flit[`MSG_SRC_Y_] = src_ypos;
                     flit[`MSG_SRC_FBITS_] = src_fbits;
                     flit[`MSG_OPTIONS_3_] = msg_options_3;
+                `else 
+                    flit[`MSG_SRC_CHIPID_] = src_chipid;
+                    flit[`MSG_SRC_X_] = src_xpos;
+                    flit[`MSG_SRC_Y_] = src_ypos;
+                    flit[`MSG_SRC_FBITS_] = src_fbits;
+                    //flit[`MSG_OPTIONS_3_] = msg_options_3;
+                    flit[`MSG_AMO_MASK1_] = 8'b0;
+                `endif 
                     flit_ready = 1'b1;
                 end
             endcase
         end
 
         `MSG_STATE_NOC_DATA: begin
-            flit[`NOC_DATA_WIDTH-1:0] = out_data[noc_cnt]; //wdata_fifo_out;
+            flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == `MSG_TYPE_STORE) ? out_data[noc_cnt] : {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
             flit_ready = 1'b1;
         end
 

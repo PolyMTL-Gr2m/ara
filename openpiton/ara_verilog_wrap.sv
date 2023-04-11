@@ -67,6 +67,8 @@ module ara_verilog_wrap
     input                       debug_req_i,  // debug request (async)
 
     // NOC Signals
+
+`ifdef ARA_REQ2MEM // NoC channel direct memory request to main memory
     output [`NOC_DATA_WIDTH-1:0] noc2_valid_out,
     output [`NOC_DATA_WIDTH-1:0] noc2_data_out ,
     input  [`NOC_DATA_WIDTH-1:0] noc2_ready_in ,
@@ -74,12 +76,24 @@ module ara_verilog_wrap
     input  [`NOC_DATA_WIDTH-1:0] noc3_valid_in ,
     input  [`NOC_DATA_WIDTH-1:0] noc3_data_in  ,
     output [`NOC_DATA_WIDTH-1:0] noc3_ready_out,
+`else // NoC channel for memory request to L2 Cache 
+    output                       noc1_valid_out,
+    output [`NOC_DATA_WIDTH-1:0] noc1_data_out ,
+    input                        noc1_ready_in , 
+
+    input                        noc2_valid_in ,
+    input  [`NOC_DATA_WIDTH-1:0] noc2_data_in  ,
+    output                       noc2_ready_out,
+`endif 
+
 
 
   `ifdef PITON_ARIANE
     // L15 (memory side)
     output [$size(wt_cache_pkg::l15_req_t)-1:0]  l15_req_o,
     input  [$size(wt_cache_pkg::l15_rtrn_t)-1:0] l15_rtrn_i
+    // output wt_cache_pkg::l15_rtrn_t   l15_req_o,
+    // input  wt_cache_pkg::l15_rtrn_t   l15_rtrn_i
   `else
     // AXI (memory side)
     output [$size(ariane_axi::req_t)-1:0]             axi_req_o,
@@ -361,24 +375,6 @@ module ara_verilog_wrap
     .axi_req_o       (ara_axi_req   ),
     .axi_resp_i      (ara_axi_resp  )
   );
-  
-  // axi_cut #(
-  //   .ar_chan_t   (system_ar_chan_t     ),
-  //   .aw_chan_t   (system_aw_chan_t     ),
-  //   .b_chan_t    (system_b_chan_t      ),
-  //   .r_chan_t    (system_r_chan_t      ),
-  //   .w_chan_t    (system_w_chan_t      ),
-  //   .req_t       (system_req_t         ),
-  //   .resp_t      (system_resp_t        )
-  // ) i_system_cut (
-  //   .clk_i       (clk_i),
-  //   .rst_ni      (rst_ni),
-  //   .slv_req_i   (ara_axi_req),
-  //   .slv_resp_o  (ara_axi_resp),
-  //   .mst_req_o   (system_axi_req),
-  //   .mst_resp_i  (system_axi_resp)
-  // );
-
 
   //////////////////////
   //  Memory Regions  //
@@ -417,6 +413,8 @@ module ara_verilog_wrap
   //soc_wide_resp_t   periph_wide_axi_resp;
   soc_narrow_req_t  periph_narrow_axi_req;
   soc_narrow_resp_t periph_narrow_axi_resp;
+  soc_narrow_req_t  periph_cut_narrow_axi_req;
+  soc_narrow_resp_t periph_cut_narrow_axi_resp;
 
 
 
@@ -620,12 +618,21 @@ axilite_noc_bridge #(
     .noc2_valid_in  (           ),
     .noc2_data_in   (            ),
     .noc2_ready_out (          ),
+  `ifdef ARA_REQ2MEM // direct memory request to main memory 
     .noc2_valid_out (noc2_valid_out          ),
     .noc2_data_out  (noc2_data_out           ),
     .noc2_ready_in  (noc2_ready_in           ),
     .noc3_valid_in  (noc3_valid_in),
     .noc3_data_in   (noc3_data_in),
     .noc3_ready_out (noc3_ready_out),
+  `else 
+    .noc2_valid_out (noc1_valid_out          ),
+    .noc2_data_out  (noc1_data_out           ),
+    .noc2_ready_in  (noc1_ready_in           ),
+    .noc3_valid_in  (noc2_valid_in),
+    .noc3_data_in   (noc2_data_in),
+    .noc3_ready_out (noc2_ready_out),
+  `endif 
     .noc3_valid_out (),
     .noc3_data_out  (),
     .noc3_ready_in  (),
@@ -633,10 +640,17 @@ axilite_noc_bridge #(
     .src_xpos       (default_coreid_x), // 8  // 1
     .src_ypos       (default_coreid_y), // 8  // 1
     .src_fbits      (`NOC_FBITS_ARA), // 4
-    .dest_chipid    (14'b1000_0000_0000_00), // 14 // 
+  `ifdef ARA_REQ2MEM // direct memory request to main memory 
+    .dest_chipid    (14'b1000_0000_0000_00), // 14 //  all zero 
     .dest_xpos      (8'd0), // 8
     .dest_ypos      (8'd0), // 8
     .dest_fbits     (`NOC_FBITS_MEM), //4
+  `else // memory request to L2 cache 
+    .dest_chipid    (14'b0000_0000_0000_00), // 14
+    .dest_xpos      (8'd0), // 8
+    .dest_ypos      (8'd0), // 8
+    .dest_fbits     (`NOC_FBITS_L2), //4
+  `endif 
     .m_axi_awaddr   (axi_lite_noc_req.aw.addr  ),
     .m_axi_awvalid  (axi_lite_noc_req.aw_valid ),
     .m_axi_awready  (axi_lite_noc_resp.aw_ready),
