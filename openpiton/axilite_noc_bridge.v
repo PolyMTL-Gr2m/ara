@@ -120,6 +120,7 @@ wire                                    wdata_fifo_wval;
 wire                                    wdata_fifo_full;
 wire [`C_M_AXI_LITE_ADDR_WIDTH-1:0]     wdata_fifo_wdata;
 wire                                    wdata_fifo_empty;
+wire [`C_M_AXI_LITE_ADDR_WIDTH-1:0]     wdata_fifo_out_buffer;
 wire [`C_M_AXI_LITE_ADDR_WIDTH-1:0]     wdata_fifo_out;
 reg                                     wdata_fifo_ren;
 
@@ -220,10 +221,14 @@ end
 
 /******** Where the magic happens ********/
 noc_response_axilite #(
+  `ifdef ARA_REQ2MEM
+    .AXI_LITE_DATA_WIDTH(AXI_LITE_DATA_WIDTH)
+  `else 
     .AXI_LITE_DATA_WIDTH(AXI_LITE_DATA_WIDTH),
     .MSG_TYPE_INVAL(`MSG_TYPE_INVAL), 
     .MSG_TYPE_STORE(`MSG_TYPE_STORE), 
     .MSG_TYPE_LOAD(`MSG_TYPE_LOAD)
+  `endif
 ) noc_response_axilite(
     .clk(clk),
     .rst(rst),
@@ -240,8 +245,10 @@ noc_response_axilite #(
     .m_axi_bresp(m_axi_bresp),
     .m_axi_bvalid(m_axi_bvalid),
     .m_axi_bready(m_axi_bready),
+  `ifndef ARA_REQ2MEM
     .transaction_type_wr_data({type_fifo_out, word_select}), 
     .transaction_type_wr(type_fifo_ren),
+  `endif
     .w_reqbuf_size(),
     .r_reqbuf_size()
 );
@@ -315,7 +322,7 @@ sync_fifo #(
 	.ASIZE(5),
 	.MEMSIZE(16) // should be 2 ^ (ASIZE-1)    
 ) waddr_fifo (
-	.rdata(wdata_fifo_out),
+	.rdata(wdata_fifo_out_buffer),
 	.empty(wdata_fifo_empty),
 	.clk(clk),
 	.ren(wdata_fifo_ren),
@@ -324,7 +331,8 @@ sync_fifo #(
 	.wval(wdata_fifo_wval),
 	.reset(rst)
 );
-
+assign wdata_fifo_out = {wdata_fifo_out_buffer[7:0], wdata_fifo_out_buffer[15:8], wdata_fifo_out_buffer[23:16], wdata_fifo_out_buffer[31:24], 
+                            wdata_fifo_out_buffer[39:32], wdata_fifo_out_buffer[47:40], wdata_fifo_out_buffer[55:48], wdata_fifo_out_buffer[63:56]};
 assign wdata_fifo_wval = m_axi_wvalid && m_axi_wready; // write_channel_ready;// && noc2_ready_in;
 assign wdata_fifo_wdata = m_axi_wdata;
 //assign wdata_fifo_ren = (noc_store_done && !wdata_fifo_empty); // noc_last_data only occurs for stores
@@ -465,7 +473,11 @@ assign fifo_has_packet = (type_fifo_out == `MSG_TYPE_STORE) ? (!awaddr_fifo_empt
     assign noc_store_done = noc_last_data && type_fifo_out == `MSG_TYPE_STORE;
 `endif
 //assign noc_store_done = noc_last_data && type_fifo_out == `MSG_TYPE_STORE
-assign noc_load_done = noc_last_data && type_fifo_out == `MSG_TYPE_LOAD;
+`ifdef ARA_REQ2MEM
+    assign noc_load_done = noc_last_header && type_fifo_out == `MSG_TYPE_LOAD;
+`else 
+    assign noc_load_done = noc_last_data && type_fifo_out == `MSG_TYPE_LOAD;
+`endif
 
 
 
@@ -512,16 +524,17 @@ begin
         `ifdef ARA_REQ2MEM
             msg_type = `MSG_TYPE_NC_LOAD_REQ; // axilite peripheral is reading from the memory?
             msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now. 
+            msg_length = 3'd2; 
             //msg_data_size = 3'b001;
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
         `else 
             msg_type = `MSG_TYPE_SWAPWB_REQ;
             //msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now. 
             msg_data_size = `MSG_DATA_SIZE_16B; // fix it for now.
+            msg_length = 3'd4;
             //msg_data_size = 3'b001;
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
         `endif
-            msg_length = 3'd4; // only 2 extra headers
         end
         
         default: begin
@@ -593,8 +606,11 @@ begin
                 if (noc_last_header && type_fifo_out == `MSG_TYPE_STORE)
                     flit_state <= `MSG_STATE_NOC_DATA;
                 else if (noc_last_header && type_fifo_out == `MSG_TYPE_LOAD)
+                  `ifdef ARA_REQ2MEM
+                    flit_state <= `MSG_STATE_IDLE;
+                  `else
                     flit_state <= `MSG_STATE_NOC_DATA;
-                    //flit_state <= `MSG_STATE_IDLE;
+                  `endif 
             end
 
             `MSG_STATE_NOC_DATA: begin

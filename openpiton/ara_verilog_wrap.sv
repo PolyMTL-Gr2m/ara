@@ -90,10 +90,10 @@ module ara_verilog_wrap
 
   `ifdef PITON_ARIANE
     // L15 (memory side)
-    output [$size(wt_cache_pkg::l15_req_t)-1:0]  l15_req_o,
-    input  [$size(wt_cache_pkg::l15_rtrn_t)-1:0] l15_rtrn_i
-    // output wt_cache_pkg::l15_rtrn_t   l15_req_o,
-    // input  wt_cache_pkg::l15_rtrn_t   l15_rtrn_i
+    // output [$size(wt_cache_pkg::l15_req_t)-1:0]  l15_req_o,
+    // input  [$size(wt_cache_pkg::l15_rtrn_t)-1:0] l15_rtrn_i
+    output wt_cache_pkg::l15_rtrn_t   l15_req_o,
+    input  wt_cache_pkg::l15_rtrn_t   l15_rtrn_i
   `else
     // AXI (memory side)
     output [$size(ariane_axi::req_t)-1:0]             axi_req_o,

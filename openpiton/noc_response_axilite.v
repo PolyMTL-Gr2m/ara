@@ -10,9 +10,11 @@ module noc_response_axilite #(
     // shift unaligned read data
     parameter ALIGN_RDATA          = 1,
     parameter AXI_LITE_DATA_WIDTH  = 512,
+  `ifndef ARA_REQ2MEM
     parameter MSG_TYPE_INVAL       = 2'd0, // Invalid Message
     parameter MSG_TYPE_LOAD        = 2'd1,// Load Request
     parameter MSG_TYPE_STORE       = 2'd2, // Store Request
+  `endif
     parameter AXI_LITE_RESP_WIDTH  = 2
 ) (
     // Clock + Reset
@@ -38,10 +40,10 @@ module noc_response_axilite #(
     output  reg [AXI_LITE_RESP_WIDTH-1:0]         m_axi_bresp,
     output  reg                                   m_axi_bvalid,
     input wire                                    m_axi_bready,
-
+  `ifndef ARA_REQ2MEM
     input wire [2:0]                             transaction_type_wr_data, 
     input wire                                   transaction_type_wr,
-
+  `endif
     // this does not belong to axi lite and is non-standard
     output  reg  [`C_M_AXI_LITE_SIZE_WIDTH-1:0]   w_reqbuf_size,
     output  reg  [`C_M_AXI_LITE_SIZE_WIDTH-1:0]   r_reqbuf_size
@@ -172,31 +174,32 @@ reg  [`MSG_LENGTH_WIDTH-1:0] msg_payload_len;
 reg  [`MSG_LENGTH_WIDTH-1:0] msg_counter_next;
 reg  [`MSG_LENGTH_WIDTH-1:0] msg_counter_f;
 
+`ifndef ARA_REQ2MEM
+    wire store_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_NODATA_ACK;
+    wire load_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_DATA_ACK;
 
-wire store_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_NODATA_ACK;
-wire load_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_DATA_ACK;
-
-reg [2:0] transaction_type_rd_data; 
-logic transaction_type_rd; 
-logic transaction_fifo_empty;
-logic transaction_fifo_full; 
+    reg [2:0] transaction_type_rd_data; 
+    logic transaction_type_rd; 
+    logic transaction_fifo_empty;
+    logic transaction_fifo_full; 
 
 
-/* fifo for storing transaction type */
-sync_fifo #(
-	.DSIZE(3),
-	.ASIZE(5),
-	.MEMSIZE(16) // should be 2 ^ (ASIZE-1)
-) type_fifo (
-	.rdata(transaction_type_rd_data),
-	.empty(transaction_fifo_empty),
-	.clk(clk),
-	.ren(transaction_type_rd),
-	.wdata(transaction_type_wr_data),
-	.full(transaction_fifo_full),
-	.wval(transaction_type_wr),
-	.reset(rst)
-);
+    /* fifo for storing transaction type */
+    sync_fifo #(
+        .DSIZE(3),
+        .ASIZE(5),
+        .MEMSIZE(16) // should be 2 ^ (ASIZE-1)
+    ) type_fifo (
+        .rdata(transaction_type_rd_data),
+        .empty(transaction_fifo_empty),
+        .clk(clk),
+        .ren(transaction_type_rd),
+        .wdata(transaction_type_wr_data),
+        .full(transaction_fifo_full),
+        .wval(transaction_type_wr),
+        .reset(rst)
+    );
+`endif
 
 
 // Should we read data from noc_data_in?
@@ -221,7 +224,9 @@ begin
     msg_data_done = 1'b0;
     m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
     m_axi_bvalid = 1'b0;
+  `ifndef ARA_REQ2MEM    
     transaction_type_rd = 0;
+  `endif
     case (msg_state_f)
         MSG_STATE_HEADER_0: begin
         `ifdef ARA_REQ2MEM
@@ -280,12 +285,15 @@ begin
                 msg_state_next = MSG_STATE_HEADER_0;
                 msg_payload_len = `MSG_LENGTH_WIDTH'd0;
                 msg_counter_next = `MSG_LENGTH_WIDTH'd0;
+              `ifndef ARA_REQ2MEM
                 transaction_type_rd = 1;
+              `endif
             end
             else begin
                 msg_counter_next = (noc_io_go) ? msg_counter_f + 1'b1 : msg_counter_f;
             end
         end
+      `ifndef ARA_REQ2MEM
         MSG_STATE_STORE:begin 
             msg_state_next = MSG_STATE_HEADER_0;
             m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
@@ -294,6 +302,7 @@ begin
             msg_counter_next = `MSG_LENGTH_WIDTH'd0;
             msg_payload_len = `MSG_LENGTH_WIDTH'd0;
         end 
+      `endif
     endcase
 end
 
@@ -341,8 +350,13 @@ generate
                 wdata <= {AXI_LITE_DATA_WIDTH{1'b0}};
             end
             else begin
+              `ifdef ARA_REQ2MEM
+                wval <= (msg_state_f == MSG_STATE_DATA && noc_io_go && !full);
+              `else 
                 wval <= (msg_state_f == MSG_STATE_DATA && noc_io_go && !full && msg_counter_f[0] == transaction_type_rd_data[0]);
-                wdata <= noc_data_in;
+              `endif 
+                wdata <= {noc_data_in[7:0], noc_data_in[15:8], noc_data_in[23:16], noc_data_in[31:24], 
+                              noc_data_in[39:32], noc_data_in[47:40], noc_data_in[55:48], noc_data_in[63:56]}; // for little endian to big endian
             end
         end        
     end
