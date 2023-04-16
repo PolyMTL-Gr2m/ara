@@ -9,9 +9,11 @@
 ../hardware/include/rvv_pkg.sv
 ../hardware/include/ara_pkg.sv
 ../openpiton/sync_fifo.v 
-../openpiton/noc_response_axilite.v 
+// ../openpiton/noc_response_axilite.v 
+../openpiton/noc_response_axilite.sv 
 ../openpiton/strb2mask.v
-../openpiton/axilite_noc_bridge.v
+../openpiton/axilite_noc_bridge.sv
+// ../openpiton/axilite_noc_bridge.v
 ../openpiton/ara_verilog_wrap.sv
 ../hardware/src/accel_dispatcher_ideal.sv
 ../hardware/src/ara_dispatcher.sv

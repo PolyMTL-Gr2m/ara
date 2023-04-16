@@ -611,31 +611,27 @@ module ara_verilog_wrap
   );
 
 axilite_noc_bridge #(
-  .AXI_LITE_DATA_WIDTH (     64     )
+  .AXI_LITE_DATA_WIDTH (AxiNarrowDataWidth), 
+  .AXI_LITE_ADDR_WIDTH (AxiAddrWidth), 
+  . AXI_LITE_RESP_WIDTH (2)
 ) axi_noc_bridge (
-    .clk            (clk_i),
-    .rst            (!rst_ni),
-    .noc2_valid_in  (           ),
-    .noc2_data_in   (            ),
-    .noc2_ready_out (          ),
+    .clk           (clk_i),
+    .rst_n         (rst_ni),
   `ifdef ARA_REQ2MEM // direct memory request to main memory 
-    .noc2_valid_out (noc2_valid_out          ),
-    .noc2_data_out  (noc2_data_out           ),
-    .noc2_ready_in  (noc2_ready_in           ),
-    .noc3_valid_in  (noc3_valid_in),
-    .noc3_data_in   (noc3_data_in),
-    .noc3_ready_out (noc3_ready_out),
+    .noc_valid_out (noc2_valid_out          ),
+    .noc_data_out  (noc2_data_out           ),
+    .noc_ready_in  (noc2_ready_in           ),
+    .noc_valid_in  (noc3_valid_in),
+    .noc_data_in   (noc3_data_in),
+    .noc_ready_out (noc3_ready_out),
   `else 
-    .noc2_valid_out (noc1_valid_out          ),
-    .noc2_data_out  (noc1_data_out           ),
-    .noc2_ready_in  (noc1_ready_in           ),
-    .noc3_valid_in  (noc2_valid_in),
-    .noc3_data_in   (noc2_data_in),
-    .noc3_ready_out (noc2_ready_out),
+    .noc_valid_out (noc1_valid_out          ),
+    .noc_data_out  (noc1_data_out           ),
+    .noc_ready_in  (noc1_ready_in           ),
+    .noc_valid_in  (noc2_valid_in),
+    .noc_data_in   (noc2_data_in),
+    .noc_ready_out (noc2_ready_out),
   `endif 
-    .noc3_valid_out (),
-    .noc3_data_out  (),
-    .noc3_ready_in  (),
     .src_chipid     (default_chipid), // 14 // 0
     .src_xpos       (default_coreid_x), // 8  // 1
     .src_ypos       (default_coreid_y), // 8  // 1
