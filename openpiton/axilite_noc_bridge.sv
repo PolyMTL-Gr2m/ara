@@ -103,7 +103,6 @@ logic [`MSG_OPTIONS_3_]                   msg_options_3;
 
 logic                                     axi2noc_msg_type_store;
 logic                                     axi2noc_msg_type_load;
-logic [1:0]                               axi2noc_msg_type;
 logic                                     flit_ready;
 logic [`NOC_DATA_WIDTH-1:0]               flit;
 logic [`NOC_DATA_WIDTH-1:0]               noc_data;
@@ -167,6 +166,10 @@ logic [2:0]                               noc_cnt;
 
 logic                                     fifo_rst;
 
+// deal with simultaneous read write operation
+logic                                     simu_wr_detected; 
+logic                                     read_buffer_full; 
+
 /******** Where the magic happens ********/
 noc_response_axilite #(
   `ifdef ARA_REQ2MEM
@@ -199,17 +202,34 @@ noc_response_axilite #(
 );
 
 assign fifo_rst = !rst_n;
+/**************************************************************************/
+/*control signal of store buffer, which is for simultaneous read and write*/
+/**************************************************************************/  
+assign simu_wr_detected = awaddr_fifo_wval && araddr_fifo_wval && !read_buffer_full;
+
+always@(posedge clk or negedge rst_n) begin 
+    if (!rst_n) begin 
+        read_buffer_full <= 0;
+    end 
+    else if (simu_wr_detected) begin
+        read_buffer_full <= 1;
+    end 
+    else if (type_fifo_wval) begin 
+        read_buffer_full <= 0;
+    end 
+    else begin 
+        read_buffer_full <= read_buffer_full;
+    end
+end 
+/****************************************************************************/
 
 assign write_channel_ready = !awaddr_fifo_full && !wdata_fifo_full && !wstrb_fifo_full;
-assign m_axi_awready = write_channel_ready && !type_fifo_full;
+assign m_axi_awready = write_channel_ready && !type_fifo_full && !read_buffer_full;
 assign m_axi_wready = write_channel_ready && !type_fifo_full;
-assign m_axi_arready = !araddr_fifo_full && !type_fifo_full;
+assign m_axi_arready = !araddr_fifo_full && !type_fifo_full && !read_buffer_full;
 
-assign axi2noc_msg_type_store = m_axi_awvalid;
-assign axi2noc_msg_type_load = m_axi_arvalid;
-assign axi2noc_msg_type = (axi2noc_msg_type_store) ? MSG_TYPE_STORE :
-                            (axi2noc_msg_type_load) ? MSG_TYPE_LOAD :
-                            MSG_TYPE_INVAL;
+assign axi2noc_msg_type_store = m_axi_awvalid && (!read_buffer_full); //give priority to load request if read buffer has something
+assign axi2noc_msg_type_load = m_axi_arvalid || read_buffer_full;
 
 /* fifo for storing packet type */
 sync_fifo #(
@@ -489,7 +509,7 @@ always_comb
 begin
     if (noc_ready_in) begin
         noc_last_header = (flit_state_f == MSG_STATE_HEADER &&
-                                    noc_cnt == NOC_HDR_LEN ) ? 1'b1 : 1'b0;
+                                    noc_cnt == NOC_HDR_LEN) ? 1'b1 : 1'b0;
         noc_last_data = (flit_state_f == MSG_STATE_NOC_DATA &&
                                     noc_cnt == (msg_length - 3)) ? 1'b1 : 1'b0;
     end
