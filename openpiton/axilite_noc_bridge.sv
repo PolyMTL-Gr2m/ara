@@ -620,6 +620,8 @@ begin
             else if (noc_last_header && type_fifo_out == MSG_TYPE_LOAD)
               `ifdef ARA_REQ2MEM
                 flit_state_next = MSG_STATE_IDLE;
+              `elsif LOAD_NOSHARE_TEST
+                flit_state_next = MSG_STATE_IDLE;
               `else
                 flit_state_next = MSG_STATE_IDLE;
             //   `else // we don;t need extra data flits for load right now 
@@ -799,5 +801,77 @@ end
 
 assign noc_valid_out = flit_ready;
 assign noc_data_out = flit;
+
+
+/* Dump store addr and data to file. */
+integer file;
+initial begin
+    file = $fopen("axilite_noc.log", "w");
+end
+
+always @(posedge clk)
+begin
+    if (awaddr_fifo_ren)
+    begin
+        $fwrite(file, "awaddr-fifo %064x\n", awaddr_fifo_out);
+        $fflush(file);
+    end
+    if (wdata_fifo_ren)
+    begin
+        $fwrite(file, "wdata-fifo %064x\n", wdata_fifo_out);
+        $fflush(file);
+    end
+    if (araddr_fifo_ren)
+    begin
+        $fwrite(file, "araddr-fifo %064x\n", araddr_fifo_out);
+        $fflush(file);
+    end
+    /*if (noc2_valid_out && noc2_ready_in) begin
+        $fwrite(file, "bridge-write-data %064x\n", noc2_data_out);
+        $fflush(file);
+    end */
+end
+
+/* Dump store addr and data to file. */
+integer file3;
+initial begin
+    file3 = $fopen("axilite_noc1_store.log", "w");
+end
+always @(posedge clk)
+begin
+    if (noc_valid_out && noc_ready_in)
+    begin
+        $fwrite(file3, "noc1_data_out %064x\n", noc_data_out);
+        $fflush(file3);
+    end
+end
+
+/* Dump store addr and data to file. */
+integer file2;
+initial begin
+    file2 = $fopen("axilite_noc2_load.log", "w");
+end
+always @(posedge clk)
+begin
+    if ((type_fifo_out == MSG_TYPE_LOAD) && noc_valid_in && noc_ready_out)
+    begin
+        $fwrite(file2, "noc2_data_in %064x\n", noc_data_in);
+        $fflush(file2);
+    end
+end
+
+/* Dump axi read data to file. */
+integer file4;
+initial begin
+    file4 = $fopen("axilite_read_data.log", "w");
+end
+always @(posedge clk)
+begin
+    if (m_axi_rvalid && m_axi_rready)
+    begin
+        $fwrite(file4, "rdata %x\n", m_axi_rdata);
+        $fflush(file4);
+    end
+end
 
 endmodule 

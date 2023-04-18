@@ -22,6 +22,9 @@
 #else
 #include <stdio.h>
 
+// #ifndef __MEM_FLUSH__
+//   #define __MEM_FLUSH__
+// #endif
 // The FP and V extensions are activated in the crt0 script
 #define enable_vec()
 #define enable_fp()
@@ -70,7 +73,24 @@ int test_case;
 // In order to avoid that scalar loads run ahead of vector stores,
 // we use an instruction to ensure that all vector stores have been
 // committed before continuing with scalar memory operations.
-#define MEMORY_BARRIER // asm volatile ("fence");
+#define MEMORY_BARRIER  //asm volatile ("fence"); 
+#define MEMBARRIER
+
+
+#ifdef __MEM_FLUSH__
+  #define OPENPITON_FLUSH(datatype,vreg,size) \
+    int temp = size; \
+    uint64_t addr = ((uint64_t)V ##vreg & 0x03ffffffc0) | 0xac00000000 | ((uint64_t)V ##vreg >> 34); \
+    volatile uint64_t my_var = *((volatile uint64_t *)addr); \
+    addr = addr + 64; \
+    my_var = *((volatile uint64_t *)addr); \
+    addr = addr + 64; \
+    my_var = *((volatile uint64_t *)addr); \
+    addr = addr + 64; \
+    my_var = *((volatile uint64_t *)addr);
+#else 
+  #define OPENPITON_FLUSH(datatype,vreg,size)
+#endif
 
 // Zero-initialized variables can be problematic on bare-metal.
 // Therefore, initialize them during runtime.
@@ -105,6 +125,8 @@ int test_case;
     return;                                                             \
   }                                                                     \
 
+// uint64_t addr = ((uint64_t)vact & 0x03ffffffc0) | 0xac00000000 | ((uint64_t)vact >> 34); 
+// volatile uint8_t my_var = *((volatile uint8_t *)addr);                              
 // Check the results against a vector of golden values
 #define VCMP(T,str,casenum,vexp,act...)                                               \
   T vact[] = {act};                                                                   \
@@ -159,16 +181,22 @@ int test_case;
   } while(0)
 
 // Macro to load a vector register with data from the stack
+    // volatile uint64_t *addr = (volatile uint64_t *)0xc00000000; 
+    // volatile char a = *((volatile char *)addr); 
+    // volatile char b = a + 1; 
+    //int vector_size = sizeof(vec);                                          
+    //OPENPITON_FLUSH(datatype,vreg,vector_size);                                         
 #define VLOAD(datatype,loadtype,vreg,vec...)                                \
   do {                                                                      \
     volatile datatype V ##vreg[] = {vec};                                   \
-    uint64_t addr = ((uint64_t)V ##vreg & 0x03ffffffc0) | 0xac00000000 | ((uint64_t)V ##vreg >> 34); \
-    volatile uint8_t my_var = *((volatile uint8_t *)addr); \
+    int vector_size = sizeof(vec);                                          \
+    OPENPITON_FLUSH(datatype,vreg,vector_size);                             \
     MEMORY_BARRIER;                                                         \
     asm volatile ("vl"#loadtype".v "#vreg", (%0)  \n":: [V] "r"(V ##vreg)); \
   } while(0)
 
 // Macro to store a vector register into the pointer vec
+
 #define VSTORE(T, storetype, vreg, vec)                                   \
   do {                                                                    \
     T* vec ##_t = (T*) vec;                                               \
@@ -187,6 +215,8 @@ int test_case;
     asm volatile("vmv.v.i "#register", 0");                                                       \
     asm volatile("vsetvl zero, %[vl], %[vtype]" :: [vl] "r" (vl), [vtype] "r" (vtype));           \
   } while(0)
+
+#define CLEAR(register) VCLEAR(register)
 
 // Macro to initialize a vector with progressive values from a counter
 #define INIT_MEM_CNT(vec_name, size) \
@@ -212,7 +242,12 @@ int test_case;
 #define VCMP_U64(casenum,vect,act...) {VSTORE_U64(vect); VCMP(uint64_t,%x,casenum,Ru64,act)}
 #define VCMP_U32(casenum,vect,act...) {VSTORE_U32(vect); VCMP(uint32_t,%x,casenum,Ru32,act)}
 #define VCMP_U16(casenum,vect,act...) {VSTORE_U16(vect); VCMP(uint16_t,%x,casenum,Ru16,act)}
-#define VCMP_U8(casenum,vect,act...)  {VSTORE_U8(vect) ; VCMP(uint8_t, %x,casenum, Ru8,act)}
+#define VCMP_U8(casenum,vect,act...)  {VSTORE_U8(vect); VCMP(uint8_t, %x,casenum, Ru8,act)}
+
+#define VEC_CMP_U64(casenum,vect,act...) {VSTORE_U64(vect); VCMP(uint64_t,%x,casenum,Ru64,act)}
+#define VEC_CMP_U32(casenum,vect,act...) {VSTORE_U32(vect); VCMP(uint32_t,%x,casenum,Ru32,act)}
+#define VEC_CMP_U16(casenum,vect,act...) {VSTORE_U16(vect); VCMP(uint16_t,%x,casenum,Ru16,act)}
+#define VEC_CMP_U8(casenum,vect,act...)  {VSTORE_U8(vect); VCMP(uint8_t, %x,casenum, Ru8,act)}
 
 #define LVCMP_U8(casenum,vect,act)   {uint64_t vl; read_vl(vl); VSTORE_L8(vect);     \
                                        LVCMP(uint8_t, %x,casenum,vl, Lu8, act)}
@@ -246,6 +281,11 @@ int test_case;
 #define VLOAD_32(vreg,vec...) VLOAD(uint32_t,e32,vreg,vec)
 #define VLOAD_16(vreg,vec...) VLOAD(uint16_t,e16,vreg,vec)
 #define VLOAD_8(vreg,vec...)  VLOAD(uint8_t, e8, vreg,vec)
+
+#define VLOAD_U64(vreg,vec...) VLOAD(uint64_t,e64,vreg,vec)
+#define VLOAD_U32(vreg,vec...) VLOAD(uint32_t,e32,vreg,vec)
+#define VLOAD_U16(vreg,vec...) VLOAD(uint16_t,e16,vreg,vec)
+#define VLOAD_U8(vreg,vec...)  VLOAD(uint8_t, e8, vreg,vec)
 
 // Vector store
 #define VSTORE_U64(vreg) VSTORE(uint64_t,e64,vreg,Ru64)
