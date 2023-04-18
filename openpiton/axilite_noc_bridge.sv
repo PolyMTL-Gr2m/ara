@@ -418,6 +418,11 @@ assign fifo_has_packet = (type_fifo_out == MSG_TYPE_STORE) ? (!awaddr_fifo_empty
 `ifdef ARA_REQ2MEM
  assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE && ~wstrb_outputside_valid;
  assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
+
+`elsif LOAD_NOSHARE_TEST
+ assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE;
+ assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
+
 `else 
  assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE; // L2 supports mask   
  assign noc_load_done = noc_last_data && type_fifo_out == MSG_TYPE_LOAD; // We need to file 2 meaningless data flit (16 bytes) for swap_wb load
@@ -465,7 +470,12 @@ begin
 
         MSG_TYPE_LOAD: begin
         `ifdef ARA_REQ2MEM // to memeory 
-            msg_type = `MSG_TYPE_NC_LOAD_REQ; // axilite peripheral is reading from the memory?
+            msg_type = `MSG_TYPE_NC_LOAD_REQ; 
+            msg_data_size = `MSG_DATA_SIZE_8B; 
+            msg_length = `MSG_LENGTH_WIDTH'd2; 
+            msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
+        `elsif LOAD_NOSHARE_TEST
+            msg_type = `MSG_TYPE_LOAD_NOSHARE_REQ; // for L2 LOADNOSHARE test 
             msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now. 
             msg_length = `MSG_LENGTH_WIDTH'd2; 
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
@@ -559,6 +569,8 @@ begin
                 flit_state_next = MSG_STATE_NOC_DATA;
             else if (noc_last_header && type_fifo_out == MSG_TYPE_LOAD)
               `ifdef ARA_REQ2MEM
+                flit_state_next = MSG_STATE_IDLE;
+              `elsif LOAD_NOSHARE_TEST
                 flit_state_next = MSG_STATE_IDLE;
               `else
                 flit_state_next = MSG_STATE_NOC_DATA;
@@ -657,5 +669,77 @@ end
 
 assign noc_valid_out = flit_ready;
 assign noc_data_out = flit;
+
+
+/* Dump store addr and data to file. */
+integer file;
+initial begin
+    file = $fopen("axilite_noc.log", "w");
+end
+
+always @(posedge clk)
+begin
+    if (awaddr_fifo_ren)
+    begin
+        $fwrite(file, "awaddr-fifo %064x\n", awaddr_fifo_out);
+        $fflush(file);
+    end
+    if (wdata_fifo_ren)
+    begin
+        $fwrite(file, "wdata-fifo %064x\n", wdata_fifo_out);
+        $fflush(file);
+    end
+    if (araddr_fifo_ren)
+    begin
+        $fwrite(file, "araddr-fifo %064x\n", araddr_fifo_out);
+        $fflush(file);
+    end
+    /*if (noc2_valid_out && noc2_ready_in) begin
+        $fwrite(file, "bridge-write-data %064x\n", noc2_data_out);
+        $fflush(file);
+    end */
+end
+
+/* Dump store addr and data to file. */
+integer file3;
+initial begin
+    file3 = $fopen("axilite_noc1_store.log", "w");
+end
+always @(posedge clk)
+begin
+    if (noc_valid_out && noc_ready_in)
+    begin
+        $fwrite(file3, "noc1_data_out %064x\n", noc_data_out);
+        $fflush(file3);
+    end
+end
+
+/* Dump store addr and data to file. */
+integer file2;
+initial begin
+    file2 = $fopen("axilite_noc2_load.log", "w");
+end
+always @(posedge clk)
+begin
+    if ((type_fifo_out == MSG_TYPE_LOAD) && noc_valid_in && noc_ready_out)
+    begin
+        $fwrite(file2, "noc2_data_in %064x\n", noc_data_in);
+        $fflush(file2);
+    end
+end
+
+/* Dump axi read data to file. */
+integer file4;
+initial begin
+    file4 = $fopen("axilite_read_data.log", "w");
+end
+always @(posedge clk)
+begin
+    if (m_axi_rvalid && m_axi_rready)
+    begin
+        $fwrite(file4, "rdata %x\n", m_axi_rdata);
+        $fflush(file4);
+    end
+end
 
 endmodule 

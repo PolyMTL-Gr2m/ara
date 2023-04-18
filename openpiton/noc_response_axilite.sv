@@ -150,6 +150,22 @@ begin
                 msg_counter_next = `MSG_LENGTH_WIDTH'd0;
                 msg_payload_len_next = noc_data_in[`MSG_LENGTH];
             end
+        `elsif LOAD_NOSHARE_TEST
+            if (noc_io_go && (load_ack)) begin
+                if (transaction_type_rd_data[2:1] == MSG_TYPE_STORE && (~transaction_fifo_empty)) 
+                begin
+                    msg_state_next = MSG_STATE_STORE;
+                    m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
+                    m_axi_bvalid = 1'b1;
+                end
+                else if (transaction_type_rd_data[2:1] == MSG_TYPE_LOAD && (~transaction_fifo_empty))
+                begin
+                    msg_state_next = MSG_STATE_DATA;
+                end
+                else msg_state_next = MSG_STATE_HEADER_0;
+                msg_counter_next = `MSG_LENGTH_WIDTH'd0;
+                msg_payload_len_next = noc_data_in[`MSG_LENGTH];
+            end
         `else 
             if (noc_io_go && (load_ack)) begin
                 
