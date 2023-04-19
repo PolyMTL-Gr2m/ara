@@ -244,6 +244,11 @@ int test_case;
 #define VCMP_U16(casenum,vect,act...) {VSTORE_U16(vect); VCMP(uint16_t,%x,casenum,Ru16,act)}
 #define VCMP_U8(casenum,vect,act...)  {VSTORE_U8(vect); VCMP(uint8_t, %x,casenum, Ru8,act)}
 
+#define VEC_CMP_64(casenum,vect,act...) {VSTORE_U64(vect); VCMP(uint64_t,%x,casenum,Ru64,act)}
+#define VEC_CMP_32(casenum,vect,act...) {VSTORE_U32(vect); VCMP(uint32_t,%x,casenum,Ru32,act)}
+#define VEC_CMP_16(casenum,vect,act...) {VSTORE_U16(vect); VCMP(uint16_t,%x,casenum,Ru16,act)}
+#define VEC_CMP_8(casenum,vect,act...)  {VSTORE_U8(vect); VCMP(uint8_t, %x,casenum, Ru8,act)}
+
 #define VEC_CMP_U64(casenum,vect,act...) {VSTORE_U64(vect); VCMP(uint64_t,%x,casenum,Ru64,act)}
 #define VEC_CMP_U32(casenum,vect,act...) {VSTORE_U32(vect); VCMP(uint32_t,%x,casenum,Ru32,act)}
 #define VEC_CMP_U16(casenum,vect,act...) {VSTORE_U16(vect); VCMP(uint16_t,%x,casenum,Ru16,act)}
