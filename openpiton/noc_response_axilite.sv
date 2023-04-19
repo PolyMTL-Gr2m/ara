@@ -184,6 +184,14 @@ begin
                 msg_payload_len_next = noc_data_in[`MSG_LENGTH];
             end
         `endif 
+            else begin
+                msg_state_next = msg_state_f;
+                msg_counter_next = msg_counter_f;
+                msg_data_done = 1'b0;
+                m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
+                m_axi_bvalid = 1'b0;
+                msg_payload_len_next = msg_payload_len_f;
+            end 
         end
         MSG_STATE_DATA: begin
             if (msg_counter_f >= msg_payload_len_f) begin
