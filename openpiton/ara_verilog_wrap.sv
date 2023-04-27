@@ -84,6 +84,8 @@ module ara_verilog_wrap
     input                        noc2_valid_in ,
     input  [`NOC_DATA_WIDTH-1:0] noc2_data_in  ,
     output                       noc2_ready_out,
+    input wire [`HOME_ID_WIDTH-1:0] config_system_tile_count_5_0,
+    input wire [`HOME_ALLOC_METHOD_WIDTH-1:0] config_home_alloc_method,
 `endif 
 
 
@@ -555,6 +557,55 @@ module ara_verilog_wrap
   soc_narrow_lite_req_t  axi_lite_noc_req;
   soc_narrow_lite_resp_t axi_lite_noc_resp;
 
+  axi_noc_bridge #(
+    .AxiDataWidth (AxiWideDataWidth  ),
+    .AxiAddrWidth (AxiAddrWidth        )
+  )i_axi_noc_bridge_ara
+  (
+    .clk_i     (clk_i                        ),
+    .rst_ni    (rst_ni                       ),
+    // write address channel
+    .m_axi_awaddr   (ara_axi_req.aw.addr ),
+    .m_axi_awlen    (ara_axi_req.aw.len  ),
+    .m_axi_awsize   (ara_axi_req.aw.size ),
+    .m_axi_awburst  (ara_axi_req.aw.burst),
+    .m_axi_aw_cache (ara_axi_req.aw.cache),
+    // handshake logic
+    .m_axi_awvalid  (ara_axi_req.aw_valid ),
+    .m_axi_awready  (ara_axi_resp.aw_ready),
+
+    //write data channel
+    .m_axi_wdata    (ara_axi_req.w.data   ),
+    .m_axi_wstrb    (ara_axi_req.w.strb   ),
+    .m_axi_wlast    (ara_axi_req.w.last   ),
+    // handshake logic
+    .m_axi_wvalid   (ara_axi_req.w_valid  ),
+    .m_axi_wready   (ara_axi_resp.w_ready ),
+
+    // write response channel
+    .m_axi_bresp    (ara_axi_resp.b.resp  ),
+    .m_axi_bvalid   (ara_axi_resp.b_valid  ),
+    .m_axi_bready   (ara_axi_req.b_ready ),
+
+    // read address channel 
+    .m_axi_araddr   (ara_axi_req.ar.addr  ),
+    .m_axi_arlen    (ara_axi_req.ar.len   ), 
+    .m_axi_arsize   (ara_axi_req.ar.size  ), 
+    .m_axi_arburst  (ara_axi_req.ar.burst ), 
+    .m_axi_ar_cache (ara_axi_req.ar.cache ), 
+    // handshake logic 
+    .m_axi_arvalid  (ara_axi_req.ar_valid ),
+    .m_axi_arready  (ara_axi_resp.ar_ready),
+
+    // read data channel
+    .m_axi_rdata    (ara_axi_resp.r.data  ),
+    .m_axi_rresp    (ara_axi_resp.r.resp  ),
+    .m_axi_rlast    (ara_axi_resp.r.last  ),
+    // handshake logic
+    .m_axi_rvalid   (ara_axi_resp.r_valid ),
+    .m_axi_rready   (ara_axi_req.r_ready  )
+  );
+
   axi_dw_converter #(
     .AxiSlvPortDataWidth(AxiWideDataWidth    ),
     .AxiMstPortDataWidth(AxiNarrowDataWidth  ),
@@ -588,6 +639,55 @@ module ara_verilog_wrap
     .mst_resp_i(periph_narrow_axi_resp )
   );
 
+  axi_noc_bridge #(
+    .AxiDataWidth (AxiNarrowDataWidth  ),
+    .AxiAddrWidth (AxiAddrWidth        )
+  )i_axi_noc_bridge_converter
+  (
+    .clk_i     (clk_i                        ),
+    .rst_ni    (rst_ni                       ),
+    // write address channel
+    .m_axi_awaddr   (periph_narrow_axi_req.aw.addr ),
+    .m_axi_awlen    (periph_narrow_axi_req.aw.len  ),
+    .m_axi_awsize   (periph_narrow_axi_req.aw.size ),
+    .m_axi_awburst  (periph_narrow_axi_req.aw.burst),
+    .m_axi_aw_cache (periph_narrow_axi_req.aw.cache),
+    // handshake logic
+    .m_axi_awvalid  (periph_narrow_axi_req.aw_valid ),
+    .m_axi_awready  (periph_narrow_axi_resp.aw_ready),
+
+    //write data channel
+    .m_axi_wdata    (periph_narrow_axi_req.w.data   ),
+    .m_axi_wstrb    (periph_narrow_axi_req.w.strb   ),
+    .m_axi_wlast    (periph_narrow_axi_req.w.last   ),
+    // handshake logic
+    .m_axi_wvalid   (periph_narrow_axi_req.w_valid  ),
+    .m_axi_wready   (periph_narrow_axi_resp.w_ready ),
+
+    // write response channel
+    .m_axi_bresp    (periph_narrow_axi_resp.b.resp  ),
+    .m_axi_bvalid   (periph_narrow_axi_resp.b_valid  ),
+    .m_axi_bready   (periph_narrow_axi_req.b_ready ),
+
+    // read address channel 
+    .m_axi_araddr   (periph_narrow_axi_req.ar.addr  ),
+    .m_axi_arlen    (periph_narrow_axi_req.ar.len   ), 
+    .m_axi_arsize   (periph_narrow_axi_req.ar.size  ), 
+    .m_axi_arburst  (periph_narrow_axi_req.ar.burst ), 
+    .m_axi_ar_cache (periph_narrow_axi_req.ar.cache ), 
+    // handshake logic 
+    .m_axi_arvalid  (periph_narrow_axi_req.ar_valid ),
+    .m_axi_arready  (periph_narrow_axi_resp.ar_ready),
+
+    // read data channel
+    .m_axi_rdata    (periph_narrow_axi_resp.r.data  ),
+    .m_axi_rresp    (periph_narrow_axi_resp.r.resp  ),
+    .m_axi_rlast    (periph_narrow_axi_resp.r.last  ),
+    // handshake logic
+    .m_axi_rvalid   (periph_narrow_axi_resp.r_valid ),
+    .m_axi_rready   (periph_narrow_axi_req.r_ready  )
+  );
+
   axi_to_axi_lite #(
     .AxiAddrWidth   (AxiAddrWidth          ),
     .AxiDataWidth   (AxiNarrowDataWidth    ),
@@ -613,8 +713,8 @@ module ara_verilog_wrap
 axilite_noc_bridge #(
   .AXI_LITE_DATA_WIDTH (AxiNarrowDataWidth), 
   .AXI_LITE_ADDR_WIDTH (AxiAddrWidth), 
-  . AXI_LITE_RESP_WIDTH (2)
-) axi_noc_bridge (
+  .AXI_LITE_RESP_WIDTH (2)
+) axilite_noc_bridge (
     .clk           (clk_i),
     .rst_n         (rst_ni),
   `ifdef ARA_REQ2MEM // direct memory request to main memory 
@@ -646,6 +746,8 @@ axilite_noc_bridge #(
     .dest_xpos      (8'd0), // 8
     .dest_ypos      (8'd0), // 8
     .dest_fbits     (`NOC_FBITS_L2), //4
+    .system_tile_count (system_tile_count),
+    .home_alloc_method (home_alloc_method),
   `endif 
     .m_axi_awaddr   (axi_lite_noc_req.aw.addr  ),
     .m_axi_awvalid  (axi_lite_noc_req.aw_valid ),
