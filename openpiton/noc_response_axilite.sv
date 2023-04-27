@@ -1,3 +1,17 @@
+//==================================================================================================
+//  Filename      : noc_response_axilite.sv
+//  Created On    : 2023-04-23
+//  Revision      :
+//  Author        : Ci-Chian Lu
+//  Company       : University of California, Santa Barbara
+//  Email         : ci-chian@ucsb.edu
+//
+//  Description   : 
+//
+//
+//==================================================================================================
+
+
 `include "define.tmp.h"
 
 module noc_response_axilite #(
@@ -38,8 +52,8 @@ module noc_response_axilite #(
 
 `ifdef ARA_REQ2MEM
     typedef enum logic {
-        MSG_STATE_HEADER_0   = 1'b0, // Header 0
-        MSG_STATE_DATA       = 1'b1 // Data Lines
+        MSG_STATE_HEADER_0   = 2'b0, // Header 0
+        MSG_STATE_DATA       = 2'b1 // Data Lines
     } msg_state; 
 `else 
     typedef enum logic [2:0] {
@@ -150,25 +164,8 @@ begin
                 msg_counter_next = `MSG_LENGTH_WIDTH'd0;
                 msg_payload_len_next = noc_data_in[`MSG_LENGTH];
             end
-        `elsif LOAD_NOSHARE_TEST
+        `else
             if (noc_io_go && (load_ack)) begin
-                if (transaction_type_rd_data[2:1] == MSG_TYPE_STORE && (~transaction_fifo_empty)) 
-                begin
-                    msg_state_next = MSG_STATE_STORE;
-                    m_axi_bresp = {AXI_LITE_RESP_WIDTH{1'b0}};
-                    m_axi_bvalid = 1'b1;
-                end
-                else if (transaction_type_rd_data[2:1] == MSG_TYPE_LOAD && (~transaction_fifo_empty))
-                begin
-                    msg_state_next = MSG_STATE_DATA;
-                end
-                else msg_state_next = MSG_STATE_HEADER_0;
-                msg_counter_next = `MSG_LENGTH_WIDTH'd0;
-                msg_payload_len_next = noc_data_in[`MSG_LENGTH];
-            end
-        `else 
-            if (noc_io_go && (load_ack)) begin
-                
                 if (transaction_type_rd_data[2:1] == MSG_TYPE_STORE && (~transaction_fifo_empty)) 
                 begin
                     msg_state_next = MSG_STATE_STORE;

@@ -1,3 +1,16 @@
+//==================================================================================================
+//  Filename      : axilite_noc_bridge.sv
+//  Created On    : 2023-04-23
+//  Revision      :
+//  Author        : Ci-Chian Lu
+//  Company       : University of California, Santa Barbara
+//  Email         : ci-chian@ucsb.edu
+//
+//  Description   : 
+//
+//
+//==================================================================================================
+
 `include "define.tmp.h"
 
 module axilite_noc_bridge #(
@@ -25,6 +38,10 @@ module axilite_noc_bridge #(
     input  logic [`MSG_DST_X_WIDTH-1:0]            dest_xpos,
     input  logic [`MSG_DST_Y_WIDTH-1:0]            dest_ypos,
     input  logic [`MSG_DST_FBITS_WIDTH-1:0]        dest_fbits,
+  `ifndef ARA_REQ2MEM
+    input  logic [`HOME_ID_WIDTH-1:0]              system_tile_count,
+    input  logic [`HOME_ALLOC_METHOD_WIDTH-1:0]    home_alloc_method,
+  `endif 
 
     // AXI Write Address Channel Signals
     input  logic [AXI_LITE_ADDR_WIDTH-1:0]         m_axi_awaddr,
@@ -74,8 +91,9 @@ typedef enum logic [1:0] {
     MSG_STATE_HEADER = 2'd2,
     MSG_STATE_NOC_DATA = 2'd3
   `else 
-    MSG_STATE_HEADER = 2'd1,
-    MSG_STATE_NOC_DATA = 2'd2
+    MSG_STATE_DEST_CAL = 2'd1,
+    MSG_STATE_HEADER = 2'd2,
+    MSG_STATE_NOC_DATA = 2'd3
   `endif
 } flit_state;        // state for flit output
 
@@ -154,6 +172,17 @@ logic [AXI_LITE_DATA_WIDTH/8 - 1: 0]      wstrb_fifo_mux_out;
     logic                                     wstrb_fifoside_ready;
     logic                                     wstrb_outputside_valid;
     logic                                     wstrb_outputside_ready;
+`else 
+    logic                                     cal_dest_stage0;
+    logic                                     cal_dest_stage1; 
+    logic                                     cal_dest_stage2 ;
+    logic [`HOME_ID_WIDTH-1:0]                lhid_s0;
+    logic [`HOME_ID_WIDTH-1:0]                lhid_s1;
+    logic [`HOME_ID_WIDTH-1:0]                home_addr_bits_s0;
+    logic [`PHY_ADDR_WIDTH-1:0]               axilite2noc_req_address_s0;
+    logic                                     special_l2_addr_s0;
+    logic [`NOC_X_WIDTH-1:0]                  lhid_s1_x;
+    logic [`NOC_Y_WIDTH-1:0]                  lhid_s1_y;
 `endif
 
 logic                                     fifo_has_packet;
@@ -401,7 +430,7 @@ sync_fifo #(
 	.wval(araddr_fifo_wval),
 	.reset(fifo_rst)
 );
-assign word_select = (type_fifo_out == MSG_TYPE_LOAD) ? (araddr_fifo_out[3:0] >> 3) : 0;  
+assign word_select = (type_fifo_out == MSG_TYPE_LOAD) ? (araddr_fifo_out[3]) : 0;  
 assign araddr_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign araddr_fifo_wdata = m_axi_araddr;
 assign araddr_fifo_ren = (noc_load_done && !araddr_fifo_empty);
@@ -419,13 +448,13 @@ assign fifo_has_packet = (type_fifo_out == MSG_TYPE_STORE) ? (!awaddr_fifo_empty
  assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE && ~wstrb_outputside_valid;
  assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
 
-`elsif LOAD_NOSHARE_TEST
+`else // load now can be done with load_noshare message type 
  assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE;
  assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
 
-`else 
- assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE; // L2 supports mask   
- assign noc_load_done = noc_last_data && type_fifo_out == MSG_TYPE_LOAD; // We need to file 2 meaningless data flit (16 bytes) for swap_wb load
+// `else // this section is commented since we don't need extra data flit to use swap write back as the replacement of load_noshare
+//  assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE; // L2 supports mask   
+//  assign noc_load_done = noc_last_data && type_fifo_out == MSG_TYPE_LOAD; // We need to file 2 meaningless data flit (16 bytes) for swap_wb load
 `endif
 
 generate begin
@@ -474,16 +503,16 @@ begin
             msg_data_size = `MSG_DATA_SIZE_8B; 
             msg_length = `MSG_LENGTH_WIDTH'd2; 
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
-        `elsif LOAD_NOSHARE_TEST
+        `else // we can use load noshare to load the data from L2 right now
             msg_type = `MSG_TYPE_LOAD_NOSHARE_REQ; // for L2 LOADNOSHARE test 
-            msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now. 
+            msg_data_size = `MSG_DATA_SIZE_16B; // Noted that L2 still return 16 bytes data 
             msg_length = `MSG_LENGTH_WIDTH'd2; 
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
-        `else  // to L2 
-            msg_type = `MSG_TYPE_SWAPWB_REQ;
-            msg_data_size = `MSG_DATA_SIZE_16B; // L2 only accept over 16Bytes data
-            msg_length = `MSG_LENGTH_WIDTH'd2 + NULL_PAYLOAD_LEN; // 2 extra header and two extra data (16Bytes zero data)
-            msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
+        // `else  // we don;t need to use swap writeback right now
+        //     msg_type = `MSG_TYPE_SWAPWB_REQ;
+        //     msg_data_size = `MSG_DATA_SIZE_16B; 
+        //     msg_length = `MSG_LENGTH_WIDTH'd2 + NULL_PAYLOAD_LEN; // 2 extra header and two extra data (16Bytes zero data)
+        //     msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, araddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
         `endif
         end
         MSG_TYPE_INVAL: begin 
@@ -549,12 +578,12 @@ begin
           `ifdef ARA_REQ2MEM
             if ((fifo_has_packet && type_fifo_out == MSG_TYPE_STORE))
                 flit_state_next = MSG_STATE_WAIT_STRB;
-          `else 
-            if ((fifo_has_packet && type_fifo_out == MSG_TYPE_STORE))
-                flit_state_next = MSG_STATE_HEADER;
-          `endif 
             else if ((fifo_has_packet && type_fifo_out == MSG_TYPE_LOAD))
                 flit_state_next = MSG_STATE_HEADER;
+          `else 
+            if (fifo_has_packet && ((type_fifo_out == MSG_TYPE_STORE) || (type_fifo_out == MSG_TYPE_LOAD)))
+                flit_state_next = MSG_STATE_DEST_CAL;
+          `endif 
             else flit_state_next = flit_state_f;
         end
       `ifdef ARA_REQ2MEM
@@ -563,17 +592,22 @@ begin
                 flit_state_next = MSG_STATE_HEADER;
             else flit_state_next = flit_state_f;
         end
+      `else 
+        MSG_STATE_DEST_CAL: begin
+            flit_state_next = MSG_STATE_HEADER;
+        end
       `endif
+      
         MSG_STATE_HEADER: begin
             if (noc_last_header && type_fifo_out == MSG_TYPE_STORE)
                 flit_state_next = MSG_STATE_NOC_DATA;
             else if (noc_last_header && type_fifo_out == MSG_TYPE_LOAD)
               `ifdef ARA_REQ2MEM
                 flit_state_next = MSG_STATE_IDLE;
-              `elsif LOAD_NOSHARE_TEST
-                flit_state_next = MSG_STATE_IDLE;
               `else
-                flit_state_next = MSG_STATE_NOC_DATA;
+                flit_state_next = MSG_STATE_IDLE;
+            //   `else // we don;t need extra data flits for load right now 
+            //     flit_state_next = MSG_STATE_NOC_DATA;
               `endif 
             else flit_state_next = flit_state_f;
         end
@@ -589,6 +623,80 @@ begin
         default: flit_state_next = MSG_STATE_IDLE;
     endcase
 end
+
+/*****destination x and y index calculate*************/
+
+`ifndef ARA_REQ2MEM
+    l15_home_encoder    l15_home_encoder(
+    .home_in        (home_addr_bits_s0),
+    .num_homes      (system_tile_count),
+    .lhid_out       (lhid_s0)
+    );
+
+    flat_id_to_xy lhid_to_xy (
+        .flat_id(lhid_s1[`HOME_ID_WIDTH-1:0]),
+        .x_coord(lhid_s1_x),
+        .y_coord(lhid_s1_y)
+    );
+
+    always_ff@(posedge clk or negedge rst_n) begin 
+        if (!rst_n) lhid_s1 <= `HOME_ID_WIDTH'b0;
+        else if (cal_dest_stage0) lhid_s1 <= lhid_s0;
+        else lhid_s1 <= lhid_s1;
+    end 
+
+    always_comb 
+    begin 
+        cal_dest_stage0 = (flit_state_f == MSG_STATE_IDLE);
+        cal_dest_stage1 = (flit_state_f == MSG_STATE_DEST_CAL);
+        cal_dest_stage2 = (flit_state_f == MSG_STATE_HEADER);
+    end 
+
+    always_comb
+    begin
+        //special l2 addresses start with 0xA
+        special_l2_addr_s0 = (axilite2noc_req_address_s0[39:36] == 4'b1010);
+    end
+
+    always_comb begin
+        unique case (type_fifo_out) 
+            MSG_TYPE_STORE: axilite2noc_req_address_s0 = awaddr_fifo_out[`PHY_ADDR_WIDTH-1:0];
+            MSG_TYPE_LOAD: axilite2noc_req_address_s0 = araddr_fifo_out[`PHY_ADDR_WIDTH-1:0];
+            MSG_TYPE_INVAL:axilite2noc_req_address_s0 = `PHY_ADDR_WIDTH'b0;
+            default: axilite2noc_req_address_s0 = `PHY_ADDR_WIDTH'b0;
+        endcase
+    end 
+
+    always_comb
+    begin
+        if (special_l2_addr_s0)
+        begin
+            home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_HIGH];
+        end
+        else
+        begin
+            unique case (home_alloc_method) 
+            `HOME_ALLOC_LOW_ORDER_BITS:
+            begin
+                home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_LOW];
+            end
+            `HOME_ALLOC_MIDDLE_ORDER_BITS:
+            begin
+                home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_MIDDLE];
+            end
+            `HOME_ALLOC_HIGH_ORDER_BITS:
+            begin
+                home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_HIGH];
+            end
+            `HOME_ALLOC_MIXED_ORDER_BITS:
+            begin
+                home_addr_bits_s0 = (axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_LOW] ^ axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_MIDDLE]);
+            end
+            default: home_addr_bits_s0 = `MSG_LHID_WIDTH'b0;
+            endcase
+        end
+    end
+`endif 
 
 always_comb
 begin
@@ -613,8 +721,13 @@ begin
             unique case (noc_cnt)
                 3'b001: begin
                     flit[`MSG_DST_CHIPID] = dest_chipid;
+                  `ifdef ARA_REQ2MEM
                     flit[`MSG_DST_X] = dest_xpos;
                     flit[`MSG_DST_Y] = dest_ypos;
+                  `else 
+                    flit[`MSG_DST_X] = lhid_s1_x;
+                    flit[`MSG_DST_Y] = lhid_s1_y;
+                  `endif
                     flit[`MSG_DST_FBITS] = dest_fbits; // to memory or L2 cache
                     flit[`MSG_LENGTH] = msg_length;
                     flit[`MSG_TYPE] = msg_type;
