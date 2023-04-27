@@ -620,8 +620,6 @@ begin
             else if (noc_last_header && type_fifo_out == MSG_TYPE_LOAD)
               `ifdef ARA_REQ2MEM
                 flit_state_next = MSG_STATE_IDLE;
-              `elsif LOAD_NOSHARE_TEST
-                flit_state_next = MSG_STATE_IDLE;
               `else
                 flit_state_next = MSG_STATE_IDLE;
             //   `else // we don;t need extra data flits for load right now 
