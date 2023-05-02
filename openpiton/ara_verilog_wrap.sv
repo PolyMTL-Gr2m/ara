@@ -544,7 +544,7 @@ module ara_verilog_wrap
     .axi_lite_slave_resp_o(axi_lite_ctrl_registers_resp),
     .hw_cnt_en_o          (hw_cnt_en_o                 ),
     .dram_base_addr_o     (// Unsed                    ),
-    .dram_end_addr_o      (/* Unsed                    ),
+    .dram_end_addr_o      ( Unsed                    ),
     .exit_o               (exit_o                      ),
     .event_trigger_o      (event_trigger)
   );
@@ -670,4 +670,4 @@ axilite_noc_bridge #(
     .m_axi_bready   (axi_lite_noc_req.b_ready  )
 );
 
-endmodule : ara_verilog_wrap:
+endmodule : ara_verilog_wrap
