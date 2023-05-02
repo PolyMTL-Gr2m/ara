@@ -557,13 +557,13 @@ module ara_verilog_wrap
   soc_narrow_lite_req_t  axi_lite_noc_req;
   soc_narrow_lite_resp_t axi_lite_noc_resp;
 
-  axi_noc_bridge #(
+  axi_intf #(
     .AxiDataWidth (AxiWideDataWidth  ),
     .AxiAddrWidth (AxiAddrWidth        )
-  )i_axi_noc_bridge_ara
+  )i_axi_noc_bridge_ara_intf
   (
-    .clk_i     (clk_i                        ),
-    .rst_ni    (rst_ni                       ),
+    .clk     (clk_i                        ),
+    .rst_n    (rst_ni                       ),
     // write address channel
     .m_axi_awaddr   (ara_axi_req.aw.addr ),
     .m_axi_awlen    (ara_axi_req.aw.len  ),
@@ -592,7 +592,7 @@ module ara_verilog_wrap
     .m_axi_arlen    (ara_axi_req.ar.len   ), 
     .m_axi_arsize   (ara_axi_req.ar.size  ), 
     .m_axi_arburst  (ara_axi_req.ar.burst ), 
-    .m_axi_ar_cache (ara_axi_req.ar.cache ), 
+    .m_axi_arcache (ara_axi_req.ar.cache ), 
     // handshake logic 
     .m_axi_arvalid  (ara_axi_req.ar_valid ),
     .m_axi_arready  (ara_axi_resp.ar_ready),
@@ -639,13 +639,13 @@ module ara_verilog_wrap
     .mst_resp_i(periph_narrow_axi_resp )
   );
 
-  axi_noc_bridge #(
+  axi_intf #(
     .AxiDataWidth (AxiNarrowDataWidth  ),
     .AxiAddrWidth (AxiAddrWidth        )
-  )i_axi_noc_bridge_converter
+  )i_axi_noc_bridge_converter_intf
   (
-    .clk_i     (clk_i                        ),
-    .rst_ni    (rst_ni                       ),
+    .clk     (clk_i                        ),
+    .rst_n    (rst_ni                       ),
     // write address channel
     .m_axi_awaddr   (periph_narrow_axi_req.aw.addr ),
     .m_axi_awlen    (periph_narrow_axi_req.aw.len  ),
@@ -674,7 +674,7 @@ module ara_verilog_wrap
     .m_axi_arlen    (periph_narrow_axi_req.ar.len   ), 
     .m_axi_arsize   (periph_narrow_axi_req.ar.size  ), 
     .m_axi_arburst  (periph_narrow_axi_req.ar.burst ), 
-    .m_axi_ar_cache (periph_narrow_axi_req.ar.cache ), 
+    .m_axi_arcache (periph_narrow_axi_req.ar.cache ), 
     // handshake logic 
     .m_axi_arvalid  (periph_narrow_axi_req.ar_valid ),
     .m_axi_arready  (periph_narrow_axi_resp.ar_ready),
@@ -687,6 +687,87 @@ module ara_verilog_wrap
     .m_axi_rvalid   (periph_narrow_axi_resp.r_valid ),
     .m_axi_rready   (periph_narrow_axi_req.r_ready  )
   );
+
+  // axi_noc_bridge #(
+  //   .AxiDataWidth (AxiNarrowDataWidth  ),
+  //   .AxiAddrWidth (AxiAddrWidth        )
+  // )i_axi_noc_bridge
+  // (
+  //   .clk     (clk_i                        ),
+  //   .rst_n    (rst_ni                       ),
+  // `ifdef ARA_REQ2MEM // direct memory request to main memory 
+  //   .noc_valid_out (noc2_valid_out          ),
+  //   .noc_data_out  (noc2_data_out           ),
+  //   .noc_ready_in  (noc2_ready_in           ),
+  //   .noc_valid_in  (noc3_valid_in),
+  //   .noc_data_in   (noc3_data_in),
+  //   .noc_ready_out (noc3_ready_out),
+  // `else 
+  //   .noc_valid_out (noc1_valid_out          ),
+  //   .noc_data_out  (noc1_data_out           ),
+  //   .noc_ready_in  (noc1_ready_in           ),
+  //   .noc_valid_in  (noc2_valid_in),
+  //   .noc_data_in   (noc2_data_in),
+  //   .noc_ready_out (noc2_ready_out),
+  // `endif 
+  //   .src_chipid     (default_chipid), // 14 // 0
+  //   .src_xpos       (default_coreid_x), // 8  // 1
+  //   .src_ypos       (default_coreid_y), // 8  // 1
+  //   .src_fbits      (`NOC_FBITS_ARA), // 4
+  // `ifdef ARA_REQ2MEM // direct memory request to main memory 
+  //   .dest_chipid    (14'b1000_0000_0000_00), // 14 //  all zero 
+  //   .dest_xpos      (8'd0), // 8
+  //   .dest_ypos      (8'd0), // 8
+  //   .dest_fbits     (`NOC_FBITS_MEM), //4
+  // `else // memory request to L2 cache 
+  //   .dest_chipid    (14'b0000_0000_0000_00), // 14
+  //   .dest_xpos      (8'd0), // 8
+  //   .dest_ypos      (8'd0), // 8
+  //   .dest_fbits     (`NOC_FBITS_L2), //4
+  //   .system_tile_count (config_system_tile_count_5_0),
+  //   .home_alloc_method (config_home_alloc_method),
+  // `endif 
+  //   // write address channel
+  //   .m_axi_awaddr   (periph_narrow_axi_req.aw.addr ),
+  //   .m_axi_awlen    (periph_narrow_axi_req.aw.len  ),
+  //   .m_axi_awsize   (periph_narrow_axi_req.aw.size ),
+  //   .m_axi_awburst  (periph_narrow_axi_req.aw.burst),
+  //   .m_axi_aw_cache (periph_narrow_axi_req.aw.cache),
+  //   // handshake logic
+  //   .m_axi_awvalid  (periph_narrow_axi_req.aw_valid ),
+  //   .m_axi_awready  (periph_narrow_axi_resp.aw_ready),
+
+  //   //write data channel
+  //   .m_axi_wdata    (periph_narrow_axi_req.w.data   ),
+  //   .m_axi_wstrb    (periph_narrow_axi_req.w.strb   ),
+  //   .m_axi_wlast    (periph_narrow_axi_req.w.last   ),
+  //   // handshake logic
+  //   .m_axi_wvalid   (periph_narrow_axi_req.w_valid  ),
+  //   .m_axi_wready   (periph_narrow_axi_resp.w_ready ),
+
+  //   // write response channel
+  //   .m_axi_bresp    (periph_narrow_axi_resp.b.resp  ),
+  //   .m_axi_bvalid   (periph_narrow_axi_resp.b_valid  ),
+  //   .m_axi_bready   (periph_narrow_axi_req.b_ready ),
+
+  //   // read address channel 
+  //   .m_axi_araddr   (periph_narrow_axi_req.ar.addr  ),
+  //   .m_axi_arlen    (periph_narrow_axi_req.ar.len   ), 
+  //   .m_axi_arsize   (periph_narrow_axi_req.ar.size  ), 
+  //   .m_axi_arburst  (periph_narrow_axi_req.ar.burst ), 
+  //   .m_axi_arcache (periph_narrow_axi_req.ar.cache ), 
+  //   // handshake logic 
+  //   .m_axi_arvalid  (periph_narrow_axi_req.ar_valid ),
+  //   .m_axi_arready  (periph_narrow_axi_resp.ar_ready),
+
+  //   // read data channel
+  //   .m_axi_rdata    (periph_narrow_axi_resp.r.data  ),
+  //   .m_axi_rresp    (periph_narrow_axi_resp.r.resp  ),
+  //   .m_axi_rlast    (periph_narrow_axi_resp.r.last  ),
+  //   // handshake logic
+  //   .m_axi_rvalid   (periph_narrow_axi_resp.r_valid ),
+  //   .m_axi_rready   (periph_narrow_axi_req.r_ready  )
+  // );
 
   axi_to_axi_lite #(
     .AxiAddrWidth   (AxiAddrWidth          ),
@@ -746,8 +827,8 @@ axilite_noc_bridge #(
     .dest_xpos      (8'd0), // 8
     .dest_ypos      (8'd0), // 8
     .dest_fbits     (`NOC_FBITS_L2), //4
-    .system_tile_count (system_tile_count),
-    .home_alloc_method (home_alloc_method),
+    .system_tile_count (config_system_tile_count_5_0),
+    .home_alloc_method (config_home_alloc_method),
   `endif 
     .m_axi_awaddr   (axi_lite_noc_req.aw.addr  ),
     .m_axi_awvalid  (axi_lite_noc_req.aw_valid ),

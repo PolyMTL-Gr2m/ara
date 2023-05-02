@@ -253,8 +253,10 @@ end
 /****************************************************************************/
 
 assign write_channel_ready = !awaddr_fifo_full && !wdata_fifo_full && !wstrb_fifo_full;
-assign m_axi_awready = write_channel_ready && !type_fifo_full && !read_buffer_full;
-assign m_axi_wready = write_channel_ready && !type_fifo_full;
+//assign m_axi_awready = write_channel_ready && !type_fifo_full && !read_buffer_full;
+assign m_axi_awready = !awaddr_fifo_full && !type_fifo_full && !read_buffer_full;
+//assign m_axi_wready = write_channel_ready && !type_fifo_full;
+assign m_axi_wready = !wdata_fifo_full && !wstrb_fifo_full && !type_fifo_full;
 assign m_axi_arready = !araddr_fifo_full && !type_fifo_full && !read_buffer_full;
 
 assign axi2noc_msg_type_store = m_axi_awvalid && (!read_buffer_full); //give priority to load request if read buffer has something
