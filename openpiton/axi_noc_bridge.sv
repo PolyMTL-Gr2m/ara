@@ -179,7 +179,6 @@ logic [AXI_ADDR_WIDTH-1:0]                awaddr_fifo_out;
 logic                                     awaddr_fifo_ren;
 logic [AXI_ADDR_WIDTH-1:0]                awaddr_buffer_q, awaddr_buffer_d;
 
-logic                                     wdata_fifo_wval;
 logic                                     wdata_fifo_full;
 logic [AXI_DATA_WIDTH-1:0]                wdata_fifo_wdata;
 logic                                     wdata_fifo_empty;
@@ -198,11 +197,6 @@ logic [AXI_ADDR_WIDTH-1:0]                araddr_buffer_q, araddr_buffer_d;
 
 logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_out;
 logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_wdata; 
-logic                                     wstrb_fifo_full;
-logic                                     wstrb_fifo_empty;
-logic                                     wstrb_fifo_ren;
-logic                                     wstrb_fifo_wval;
-logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_mux_out;
 
 logic [7:0]                               awlen_fifo_out;
 logic [7:0]                               awlen_fifo_wdata;
