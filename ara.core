@@ -26,9 +26,7 @@ filesets:
             - hardware/deps/axi/src/axi_cdc.sv
             - hardware/deps/axi/src/axi_cdc_dst.sv
             - hardware/deps/axi/src/axi_cdc_src.sv
-            - hardware/deps/axi/src/axi_cut.sv
             - hardware/deps/axi/src/axi_delayer.sv
-            - hardware/deps/axi/src/axi_dw_converter.sv
             - hardware/deps/axi/src/axi_id_prepend.sv
             - hardware/deps/axi/src/axi_isolate.sv
             - hardware/deps/axi/src/axi_join.sv
@@ -348,5 +346,5 @@ targets:
 parameters:
     PRELOAD:
         datatype  : file
-        default   : apps/bin/helloworld_2
+        default   : apps/bin/hello_world
         paramtype : plusarg
