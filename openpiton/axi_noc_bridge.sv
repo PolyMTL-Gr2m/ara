@@ -221,6 +221,16 @@ logic                                     awsize_fifo_ren;
 logic                                     [3:0] awsize_buffer_q;
 logic                                     [3:0] awsize_buffer_d; 
 
+logic [2:0]                               awsize_fifo_out;
+logic [2:0]                               awsize_fifo_wdata;
+logic                                     awsize_fifo_empty;
+logic                                     awsize_fifo_full;
+logic                                     awsize_fifo_wval;
+logic                                     awsize_fifo_ren;
+
+logic                                     [3:0] awsize_buffer_q;
+logic                                     [3:0] awsize_buffer_d; 
+
 logic [7:0]                               arlen_fifo_out;
 logic [7:0]                               arlen_fifo_wdata;
 logic                                     arlen_fifo_empty;
@@ -387,7 +397,7 @@ sync_fifo #(
     .wval(awaddr_fifo_wval),
     .reset(fifo_rst)
 );
-
+assign write_word_select = (awaddr_buffer_q[3]) ? 1 : 0; 
 assign awaddr_fifo_wval = m_axi_awvalid && m_axi_awready; 
 assign awaddr_fifo_wdata = m_axi_awaddr;
 assign waddr_aligned_with_16B = (type_fifo_out == MSG_TYPE_STORE) ? (~awaddr_buffer_q[3] && ~awaddr_buffer_q[2] && ~awaddr_buffer_q[1] && ~awaddr_buffer_q[0]) &&  (awsize_buffer_q == AX_SIZE_8B): 0;
@@ -589,8 +599,8 @@ sync_fifo #(
     .wval(arlen_fifo_wval),
     .reset(fifo_rst)
 );
-logic word_select;
-assign word_select = (araddr_buffer_q[3] == 1) ? 1 : 0; 
+logic read_word_select;
+assign read_word_select = (araddr_buffer_q[3] == 1) ? 1 : 0; 
 assign arlen_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign arlen_fifo_wdata = m_axi_arlen;
 assign need_split_r_transaction = (arlen_buffer_q > 0);
@@ -646,6 +656,16 @@ assign arsize_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign arsize_fifo_wdata = m_axi_arsize;
 assign arsize_fifo_ren = arlen_fifo_ren;
 
+
+always_comb begin 
+    if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arsize_buffer_d = arsize_fifo_out; // no beat left, next transaction  
+    else arsize_buffer_d = arsize_buffer_q;
+end 
+
+always_ff @(posedge clk or negedge rst_n) begin 
+    if (!rst_n) arsize_buffer_q <= 0;
+    else arsize_buffer_q <= arsize_buffer_d;
+end
 
 always_comb begin 
     if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arsize_buffer_d = arsize_fifo_out; // no beat left, next transaction  
