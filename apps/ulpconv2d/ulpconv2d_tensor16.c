@@ -82,7 +82,7 @@ void ulppack_conv2d(int16_t *o, int8_t *i, int8_t *f, int64_t H_in, int64_t W_in
 	// bit position:  31  28/27   20/19 15/14   11/10 7/6      0*/
 }
 
-void print_tensor_(uint8_t *tensor, uint64_t num_rows, uint64_t num_columns, uint64_t num_depth) {
+void print_tensor_(uint16_t *tensor, uint64_t num_rows, uint64_t num_columns, uint64_t num_depth) {
   printf("0x%8X\n", (uint64_t)tensor);
   for (uint64_t k = 0; k < num_depth; ++k) {
   	for (uint64_t i = 0; i < num_rows; ++i) {
@@ -136,45 +136,62 @@ uint64_t ldi = W_in;
 
 uint64_t vlen;
 	
+int64_t ch_loop = (C_in >> 2);
 
-uint8_t f_packed[F * F * (C_in >> 1)];
-uint8_t *f_loop = f_packed;
+uint16_t f_packed[F * F * (C_in >> 2)];
+uint16_t *f_loop = f_packed;
 	
 int8_t *f_ = f_ptr;
 
-uint8_t shift = 16;
 
 
 	// PACKING THE FILTER
 	
 	
-	for(int channels = 0 ; channels < (C_in >> 1) ; channels ++){
+	for(int channels = 0 ; channels < ch_loop ; channels ++){
 		
 		uint64_t ldf = F * F;
 		
-		asm volatile("vsetvli zero, %0, e8, mf2, ta, ma" ::"r"(F * F));
+		asm volatile("vsetvli zero, %0, e8, mf2, ta, ma" ::"r"(ldf));
 
-		asm volatile("vle8.v v1, (%0); add %0, %0, %1" : "+&r" (f_) : "r"(ldf));
 		asm volatile("vle8.v v0, (%0); add %0, %0, %1" : "+&r" (f_) : "r"(ldf));
+		asm volatile("vle8.v v1, (%0); add %0, %0, %1" : "+&r" (f_) : "r"(ldf));
+		asm volatile("vle8.v v2, (%0); add %0, %0, %1" : "+&r" (f_) : "r"(ldf));
+		asm volatile("vle8.v v3, (%0); add %0, %0, %1" : "+&r" (f_) : "r"(ldf));
 		
-		asm volatile("vmacc.vx v0, %0, v1" ::"r"(shift));
+		// Depth = 2
+		//vpack.v.v v0, v0, v1
+		asm volatile (".byte 0x57, 0x80, 0x00, 0x06");
+		//vpack.v.v v2, v2, v3
+		asm volatile (".byte 0x57, 0x81, 0x21, 0x06");
+
+		//Depth = 4
+		//vwpack.v.v v4, v0, v2
+		asm volatile (".byte 0x57, 0x22, 0x01, 0xe6");
+
+
+		asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(ldf));
 				
-		asm volatile("vse8.v v0, (%0); add %0, %0, %1" : "+&r"(f_loop) : "r"(ldf));
+		asm volatile("vse16.v v4, (%0); add %0, %0, %1" : "+&r"(f_loop) : "r"(ldf << 1));
+		//print_tensor_(f_packed, 1, ldf, 1);
+
 		
 			
 	}		
 	
-	for (int width = 0 ; width < (W_in - F + 1) ; width += VLEN_M1_OUT) // IF CONVOLUTION NEED TO BE TILED (C > VLEN_WIDE)
+	asm volatile (".byte 0x57, 0x70, 0xC0, 0xA0");
+	
+	for (int width = 0 ; width < W_in - 2 ; width += VLEN_MF2_OUT) // IF CONVOLUTION NEED TO BE TILED (C > VLEN_WIDE)
 	{
 
 		
 		int8_t *i_ = i_ptr + width; 									// input pointer realtive to the tile (constant throughout the tile)
 		int16_t *o_ = o_ptr + width;	
 		
-		if(width > W_in - VLEN_M1) 	// if we are at the right border of the input
+		if(width > W_in - VLEN_MF2) 	// if we are at the right border of the input
 			vlen = (W_in - width);		 	// we set the vector length to fit the last inputs
 		else
-			vlen = VLEN_M1;						// else we go full length
+			vlen = VLEN_MF2;						// else we go full length
 		
 		int8_t * i__ = i_;							// inside tile pointer (change at each load)
 		
@@ -183,116 +200,111 @@ uint8_t shift = 16;
 		// helper variables
 		uint16_t k0, k1, k2;
 
-		for(int channels = 0 ; channels < (C_in >> 1) ; channels ++){
+		for(int channels = 0 ; channels < ch_loop ; channels ++){
 		
-			asm volatile (".byte 0x57, 0x70, 0x00, 0xA0");
-		
-			i__ = i_ + 2 * channels * H_in * W_in;
-			
-			asm volatile("vsetvli zero, %0, e8, m1, ta, ma" ::"r"(vlen));
+			i__ = i_ + 4 * channels * H_in * W_in;
 			
 			f_loop = f_packed + channels * F * F;
 			
-			asm volatile("vle8.v v0, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
-			asm volatile("vle8.v v2, (%0)"                 : "+&r" (i__));
+			asm volatile("vsetvli zero, %0, e8, mf2, ta, ma" ::"r"(vlen));
 			
-			i__ += (H_in - F + 2) * W_in;
-			
-			asm volatile("vle8.v v1,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
-			asm volatile("vle8.v v3, (%0)"                 : "+&r" (i__));
+			asm volatile("vle8.v v2, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+			asm volatile("vle8.v v4, (%0); add %0, %0, %1" : "+&r" (i__) : "r"((H_in - 1) * W_in));
 			
 			k0 = f_loop[0]; 
 			k1 = f_loop[3];
 			
-			// PACKING 2 8b data into 1 8b register (with 4b interval)
+			asm volatile("vle8.v v3, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+			asm volatile("vle8.v v5, (%0); add %0, %0, %1" : "+&r" (i__) : "r"((H_in - 1) * W_in));
 			
-			asm volatile("vmacc.vx v0, %0, v1"  ::"r"(shift));
-			asm volatile("vmacc.vx v2, %0, v3"  ::"r"(shift));
-			
-			asm volatile (".byte 0x57, 0x70, 0x40, 0xA0");
+			//vpack.v.v v3, v3, v2
+			asm volatile (".byte 0xd7, 0x01, 0x31, 0x06");
+			//vpack.v.v v5, v5, v4
+			asm volatile (".byte 0xd7, 0x02, 0x52, 0x06");
 
+
+			asm volatile("vle8.v v2, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+			asm volatile("vle8.v v4, (%0); add %0, %0, %1" : "+&r" (i__) : "r"((H_in - 1) * W_in));
+			
+			asm volatile("vle8.v v6, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+			asm volatile("vle8.v v7, (%0); add %0, %0, %1" : "+&r" (i__));
+			
+			//vpack.v.v v6, v6, v2
+			asm volatile (".byte 0x57, 0x03, 0x61, 0x06");
+			//vpack.v.v v7, v7, v4
+			asm volatile (".byte 0xd7, 0x03, 0x72, 0x06");
+			
+			//vwpack.v.v v0, v6, v3
+			asm volatile (".byte 0x57, 0xa0, 0x61, 0xe6");
+			//vwpack.v.v v1, v7, v5
+			asm volatile (".byte 0xd7, 0xa0, 0x72, 0xe6");
+			
+			asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen));
 
 			// unroll loop processes each column of the filter
 
 			if(channels % 21 > 0)
-				asm volatile("vmacc.vx v4, %0, v0" ::"r"(k0));
+				asm volatile("vmacc.vx v30, %0, v0" ::"r"(k0));
 			else
-				asm volatile("vmul.vx v4,  v0, %0" :: "r"(k0));
+				asm volatile("vmul.vx v30,  v0, %0" :: "r"(k0));
 				
          if(channels % 42 > 0)
-         	asm volatile("vmacc.vx v6,   %0, v2" ::"r"(k0));
+         	asm volatile("vmacc.vx v31,   %0, v1" ::"r"(k0));
          else
-				asm volatile("vmul.vx v6,  v2, %0" :: "r"(k0));
+				asm volatile("vmul.vx v31,  v1, %0" :: "r"(k0));
 					
 			k0 = f_loop[1];
 			asm volatile("vslidedown.vi v0, v0, 1");
 				
-			asm volatile("vmacc.vx v4,   %0, v2" ::"r"(k1));
+			asm volatile("vmacc.vx v30,   %0, v1" ::"r"(k1));
 			
 			k1 = f_loop[4];
-			asm volatile("vslidedown.vi v2, v2, 1");
+			asm volatile("vslidedown.vi v1, v1, 1");
 				
 				
-			asm volatile("vmacc.vx v4,   %0, v0" ::"r"(k0));
-			asm volatile("vmacc.vx v6,   %0, v2" ::"r"(k0));
+			asm volatile("vmacc.vx v30,   %0, v0" ::"r"(k0));
+			asm volatile("vmacc.vx v31,   %0, v1" ::"r"(k0));
 				
 			k0 = f_loop[2];
 			asm volatile("vslidedown.vi v0, v0, 1");
 				
-			asm volatile("vmacc.vx v4,   %0, v2" ::"r"(k1));
+			asm volatile("vmacc.vx v30,   %0, v1" ::"r"(k1));
 				
 			k1 = f_loop[5];
-			asm volatile("vslidedown.vi v2, v2, 1");
+			asm volatile("vslidedown.vi v1, v1, 1");
 				
 				
 				
-			asm volatile("vmacc.vx v4,   %0, v0" ::"r"(k0));
-			asm volatile("vmacc.vx v6,   %0, v2" ::"r"(k0));
+			asm volatile("vmacc.vx v30,   %0, v0" ::"r"(k0));
+			asm volatile("vmacc.vx v31,   %0, v1" ::"r"(k0));
 				
-			asm volatile("vmacc.vx v4,   %0, v2" ::"r"(k1));
-			
-			if((channels % 42 == 41) || (channels == ((C_in >> 1) - 1)))
-				if(channels > 41)
-					asm volatile("vwadd.wv v30, v30, v6");
-				else
-					asm volatile("vwadd.vx v30, v6, zero");
-				
-			
-			if((channels % 21 == 20) || (channels == ((C_in >> 1) - 1)))
-				if(channels > 20)
-					asm volatile("vwadd.wv v28, v28, v4");
-				else
-					asm volatile("vwadd.vx v28, v4, zero");
-				
+			asm volatile("vmacc.vx v30,   %0, v1" ::"r"(k1));
 
 		}
-		
-		asm volatile("vse16.v v28, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
-		asm volatile("vse16.v v30, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
 		
 		i_ += 2 * W_in;
 		
 		for (int height = 2 ; height < H_in ; height += 4){
 		
-			for(int channels = 0 ; channels < (C_in >> 1) ; channels ++){
-			
-				i__ = i_ + 2 * channels * H_in * W_in;
-			
-				asm volatile("vsetvli zero, %0, e8, m1, ta, ma" ::"r"(vlen));
+			for(int channels = 0 ; channels < ch_loop ; channels ++){
 				
-				asm volatile (".byte 0x57, 0x70, 0x00, 0xA0");
+				asm volatile("vsetvli zero, %0, e8, mf2, ta, ma" ::"r"(vlen));
 				
-				asm volatile("vle8.v v0, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
-				if(height < H_in - 1)
-					asm volatile("vle8.v v1, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
-				if(height < H_in - 2)
-					asm volatile("vle8.v v2, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
-				if(height < H_in - 3)
-					asm volatile("vle8.v v3, (%0)"                 : "+&r" (i__));
 				
-				i__ = i_ + (2 * channels + 1) * H_in * W_in;
+				i__ = i_ + 4 * channels * H_in * W_in;
 				
 				f_loop = f_packed + channels * F * F;
+				
+				asm volatile("vle8.v v8, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 1)
+					asm volatile("vle8.v v9, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 2)
+					asm volatile("vle8.v v10, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 3)
+					asm volatile("vle8.v v11, (%0)"                 : "+&r" (i__));
+				
+				i__ = i_ + (4 * channels + 1) * H_in * W_in;
+				
 				
 				asm volatile("vle8.v v4,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
 				if(height < H_in - 1)
@@ -301,50 +313,123 @@ uint8_t shift = 16;
 					asm volatile("vle8.v v6,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
 				if(height < H_in - 3)
 					asm volatile("vle8.v v7,  (%0)"                 : "+&r" (i__));
+					
+				i__ = i_ + (4 * channels + 2) * H_in * W_in;
+				
+				//vpack.v.v v4, v4, v8
+				asm volatile (".byte 0x57, 0x02, 0x44, 0x06");
+				if(height < H_in - 1)
+					//vpack.v.v v5, v5, v9
+					asm volatile (".byte 0xd7, 0x82, 0x54, 0x06");
+				if(height < H_in - 2)
+					//vpack.v.v v6, v6, v10
+					asm volatile (".byte 0x57, 0x03, 0x65, 0x06");
+				if(height < H_in - 3)
+					//vpack.v.v v7, v7, v11
+					asm volatile (".byte 0xd7, 0x83, 0x75, 0x06");
+				
+				
+				
+				asm volatile("vle8.v v12, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 1)
+					asm volatile("vle8.v v13, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 2)
+					asm volatile("vle8.v v14, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 3)
+					asm volatile("vle8.v v15, (%0)"                 : "+&r" (i__));
+					
+				i__ = i_ + (4 * channels + 3) * H_in * W_in;
+				
 
+				asm volatile("vle8.v v8,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 1)
+					asm volatile("vle8.v v9,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 2)
+					asm volatile("vle8.v v10,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				if(height < H_in - 3)
+					asm volatile("vle8.v v11,  (%0)"                 : "+&r" (i__));
+					
+					
+				//vpack.v.v v8, v8, v12
+				asm volatile (".byte 0x57, 0x04, 0x86, 0x06");
+				if(height < H_in - 1)
+					//vpack.v.v v9, v9, v13
+					asm volatile (".byte 0xd7, 0x84, 0x96, 0x06");
+				if(height < H_in - 2)
+					//vpack.v.v v10, v10, v14
+					asm volatile (".byte 0x57, 0x05, 0xa7, 0x06");
+				if(height < H_in - 3)
+					//vpack.v.v v11, v11, v15
+					asm volatile (".byte 0xd7, 0x85, 0xb7, 0x06");
+				
+				
+				//vwpack.v.v v0, v8, v4
+				asm volatile (".byte 0x57, 0x20, 0x82, 0xe6");
+				if(height < H_in - 1)
+					//vwpack.v.v v1, v9, v5
+					asm volatile (".byte 0xd7, 0xa0, 0x92, 0xe6");
+				if(height < H_in - 2)
+					//vwpack.v.v v2, v10, v6
+					asm volatile (".byte 0x57, 0x21, 0xa3, 0xe6");
+				if(height < H_in - 3)
+					//vwpack.v.v v3, v11, v7
+					asm volatile (".byte 0xd7, 0xa1, 0xb3, 0xe6");
+
+
+				asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen));
+				
+				/*asm volatile("vse16.v v0, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
+				asm volatile("vse16.v v1, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
+				asm volatile("vse16.v v2, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
+				asm volatile("vse16.v v3, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));*/
+				
 				k0 = f_loop[0]; 
 				k1 = f_loop[3];
 				k2 = f_loop[6];
-				
-				// PACKING 2 8b data into 1 8b register (with 4b interval)
-				asm volatile("vmacc.vx v0, %0, v4"  ::"r"(shift));
-				if(height < H_in - 1)
-					asm volatile("vmacc.vx v1, %0, v5"  ::"r"(shift));
-				if(height < H_in - 2)
-					asm volatile("vmacc.vx v2, %0, v6"  ::"r"(shift));
-				if(height < H_in - 3)
-					asm volatile("vmacc.vx v3, %0, v7"  ::"r"(shift));
 					
 					
-				asm volatile (".byte 0x57, 0x70, 0x40, 0xA0");
-				
-           	// Row 0
-				asm volatile("vmul.vx  v12, v0, %0" ::"r"(k0));
-				asm volatile("vmul.vx  v10, v0, %0" ::"r"(k1));
-				
-				if(channels % 2 > 0)
-					asm volatile("vmacc.vx v8, %0, v0" ::"r"(k2));
-				else
-					asm volatile("vmul.vx v8,  v0, %0" ::"r"(k2));	
+				// Row 0		
+				if(channels > 0){
+					asm volatile("vmacc.vx v28, %0, v0" ::"r"(k0));
+					asm volatile("vmacc.vx v27, %0, v0" ::"r"(k1));
+					asm volatile("vmacc.vx v26, %0, v0" ::"r"(k2));
+				}
+				else{
+					asm volatile("vmul.vx v28,  v0, %0" ::"r"(k0));		
+					asm volatile("vmul.vx v27,  v0, %0" ::"r"(k1));	
+					asm volatile("vmul.vx v26,  v0, %0" ::"r"(k2));	
+					
+					asm volatile("vadd.vv  v26, v26, v30");
+					asm volatile("vadd.vv  v27, v27, v31");
+				}		
+
 					
 				asm volatile("vslidedown.vi v0, v0, 1");						
 				
 				// Row 1
 				if(height < H_in - 1){
 
-					asm volatile("vmul.vx  v14, v1, %0" ::"r"(k0));
-					asm volatile("vmacc.vx v12, %0, v1" ::"r"(k1));
-					asm volatile("vmacc.vx v10, %0, v1" ::"r"(k2));
+					if(channels > 0)
+						asm volatile("vmacc.vx v29, %0, v1" ::"r"(k0));
+					else
+						asm volatile("vmul.vx v29,  v1, %0" ::"r"(k0));
+						
+					asm volatile("vmacc.vx v28, %0, v1" ::"r"(k1));
+					asm volatile("vmacc.vx v27, %0, v1" ::"r"(k2));
 					
 					asm volatile("vslidedown.vi v1, v1, 1");
 				}
 
 				// Row 2
 				if(height < H_in - 2){
-					asm volatile("vmul.vx  v16, v2, %0" ::"r"(k0));
+					
+					if(channels > 0)
+						asm volatile("vmacc.vx v30, %0, v2" ::"r"(k0));
+					else
+						asm volatile("vmul.vx v30,  v2, %0" ::"r"(k0));
 							
-					asm volatile("vmacc.vx v14, %0, v2" ::"r"(k1));
-					asm volatile("vmacc.vx v12, %0, v2" ::"r"(k2));
+					asm volatile("vmacc.vx v29, %0, v2" ::"r"(k1));
+					asm volatile("vmacc.vx v28, %0, v2" ::"r"(k2));
 						
 					asm volatile("vslidedown.vi v2, v2, 1");
 				}
@@ -352,13 +437,13 @@ uint8_t shift = 16;
 				// Row 3
 				if(height < H_in - 3){
 				
-					if(channels % 2 > 0) 
-						asm volatile("vmacc.vx v18, %0, v3" ::"r"(k0));
+					if(channels % 42 > 0) 
+						asm volatile("vmacc.vx v31, %0, v3" ::"r"(k0));
 					else
-						asm volatile("vmul.vx  v18, v3, %0" ::"r"(k0));
+						asm volatile("vmul.vx  v31, v3, %0" ::"r"(k0));
 								
-					asm volatile("vmacc.vx v16, %0, v3" ::"r"(k1));
-					asm volatile("vmacc.vx v14, %0, v3" ::"r"(k2));
+					asm volatile("vmacc.vx v30, %0, v3" ::"r"(k1));
+					asm volatile("vmacc.vx v29, %0, v3" ::"r"(k2));
 						
 					asm volatile("vslidedown.vi v3, v3, 1");	
 				}
@@ -366,164 +451,94 @@ uint8_t shift = 16;
 				k0 = f_loop[1]; 
 				k1 = f_loop[4];
 				k2 = f_loop[7];
-				
-				// LOCAL ACC
-				if(channels > 0){
-					
-					if(height < H_in - 2)
-						asm volatile("vwadd.wv v24, v24, v12");
-					if(height < H_in - 3)
-						asm volatile("vwadd.wv v26, v26, v14");
-							
-					}
-				else{
-				
-					if(height < H_in - 2)
-						asm volatile("vwadd.vx v24, v12, zero");
-					if(height < H_in - 3)
-						asm volatile("vwadd.vx v26, v14, zero");		
-									
 						
-				}
-				
-				
 				
 				// Row 0
-				asm volatile("vmul.vx  v12, v0, %0" ::"r"(k0));
-				asm volatile("vmacc.vx v10, %0, v0" ::"r"(k1));
-				asm volatile("vmacc.vx v8,  %0, v0" ::"r"(k2));
+				asm volatile("vmacc.vx v28, %0, v0" ::"r"(k0));
+				asm volatile("vmacc.vx v27, %0, v0" ::"r"(k1));
+				asm volatile("vmacc.vx v26,  %0, v0" ::"r"(k2));
 					
 				asm volatile("vslidedown.vi v0, v0, 1");						
 				
 				// Row 1
 				if(height < H_in - 1){
 
-					asm volatile("vmul.vx  v14, v1, %0" ::"r"(k0));
-					asm volatile("vmacc.vx v12, %0, v1" ::"r"(k1));
-					asm volatile("vmacc.vx v10, %0, v1" ::"r"(k2));
+					asm volatile("vmacc.vx v29, %0, v1" ::"r"(k0));
+					asm volatile("vmacc.vx v28, %0, v1" ::"r"(k1));
+					asm volatile("vmacc.vx v27, %0, v1" ::"r"(k2));
 					
 					asm volatile("vslidedown.vi v1, v1, 1");
 				}
 
 				// Row 2
 				if(height < H_in - 2){
-					asm volatile("vmacc.vx v16, %0, v2" ::"r"(k0));
-					asm volatile("vmacc.vx v14, %0, v2" ::"r"(k1));
-					asm volatile("vmacc.vx v12, %0, v2" ::"r"(k2));
+					asm volatile("vmacc.vx v30, %0, v2" ::"r"(k0));
+					asm volatile("vmacc.vx v29, %0, v2" ::"r"(k1));
+					asm volatile("vmacc.vx v28, %0, v2" ::"r"(k2));
 						
 					asm volatile("vslidedown.vi v2, v2, 1");
 				}
 					
 				// Row 3
 				if(height < H_in - 3){
-					asm volatile("vmacc.vx v18, %0, v3" ::"r"(k0));
-					asm volatile("vmacc.vx v16, %0, v3" ::"r"(k1));
-					asm volatile("vmacc.vx v14, %0, v3" ::"r"(k2));
+					asm volatile("vmacc.vx v31, %0, v3" ::"r"(k0));
+					asm volatile("vmacc.vx v30, %0, v3" ::"r"(k1));
+					asm volatile("vmacc.vx v29, %0, v3" ::"r"(k2));
 						
 					asm volatile("vslidedown.vi v3, v3, 1");	
 				}
 				
 				k0 = f_loop[2]; 
 				k1 = f_loop[5];
-				k2 = f_loop[8];
-				
-					
-				if(height < H_in - 2)
-					asm volatile("vwadd.wv v24, v24, v12");
-				if(height < H_in - 3)
-						asm volatile("vwadd.wv v26, v26, v14");
-				
+				k2 = f_loop[8];			
 				
 				
 				
 				// Row 0
-				asm volatile("vmul.vx  v12, v0, %0" ::"r"(k0));
-				asm volatile("vmacc.vx v10, %0, v0" ::"r"(k1));
-				asm volatile("vmacc.vx v8,  %0, v0" ::"r"(k2));						
+				asm volatile("vmacc.vx v28, %0, v0" ::"r"(k0));
+				asm volatile("vmacc.vx v27, %0, v0" ::"r"(k1));
+				asm volatile("vmacc.vx v26,  %0, v0" ::"r"(k2));						
 				
 				// Row 1
 				if(height < H_in - 1){
 
-					asm volatile("vmul.vx  v14, v1, %0" ::"r"(k0));
-					asm volatile("vmacc.vx v12, %0, v1" ::"r"(k1));
-					asm volatile("vmacc.vx v10, %0, v1" ::"r"(k2));
+					asm volatile("vmacc.vx v29, %0, v1" ::"r"(k0));
+					asm volatile("vmacc.vx v28, %0, v1" ::"r"(k1));
+					asm volatile("vmacc.vx v27, %0, v1" ::"r"(k2));
 
 				}
 
 				// Row 2
 				if(height < H_in - 2){
-					asm volatile("vmacc.vx v16, %0, v2" ::"r"(k0));	
-					asm volatile("vmacc.vx v14, %0, v2" ::"r"(k1));
-					asm volatile("vmacc.vx v12, %0, v2" ::"r"(k2));
+					asm volatile("vmacc.vx v30, %0, v2" ::"r"(k0));	
+					asm volatile("vmacc.vx v29, %0, v2" ::"r"(k1));
+					asm volatile("vmacc.vx v28, %0, v2" ::"r"(k2));
 
 				}
 					
 				// Row 3
 				if(height < H_in - 3){
-					asm volatile("vmacc.vx v18, %0, v3" ::"r"(k0));
-					asm volatile("vmacc.vx v16, %0, v3" ::"r"(k1));
-					asm volatile("vmacc.vx v14, %0, v3" ::"r"(k2));
+					asm volatile("vmacc.vx v31, %0, v3" ::"r"(k0));
+					asm volatile("vmacc.vx v30, %0, v3" ::"r"(k1));
+					asm volatile("vmacc.vx v29, %0, v3" ::"r"(k2));
 	
-				}
-					
-					
-				if(height < H_in - 2)
-					asm volatile("vwadd.wv v24, v24, v12");
-				if(height < H_in - 3)
-						asm volatile("vwadd.wv v26, v26, v14");
-
-				
-			if(channels > 0){
-				if(height < H_in - 1)
-					asm volatile("vwadd.wv v22, v22, v10");
-				if(height < H_in - 4)
-					asm volatile("vwadd.wv v28, v28, v16");
+				}			
 			}
-			else{
-				
-					
-				asm volatile("vwadd.wx v20, v28, zero");
-					
-				if(height < H_in - 1)
-					asm volatile("vwadd.wv v22, v30, v10");					
-				
-				if(height < H_in - 4)
-					asm volatile("vwadd.vx v28, v16, zero");		
-				
-			}
-				
-			if((channels % 2 == 1) || (channels == ((C_in >> 1) - 1))){
-				if(channels > 1){ 
-												
-					asm volatile("vwadd.wv v20, v20, v8");
-					
-					if(height < H_in - 5)
-						asm volatile("vwadd.wv v30, v30, v18");
-				}
-				else{
-						
-					asm volatile("vwadd.wv v20, v20, v8");
-				
-					if(height < H_in - 5)
-						asm volatile("vwadd.vx v30, v18, zero");
-				}	
-			}
-		}
 			
-		asm volatile("vsetvli zero, %0, e16, m2, ta, ma" ::"r"(vlen_out));
+		asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen_out));
 			
 		i_ += 4*W_in;
 			
-		asm volatile("vse16.v v20, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
+		asm volatile("vse16.v v26, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
 			
 		if(height < H_in - 1)
-			asm volatile("vse16.v v22, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
+			asm volatile("vse16.v v27, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
 		
 		if(height < H_in - 2)
-			asm volatile("vse16.v v24, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
+			asm volatile("vse16.v v28, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
 				
 		if(height < H_in - 3)
-			asm volatile("vse16.v v26, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));		
+			asm volatile("vse16.v v29, (%0); add %0, %0, %1" : "+&r" (o_) : "r"(ldo));
 
 		}
 	}
@@ -551,8 +566,6 @@ uint16_t *f_loop = f_packed;
 	
 int8_t *f_ = f_ptr;
 
-
-
 	// PACKING THE FILTER
 	for(int channels = 0 ; channels < ch_loop ; channels ++){
 
@@ -564,15 +577,21 @@ int8_t *f_ = f_ptr;
 		asm volatile("vle8.v v1, (%0); addi %0, %0, 9" : "+&r" (f_));
 		asm volatile("vle8.v v2, (%0); addi %0, %0, 9" : "+&r" (f_));
 		
+		
+		//vwpack.v.v v0, v1, v2
+		asm volatile (".byte 0x57, 0x20, 0x11, 0xe6");
+		
+		/*
 		asm volatile("vsll.vi v2,  v2,  4");
 		
 		asm volatile("vwmul.vx v4, v2, %0" ::"r"(shift));
 		
 		asm volatile("vwadd.wv v3, v4, v1");
+		*/
 		
 		asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(ldf));
 
-		asm volatile("vse16.v v3, (%0); addi %0, %0, 18" : "+&r"(f_loop));
+		asm volatile("vse16.v v0, (%0); addi %0, %0, 18" : "+&r"(f_loop));
 	}
 	
 	for (int width = 0 ; width < W_in - 2 ; width += VLEN_MF2_OUT) // IF CONVOLUTION NEED TO BE TILED (C > VLEN_WIDE)
@@ -592,10 +611,10 @@ int8_t *f_ = f_ptr;
 		
 		// helper variables
 		uint16_t k0, k1, k2;
+		
+		asm volatile (".byte 0x57, 0x70, 0x80, 0xA0");
 
 		for(int channels = 0 ; channels < ch_loop ; channels ++){
-		
-			asm volatile (".byte 0x57, 0x70, 0x00, 0xA0");
 		
 			i__ = i_ + 2 * channels * H_in * W_in;
 		
@@ -609,22 +628,25 @@ int8_t *f_ = f_ptr;
 			k0 = f_loop[0]; 
 			k1 = f_loop[3];
 			
-			asm volatile("vsll.vi v1,  v1,  4");
+			/*asm volatile("vsll.vi v1,  v1,  4");
 			asm volatile("vsll.vi v3,  v3,  4");
 			
 			asm volatile("vwmul.vx  v0, v1, %0" ::"r"(shift));
-			asm volatile("vwmul.vx  v2, v3, %0" ::"r"(shift));
+			asm volatile("vwmul.vx  v2, v3, %0" ::"r"(shift));*/
 			
 			asm volatile("vle8.v v5, (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
 			asm volatile("vle8.v v7, (%0)"                 : "+&r" (i__));
 			
 			// PACKING 2 8b data into 1 16b register (with 8b interval)
 			
-			asm volatile("vwadd.wv v0, v0, v5");
-			asm volatile("vwadd.wv v2, v2, v7");
+			/*asm volatile("vwadd.wv v0, v0, v5");
+			asm volatile("vwadd.wv v2, v2, v7");*/
 			
-			
-			asm volatile (".byte 0x57, 0x70, 0x80, 0xA0");
+			//vwpack.v.v v0, v5, v1
+			asm volatile (".byte 0x57, 0xa0, 0x50, 0xe6");
+			//vwpack.v.v v2, v7, v3
+			asm volatile (".byte 0x57, 0xa1, 0x71, 0xe6");
+
 			
 			asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen));
 			
@@ -692,31 +714,44 @@ int8_t *f_ = f_ptr;
 				i__ = i_ + (2 * channels + 1) * H_in * W_in;
 	
 				
-				asm volatile("vsll.vi v1,  v1,  4");
-				if(height < H_in - 1)
-					asm volatile("vsll.vi v3,  v3,  4");
-				if(height < H_in - 2)
-					asm volatile("vsll.vi v5,  v5,  4");
-				if(height < H_in - 3)
-					asm volatile("vsll.vi v7,  v7,  4");
+				//asm volatile("vsll.vi v1,  v1,  4");
+				//if(height < H_in - 1)
+				//	asm volatile("vsll.vi v3,  v3,  4");
+				//if(height < H_in - 2)
+				//	asm volatile("vsll.vi v5,  v5,  4");
+				//if(height < H_in - 3)
+				//	asm volatile("vsll.vi v7,  v7,  4");
 					
 				
-				asm volatile("vwmul.vx  v0, v1, %0" ::"r"(shift));
-				if(height < H_in - 1)
-					asm volatile("vwmul.vx  v2, v3, %0" ::"r"(shift));
-				if(height < H_in - 2)
-					asm volatile("vwmul.vx  v4, v5, %0" ::"r"(shift));
-				if(height < H_in - 3)
-					asm volatile("vwmul.vx  v6, v7, %0" ::"r"(shift));	
-					
+				//asm volatile("vwmul.vx  v0, v1, %0" ::"r"(shift));
+				//if(height < H_in - 1)
+				//	asm volatile("vwmul.vx  v2, v3, %0" ::"r"(shift));
+				//if(height < H_in - 2)
+				//	asm volatile("vwmul.vx  v4, v5, %0" ::"r"(shift));
+				//if(height < H_in - 3)
+				//	asm volatile("vwmul.vx  v6, v7, %0" ::"r"(shift));	
 				
-				asm volatile("vle8.v v1,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+				
+				asm volatile("vle8.v v21,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
 				if(height < H_in - 1)
-					asm volatile("vle8.v v3,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+					asm volatile("vle8.v v23,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
 				if(height < H_in - 2)
-					asm volatile("vle8.v v5,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
+					asm volatile("vle8.v v25,  (%0); add %0, %0, %1" : "+&r" (i__) : "r"(ldi));
 				if(height < H_in - 3)
-					asm volatile("vle8.v v7,  (%0)"                 : "+&r" (i__));
+					asm volatile("vle8.v v27,  (%0)"                 : "+&r" (i__));
+					
+				//vwpack.v.v v0, v21, v1
+				asm volatile (".byte 0x57, 0xa0, 0x50, 0xe7");
+				if(height < H_in - 1)
+					//vwpack.v.v v2, v23, v3
+					asm volatile (".byte 0x57, 0xa1, 0x71, 0xe7");
+				if(height < H_in - 2)
+					//vwpack.v.v v4, v25, v5
+					asm volatile (".byte 0x57, 0xa2, 0x92, 0xe7");
+				if(height < H_in - 3)
+					//vwpack.v.v v6, v27, v7
+					asm volatile (".byte 0x57, 0xa3, 0xb3, 0xe7");
+
 
 				// PACKING 2 8b data into 1 16b register (with 8b interval)
 				
@@ -724,13 +759,14 @@ int8_t *f_ = f_ptr;
 				k1 = f_loop[3];
 				k2 = f_loop[6];
 				
-				asm volatile("vwadd.wv v0, v0, v1");
-				if(height < H_in - 1)
-					asm volatile("vwadd.wv v2, v2, v3");
-				if(height < H_in - 2)
-					asm volatile("vwadd.wv v4, v4, v5");
-				if(height < H_in - 3)
-					asm volatile("vwadd.wv v6, v6, v7");
+				//asm volatile("vwadd.wv v0, v0, v1");
+				//if(height < H_in - 1)
+				//	asm volatile("vwadd.wv v2, v2, v3");
+				//if(height < H_in - 2)
+				//	asm volatile("vwadd.wv v4, v4, v5");
+				//if(height < H_in - 3)
+				//	asm volatile("vwadd.wv v6, v6, v7");
+				
 
 				asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen));
 					
@@ -852,7 +888,6 @@ int8_t *f_ = f_ptr;
 					asm volatile("vmacc.vx v14, %0, v6" ::"r"(k2));
 				}	
 			}
-			
 			
 			
 			asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen_out));
@@ -2941,8 +2976,6 @@ int8_t *f_ = f_ptr;
 	}
 }
 
-
-
 void ulppack_conv2d_vec_3x3_A3W3(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out){
 
 const uint64_t ldo = (W_in - F + 1) << 1;
@@ -2953,7 +2986,7 @@ uint64_t vlen;
 
 int64_t ch_loop = (C_in >> 1);
 
-uint16_t shift = 256;
+uint16_t shift = 16;
 	
 
 const uint16_t f_packed[F * F * ch_loop];
@@ -2975,11 +3008,12 @@ int8_t *f_ = f_ptr;
 		asm volatile("vle8.v v1, (%0); addi %0, %0, 9" : "+&r" (f_));
 		asm volatile("vle8.v v2, (%0); addi %0, %0, 9" : "+&r" (f_));
 		
+		asm volatile("vsll.vi v2,  v2,  4");
+		
 		asm volatile("vwmul.vx v4, v2, %0" ::"r"(shift));
 		
 		asm volatile("vwadd.wv v3, v4, v1");
 		
-
 		asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(ldf));
 
 		asm volatile("vse16.v v3, (%0); addi %0, %0, 18" : "+&r"(f_loop));
@@ -3005,6 +3039,8 @@ int8_t *f_ = f_ptr;
 
 		for(int channels = 0 ; channels < ch_loop ; channels ++){
 		
+			i__ = i_ + 2 * channels * H_in * W_in;
+		
 			asm volatile("vsetvli zero, %0, e8, mf2, ta, ma" ::"r"(vlen));
 			
 			f_loop = f_packed + channels * F * F;
@@ -3014,6 +3050,9 @@ int8_t *f_ = f_ptr;
 			
 			k0 = f_loop[0]; 
 			k1 = f_loop[3];
+			
+			asm volatile("vsll.vi v1,  v1,  4");
+			asm volatile("vsll.vi v3,  v3,  4");
 			
 			asm volatile("vwmul.vx  v0, v1, %0" ::"r"(shift));
 			asm volatile("vwmul.vx  v2, v3, %0" ::"r"(shift));
@@ -3034,10 +3073,10 @@ int8_t *f_ = f_ptr;
 			asm volatile("vmul.vx v6,  v2, %0" :: "r"(k0));
 				
 				
+				
 			asm volatile("vslidedown.vi v0, v0, 1");
 				
 			asm volatile("vmacc.vx v4,   %0, v2" ::"r"(k1));
-				
 			
 			k0 = f_loop[1]; 
 			k1 = f_loop[4];
@@ -3051,11 +3090,8 @@ int8_t *f_ = f_ptr;
 			else
 				asm volatile("vsrl.vi v28, v4,  8");
 				
-				
-				
-				
 
-         asm volatile("vmacc.vx v4,   %0, v0" ::"r"(k0));
+         asm volatile("vmul.vx v4,  v0, %0" :: "r"(k0));
          asm volatile("vmacc.vx v6,   %0, v2" ::"r"(k0));
 					
 			asm volatile("vslidedown.vi v0, v0, 1");
@@ -3073,28 +3109,24 @@ int8_t *f_ = f_ptr;
 			}
 			else
 				asm volatile("vsrl.vi v30, v6,  8");
-			
+				
 			asm volatile("vsrl.vi v4,  v4,  8");
 			asm volatile("vadd.vv v28, v28, v4");
-			
-			
-			
 				
 
-         asm volatile("vmacc.vx v4,   %0, v0" ::"r"(k0));
-         asm volatile("vmacc.vx v6,   %0, v2" ::"r"(k0));
+         asm volatile("vmul.vx v4,  v0, %0" :: "r"(k0));
+         asm volatile("vmul.vx v6,  v2, %0" :: "r"(k0));
 					
 			asm volatile("vmacc.vx v4,   %0, v2" ::"r"(k1));
 			
 			asm volatile("vsrl.vi v4,  v4,  8");
-			asm volatile("vadd.vv v30, v30, v4");
+			asm volatile("vadd.vv v28, v28, v4");
 			
 			asm volatile("vsrl.vi v6,  v6,  8");	
 			asm volatile("vadd.vv v30, v30, v6");
-
 			
-			i__ = i_ + 2 * channels * H_in * W_in;
 		}
+		
 		
 		i_ += 2 * W_in;
 		
@@ -3116,7 +3148,18 @@ int8_t *f_ = f_ptr;
 					asm volatile("vle8.v v7, (%0)"                 : "+&r" (i__));
 					
 				i__ = i_ + (2 * channels + 1) * H_in * W_in;
+
 	
+				
+				asm volatile("vsll.vi v1,  v1,  4");
+				if(height < H_in - 1)
+					asm volatile("vsll.vi v3,  v3,  4");
+				if(height < H_in - 2)
+					asm volatile("vsll.vi v5,  v5,  4");
+				if(height < H_in - 3)
+					asm volatile("vsll.vi v7,  v7,  4");
+					
+				
 				asm volatile("vwmul.vx  v0, v1, %0" ::"r"(shift));
 				if(height < H_in - 1)
 					asm volatile("vwmul.vx  v2, v3, %0" ::"r"(shift));
@@ -3152,20 +3195,19 @@ int8_t *f_ = f_ptr;
 				asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen));
 					
 				asm volatile("vmul.vx  v12, v0, %0" ::"r"(k0));
-				
-				if((channels % 2) > 0)
-					asm volatile("vmacc.vx v10, %0, v0" ::"r"(k1));
-				else
-					asm volatile("vmul.vx  v10, v0, %0" ::"r"(k1));
-				
-				if((channels % 4) > 0)
-					asm volatile("vmacc.vx v8, %0, v0" ::"r"(k2));
-				else
-					asm volatile("vmul.vx  v8, v0, %0" ::"r"(k2));
-				
-				
+				asm volatile("vmul.vx  v10, v0, %0" ::"r"(k1));
+				asm volatile("vmul.vx  v8, v0, %0" ::"r"(k2));
 				
 				asm volatile("vslidedown.vi v0, v0, 1");
+				
+				if(channels > 0){
+					asm volatile("vsrl.vi v8, v8, 8");
+					asm volatile("vadd.vv v20, v20, v8");
+				}
+				else{
+					asm volatile("vsrl.vi v8, v8, 8");
+					asm volatile("vadd.vv v20, v28, v8");
+				}
 				
 				if(height < H_in - 1){
 					asm volatile("vmul.vx  v14, v2, %0" ::"r"(k0));
@@ -3173,33 +3215,57 @@ int8_t *f_ = f_ptr;
 					asm volatile("vmacc.vx v10, %0, v2" ::"r"(k2));
 					
 					asm volatile("vslidedown.vi v2, v2, 1");
+					
+					if(channels > 0){
+						asm volatile("vsrl.vi v10, v10, 8");
+						asm volatile("vsrl.vi v12, v12, 8");
+						
+						asm volatile("vadd.vv v22, v22, v10");
+						asm volatile("vadd.vv v24, v24, v12");
+					}
+					else{
+						asm volatile("vsrl.vi v10, v10, 8");
+						asm volatile("vsrl.vi v24, v12, 8");
+						
+						asm volatile("vadd.vv v22, v30, v10");
+					}
+					
 				}
 						
 				if(height < H_in - 2){
-				
-					if((channels % 2) > 0)
-						asm volatile("vmacc.vx v16, %0, v4" ::"r"(k0));
-					else
-						asm volatile("vmul.vx  v16, v4, %0" ::"r"(k0));
-						
-						
-						
+
+					asm volatile("vmul.vx  v16, v4, %0" ::"r"(k0));
 					asm volatile("vmacc.vx v14, %0, v4" ::"r"(k1));
-					asm volatile("vmacc.vx v12, %0, v4" ::"r"(k2));
+					asm volatile("vmul.vx  v12, v4, %0" ::"r"(k2));
 						
 					asm volatile("vslidedown.vi v4, v4, 1");
+					
+					if(channels > 0){
+						asm volatile("vsrl.vi v14, v14, 8");
+						asm volatile("vadd.vv v26, v26, v14");
+					}
+					else{
+						asm volatile("vsrl.vi v26, v14, 8");
+					}
+					
 				}	
 				if(height < H_in - 3){
 					
-					if((channels % 4) > 0)
-						asm volatile("vmacc.vx v18, %0, v6" ::"r"(k0));
-					else
-						asm volatile("vmul.vx  v18, v6, %0" ::"r"(k0));
-						
+					asm volatile("vmul.vx  v18, v6, %0" ::"r"(k0));
 					asm volatile("vmacc.vx v16, %0, v6" ::"r"(k1));
-					asm volatile("vmacc.vx v14, %0, v6" ::"r"(k2));
+					asm volatile("vmul.vx  v14, v6, %0" ::"r"(k2));
 							
 					asm volatile("vslidedown.vi v6, v6, 1");
+					
+					if(channels > 0){
+						asm volatile("vsrl.vi v16, v16, 8");
+						asm volatile("vadd.vv v28, v28, v16");
+					}
+					else{
+						asm volatile("vsrl.vi v28, v16, 8");
+					}
+					
+					
 				}
 				
 				k0 = f_loop[1]; 
@@ -3208,25 +3274,41 @@ int8_t *f_ = f_ptr;
 				
 				
            	asm volatile("vmacc.vx v12, %0, v0" ::"r"(k0));
-            asm volatile("vmacc.vx v10, %0, v0" ::"r"(k1));
-            asm volatile("vmacc.vx v8,  %0, v0" ::"r"(k2));
+            asm volatile("vmul.vx  v10, v0, %0" ::"r"(k1));
+            asm volatile("vmul.vx  v8,  v0, %0" ::"r"(k2));
 				
 				asm volatile("vslidedown.vi v0, v0, 1");
 				
+				asm volatile("vsrl.vi v12, v12, 8");
+				asm volatile("vadd.vv v24, v24, v12");
+				
+				
+				
 				if(height < H_in - 1){
 					asm volatile("vmacc.vx v14, %0, v2" ::"r"(k0));
-					asm volatile("vmacc.vx v12, %0, v2" ::"r"(k1));
+					asm volatile("vmul.vx  v12, v2, %0" ::"r"(k1));
 					asm volatile("vmacc.vx v10, %0, v2" ::"r"(k2));
 					
 					asm volatile("vslidedown.vi v2, v2, 1");
+					
+					asm volatile("vsrl.vi v10, v10, 8");
+					asm volatile("vsrl.vi v14, v14, 8");
+						
+					asm volatile("vadd.vv v22, v22, v10");
+					asm volatile("vadd.vv v26, v26, v14");
+					
 				}
 						
 				if(height < H_in - 2){
-					asm volatile("vmacc.vx v16, %0, v4" ::"r"(k0));
-					asm volatile("vmacc.vx v14, %0, v4" ::"r"(k1));
+					asm volatile("vmul.vx  v16, v4, %0" ::"r"(k0));
+					asm volatile("vmul.vx  v14, v4, %0" ::"r"(k1));
 					asm volatile("vmacc.vx v12, %0, v4" ::"r"(k2));
 						
 					asm volatile("vslidedown.vi v4, v4, 1");
+					
+					asm volatile("vsrl.vi v12, v12, 8");
+					asm volatile("vadd.vv v24, v24, v12");
+					
 				}
 						
 				if(height < H_in - 3){
@@ -3235,6 +3317,24 @@ int8_t *f_ = f_ptr;
 					asm volatile("vmacc.vx v14, %0, v6" ::"r"(k2));
 							
 					asm volatile("vslidedown.vi v6, v6, 1");
+					
+					if(channels > 0){
+						asm volatile("vsrl.vi v14, v14, 8");
+						asm volatile("vsrl.vi v16, v16, 8");
+						asm volatile("vsrl.vi v18, v18, 8");
+						
+						asm volatile("vadd.vv v26, v26, v14");
+						asm volatile("vadd.vv v28, v28, v16");
+						asm volatile("vadd.vv v30, v30, v18");
+					}
+					else{
+						asm volatile("vsrl.vi v14, v14, 8");
+						asm volatile("vsrl.vi v16, v16, 8");
+						asm volatile("vsrl.vi v30, v18, 8");
+						
+						asm volatile("vadd.vv v26, v26, v14");
+						asm volatile("vadd.vv v28, v28, v16");
+					}
 				}
 
 				k0 = f_loop[2]; 
@@ -3242,100 +3342,55 @@ int8_t *f_ = f_ptr;
 				k2 = f_loop[8];
 				
 				
-           	asm volatile("vmacc.vx v12, %0, v0" ::"r"(k0));
-            asm volatile("vmacc.vx v10, %0, v0" ::"r"(k1));
-            asm volatile("vmacc.vx v8,  %0, v0" ::"r"(k2));
+				asm volatile("vmul.vx  v12, v0, %0" ::"r"(k0));
+				asm volatile("vmul.vx  v10, v0, %0" ::"r"(k1));
+				asm volatile("vmacc.vx v8,  %0, v0" ::"r"(k2));
+			
 				
 				if(height < H_in - 1){
-					asm volatile("vmacc.vx v14, %0, v2" ::"r"(k0));
+					asm volatile("vmul.vx  v14, v2, %0" ::"r"(k0));
 					asm volatile("vmacc.vx v12, %0, v2" ::"r"(k1));
 					asm volatile("vmacc.vx v10, %0, v2" ::"r"(k2));
+					
+					asm volatile("vsrl.vi v10, v10, 8");
+					asm volatile("vsrl.vi v12, v12, 8");
+						
+					asm volatile("vadd.vv v22, v22, v10");
+					asm volatile("vadd.vv v24, v24, v12");
+					
+					
 				}
+				
+				// accumulation after to avoid conflicts and delays in the pipeline
+				
+				asm volatile("vsrl.vi v8, v8, 8");
+				asm volatile("vadd.vv v20, v20, v8");
 						
 				if(height < H_in - 2){
-					asm volatile("vmacc.vx v16, %0, v4" ::"r"(k0));
+					asm volatile("vmul.vx  v16, v4, %0" ::"r"(k0));
 					asm volatile("vmacc.vx v14, %0, v4" ::"r"(k1));
-					asm volatile("vmacc.vx v12, %0, v4" ::"r"(k2));
+					asm volatile("vmul.vx  v12, v4, %0" ::"r"(k2));
+					
+					asm volatile("vsrl.vi v14, v14, 8");
+					asm volatile("vsrl.vi v12, v12, 8");
+					
+					asm volatile("vadd.vv v26, v26, v14");
+					asm volatile("vadd.vv v24, v24, v12");
 				}
 						
 				if(height < H_in - 3){
-					asm volatile("vmacc.vx v18, %0, v6" ::"r"(k0));
+					asm volatile("vmul.vx  v18, v6, %0" ::"r"(k0));
 					asm volatile("vmacc.vx v16, %0, v6" ::"r"(k1));
-					asm volatile("vmacc.vx v14, %0, v6" ::"r"(k2));
-				}
-				
-				
-				if((channels % 4 == 3) || (channels == ch_loop - 1)){
-					if(channels > 3){
-						asm volatile("vsrl.vi v8, v8, 8");
-						if(height < H_in - 5)
-							asm volatile("vsrl.vi v18, v18, 8");
-							
-						asm volatile("vadd.vv v20, v20, v8");
-						if(height < H_in - 5)
-							asm volatile("vadd.vv v30, v30, v18");
-					}
-					else{
-						asm volatile("vsrl.vi v8, v8, 8");
-						if(height < H_in - 5)
-							asm volatile("vsrl.vi v30, v18, 8");
-							
-						asm volatile("vadd.vv v20, v29, v8");
-					}
-				}
-						
-				if((channels % 2 == 1) || (channels == ch_loop - 1)){
-					if(channels > 1){
-						if(height < H_in - 1)
-							asm volatile("vsrl.vi v10, v10, 8");
-						if(height < H_in - 4)
-							asm volatile("vsrl.vi v16, v16, 8");
-							
-						if(height < H_in - 1)
-							asm volatile("vadd.vv v22, v22, v10");
-						if(height < H_in - 4)
-							if(channels < ch_loop - 1)
-								asm volatile("vadd.vv v28, v28, v16");
-							else
-								asm volatile("vadd.vv v29, v28, v16");
-					}	
-					else{
-						if(height < H_in - 1)
-							asm volatile("vsrl.vi v10, v10, 8");
-						if(height < H_in - 4)
-							if(channels < ch_loop - 1)
-								asm volatile("vsrl.vi v28, v16, 8");
-							else
-								asm volatile("vsrl.vi v29, v16, 8");
-						if(height < H_in - 1)
-							if(height > 2)
-								asm volatile("vadd.vv v22, v30, v10");
-							else
-								asm volatile("vadd.vv v22, v31, v10");
-					}
-				}
-				
+					asm volatile("vmul.vx  v14, v6, %0" ::"r"(k2));
 					
-				if(channels > 0){
-					if(height < H_in - 2)
-						asm volatile("vsrl.vi v12, v12, 8");
-					if(height < H_in - 3)
-						asm volatile("vsrl.vi v14, v14, 8");
+					asm volatile("vsrl.vi v18, v18, 8");
+					asm volatile("vsrl.vi v16, v16, 8");
+					asm volatile("vsrl.vi v14, v14, 8");
+					
+					asm volatile("vadd.vv v30, v30, v18");
+					asm volatile("vadd.vv v28, v28, v16");
+					asm volatile("vadd.vv v26, v26, v14");
 
-									
-					if(height < H_in - 2)
-						asm volatile("vadd.vv v24, v24, v12");
-					if(height < H_in - 3)
-						asm volatile("vadd.vv v26, v26, v14");
-				}
-
-				else{
-						
-					if(height < H_in - 2)	
-						asm volatile("vsrl.vi v24, v12, 8");
-					if(height < H_in - 3)
-						asm volatile("vsrl.vi v26, v14, 8");
-						
 				}
 			}
 			asm volatile("vsetvli zero, %0, e16, m1, ta, ma" ::"r"(vlen_out));
@@ -3355,6 +3410,7 @@ int8_t *f_ = f_ptr;
 		}
 	}
 }
+
 
 
 

@@ -113,7 +113,7 @@ package ara_pkg;
 
   typedef enum logic [7:0] {
     // Arithmetic and logic instructions
-    VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR,
+    VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR, VPACK,
     // Fixed point
     VSADDU, VSADD, VSSUBU, VSSUB, VAADDU, VAADD, VASUBU, VASUB, VSSRL, VSSRA, VNCLIP, VNCLIPU,
     // Shifts,

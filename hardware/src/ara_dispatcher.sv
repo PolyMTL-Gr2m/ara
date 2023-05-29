@@ -529,6 +529,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                 // Decode based on the func6 field
                 unique case (insn.varith_type.func6)
                   6'b000000: ara_req_d.op = ara_pkg::VADD;
+                  6'b000001: ara_req_d.op = ara_pkg::VPACK;
                   6'b000010: ara_req_d.op = ara_pkg::VSUB;
                   6'b000100: ara_req_d.op = ara_pkg::VMINU;
                   6'b000101: ara_req_d.op = ara_pkg::VMIN;
@@ -1478,6 +1479,18 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                     ara_req_d.conversion_vs2 = OpQueueConversionZExt2;
                     ara_req_d.cvt_resize     = CVT_WIDE;
                   end
+                   
+                   
+                  6'b111001: begin // VWPACK PACKING INSTRUCTION for ULPPACK on wider destination register
+                    ara_req_d.op             = ara_pkg::VPACK;
+                    ara_req_d.emul           = next_lmul(vtype_q.vlmul);
+                    ara_req_d.vtype.vsew     = vtype_q.vsew.next();
+                    ara_req_d.conversion_vs1 = OpQueueConversionSExt2;
+                    ara_req_d.conversion_vs2 = OpQueueConversionSExt2;
+                    ara_req_d.cvt_resize     = CVT_WIDE;
+                  end
+                  
+                  
                   6'b111010: begin // VWMULSU
                     ara_req_d.op             = ara_pkg::VMUL;
                     ara_req_d.emul           = next_lmul(vtype_q.vlmul);

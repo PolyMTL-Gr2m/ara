@@ -140,7 +140,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
   typedef struct packed {
     logic       arith;
     logic       dir;
-    logic [5:0] amount;
+    logic [3:0] amount;
   } shift_t;
 
   logic signed_a, signed_b;
@@ -159,7 +159,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
   assign vxrm    = vxrm_i;
   assign vxsat_o = vxsat;
 
-  assign shift = vxsh_i;
+  assign shift = {vxsh_i[7:6], vxsh_i[3:0]};
 
   if (ElementWidth == EW64) begin: gen_p_mul_ew64
     for (genvar l = 0; l < 1; l++) begin: gen_mul

@@ -22,11 +22,11 @@
 
 #define VERIF
 
-#define PRECA_MAX	2
-#define PRECW_MAX	2
+#define PRECA_MAX	1
+#define PRECW_MAX	1
 
 #define F_MAX 		3		// Max size of the kernel F x F
-#define C_in 		6		// Number of input input_channels 
+#define C_in 		8		// Number of input input_channels 
 #define C_out		1		// Number of output_channels (or output input_channels C_out)
 #define I_MAX 		8		// Max H_in x W_in input size
 #define I_START	8		// Start input size
@@ -37,23 +37,45 @@ int8_t f_nhwc[F_MAX * F_MAX * C_in * C_out];
 
 
     int8_t i[512] = {
-        1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1,
-        1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0,
-        0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
-        0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0,
-        1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0,
-        1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0,
-        1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1,
-        0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0,
-        1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1,
-        1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0,
-        0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
-        0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0,
-        1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0,
-        1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0,
-        1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1,
-        0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0,
-        1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1,
+        1, 1, 0, 1, 1, 0, 0, 0,
+        1, 0, 1, 0, 1, 1, 1, 1,
+        1, 0, 0, 0, 0, 1, 1, 1,
+        1, 1, 0, 1, 0, 0, 0, 0,
+        0, 1, 1, 1, 1, 1, 0, 0,
+        0, 0, 1, 1, 1, 1, 1, 1,
+        0, 0, 0, 1, 1, 1, 0, 0,
+        0, 0, 1, 1, 1, 1, 1, 0,
+        
+        1, 0, 0, 1, 0, 1, 1, 1,
+        1, 1, 0, 0, 0, 1, 1, 0,
+        1, 1, 1, 1, 1, 0, 0, 0,
+        0, 0, 1, 1, 1, 0, 0, 0,
+        1, 0, 0, 1, 1, 1, 1, 0, 
+        1, 0, 0, 0, 1, 0, 1, 1,
+        0, 1, 0, 1, 1, 1, 1, 0, 
+        0, 0, 1, 0, 0, 1, 1, 0,
+        
+        1, 0, 0, 1, 1, 0, 0, 0,
+        1, 0, 1, 0, 1, 1, 1, 1,
+        1, 0, 0, 0, 0, 1, 1, 1, 
+        1, 1, 0, 1, 0, 0, 0, 0,
+        0, 1, 1, 1, 1, 1, 0, 0, 
+        0, 0, 1, 1, 1, 1, 1, 1,
+        0, 0, 0, 1, 1, 1, 0, 0, 
+        0, 0, 1, 1, 1, 1, 1, 0,
+        
+        1, 0, 0, 1, 0, 1, 1, 1, 
+        1, 1, 0, 0, 0, 1, 1, 0,
+        1, 0, 1, 1, 1, 0, 0, 0, 
+        0, 0, 1, 1, 1, 0, 0, 0,
+        1, 0, 0, 1, 1, 1, 1, 0, 
+        1, 0, 0, 0, 1, 0, 1, 1,
+        0, 1, 0, 1, 1, 1, 1, 0, 
+        0, 0, 1, 0, 0, 1, 1, 0,
+        
+        
+        1, 0, 0, 1, 1, 0, 0, 0, 
+        1, 0, 1, 0, 1, 1, 1, 1,
         1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0,
         0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1,
         0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0,
@@ -71,11 +93,59 @@ int8_t f_nhwc[F_MAX * F_MAX * C_in * C_out];
         0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0};
         
         
-    int8_t f[49*2] = {1, 0, 0, 
+    int8_t f[49*4] = {
+    							1, 0, 0, 
+    							1, 1, 1, 
+    							1, 0, 1, 
+    							
+    							0, 0, 0, 
+    							1, 0, 1, 
+    						 	1, 1, 0, 
+    						 	
+    						 	0, 1, 1, 
+    						 	0, 0, 0, 
+    						 	1, 0, 1,
+    						 	 
+    						 	0, 1, 1, 
+    						 	1, 1, 0, 
+    						 	1, 1, 1, 
+    						 	
+    						 	
+    						 	1, 1, 0, 
+    						 	0, 0, 0, 
+    						 	1, 1, 1, 
+    						 	
+    						 	1, 1, 1, 
+    						 	0, 1, 1, 
+    						 	1, 1, 0, 
+    						 	
+    						 	1, 1, 0, 
+    						 	1, 0, 0, 
+    						 	0, 1, 0,
+    						 	
+    					 		1, 1, 1, 
+    					 		1, 1, 1, 
+    					 		0, 1, 0, 
+    					 		
+    					 		
+    					 		
+    					 		0, 1, 1, 
+    					 		1, 1,	0, 
+    					 		0, 0, 1, 
+    					 		
+    					 		
+    					 		
+    					 		0, 1, 0, 
+    					 	1, 1, 1, 0, 0, 0, 0,
+    					 	1, 1, 1, 0, 0, 1, 1, 
+    					 	
+							1, 0, 0, 
     						1, 1, 1, 
     						1, 0, 1, 
     						
+
     						0, 0, 0, 
+
     						1, 0, 1, 
     						1, 1, 0, 
     						
@@ -92,8 +162,9 @@ int8_t f_nhwc[F_MAX * F_MAX * C_in * C_out];
     					 	1, 0, 0, 1, 1, 1, 1,
     					 	0, 0, 0, 1, 0, 1, 0, 
     					 	1, 1, 1, 0, 0, 0, 0,
-    					 	1, 1, 1, 0, 0, 1, 1  
+    					 	1, 1, 1, 0, 0, 1, 1,  
     					 	};
+
 
 
 
@@ -153,10 +224,10 @@ void init_tensor(int8_t *tensor, int64_t R, int64_t C, int64_t D, int precision)
 
             for (int c = 0; c < C; ++c)//column
             {
-                if(r < 2 || r > 2) // test purposes
+                if(r < 0 || r > 0 ) // test purposes
                     tensor[c + C * (r + d * R)] = 0;// seed % (limit + 1);
                 //else
-                 //   tensor[c + C * (r + d * R)] = 0;
+                    //tensor[c + C * (r + d * R)] = 0;
             }
         }
     }
@@ -171,12 +242,12 @@ void init_tensor(int8_t *tensor, int64_t R, int64_t C, int64_t D, int precision)
 
 
 int verify_tensor(int16_t *tensor1, int16_t *tensor2, int64_t height, int64_t width, int64_t channels) {
-  for (int h = 0; h < height; ++h)   //depth
-  	for (int w = 0; w < width; ++w)  //rows
-  	  for (int c = 0; c < channels; ++c)//column			
-  	    if (tensor1[w + width * (h + c * height)] != tensor2[w + width * (h + c * height)]){
-  	      printf("\nError: o[%d][%d][%d] = %d, instead of %d\n", channels, height, width,
-  	             tensor1[w + width * (h + c * height)], tensor2[w + width * (h + c * height)]);
+  for (int d = 0; d < channels; ++d)   //depth
+  	for (int r = 0; r < height; ++r)  //rows
+  	  for (int c = 0; c < width; ++c)//column
+  	    if (tensor1[c + channels * (r + d * height)] != tensor2[c + channels * (r + d * height)]) {
+  	      printf("Error: o[%d][%d][%d] = %ld, instead of %ld\n", d, r, c,
+  	             tensor1[c + channels * (r + d * height)], tensor2[c + channels * (r + d * height)]);
   	      return 1;
   	   }
 return 0;
@@ -213,7 +284,6 @@ void print_tensor_16_(uint16_t *tensor, uint64_t num_rows, uint64_t num_columns,
 
 
 int main() {
-
 
 
 printf("===============\n");
@@ -363,13 +433,12 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				int64_t runtime = get_timer();
 				float performance = 2.0 * C_out * C_in * F * F * (size - F + 1) * (size - F + 1) / runtime;
 				float utilization = 100 * performance / (256 / (precA * precW)) * NR_LANES; 
-			
-				if (1){//error != 0){
+				if (error != 0){
 					 printf("Fail.\n");
-					 printf("OUT NHWC\n");
+					 printf("OUT\n");
 					 print_tensor_16_(output, (height - F + 1), (width - F + 1), output_channels);
-					 printf("EXPECTED OUT NHWC\n");
-				    print_tensor_16_(golden_output_nhwc, (height - F + 1), (width - F + 1), output_channels);
+					 //printf("EXPECTED OUT NHWC\n");
+				    //print_tensor_16_(golden_output_nhwc, (height - F + 1), (width - F + 1), output_channels);
 					 printf("EXPECTED OUT\n");
 				    print_tensor_16_(golden_output, (height - F + 1), (width - F + 1), output_channels);
 				}
@@ -404,14 +473,14 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 #endif
 
 
-#define PRECA	1
-#define PRECW	1
+#define PRECA	2
+#define PRECW	2
 
 #define F 			3		// Max size of the kernel F x F
-#define C_in 		64		// Number of input input_channels 
+#define C_in 		512	// Number of input input_channels 
 #define C_out		1		// Number of output_channels (or output input_channels C_out)
-#define I_MAX 		224		// Max H_in x W_in input size
-#define I_START	224		// Start input size
+#define I_MAX 		14		// Max H_in x W_in input size
+#define I_START	14		// Start input size
 
 //int8_t i[I_MAX * I_MAX * C_in];
 
@@ -462,3 +531,4 @@ printf("====================\n");
 				  	 printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
 	}
 }
+

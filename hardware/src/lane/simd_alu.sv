@@ -361,6 +361,14 @@ module simd_alu import ara_pkg::*; import rvv_pkg::*; #(
                 res.w64[b] = (op_i == VSSUBU) ? (sub[63:0] >> 1) + r : $signed(sub[63:0]) >>> 1 + r;
               end
           endcase
+          
+        // ULPPACK packing instruction (only supported in 8-bit)
+        VPACK: unique case (vew_i)
+        		EW8  : for (int b = 0; b < 8; b++) res.w8 [b] = (opa.w8 [b] << 4) | opb.w8 [b];
+            EW16 : for (int b = 0; b < 4; b++) res.w16[b] = (opa.w16[b] << 8) | opb.w16[b];
+          endcase						//vs2  a    	vs1 b
+          
+          
 
         // Shift instructions
         VSLL: unique case (vew_i)

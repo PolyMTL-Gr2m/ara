@@ -14,7 +14,7 @@
 #endif
 
 
-//#define SPARQ
+#define SPARQ
 
 // MACRO to specify the max size of vector registers (in this code, we consider VLEN = 4096)
 
