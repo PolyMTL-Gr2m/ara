@@ -1,0 +1,1 @@
+set_property is_global_include true [get_files xcu280.svh]
