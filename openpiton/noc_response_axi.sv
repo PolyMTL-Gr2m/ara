@@ -78,7 +78,8 @@ module noc_response_axi #(
     // AXI Write Response Channel Signals
     output logic [AXI_RESP_WIDTH-1:0]              m_axi_bresp,
     output logic                                   m_axi_bvalid,
-    input  logic                                   m_axi_bready
+    input  logic                                   m_axi_bready,
+    output logic                                   previous_trans_complete
 );
 
 localparam LAST_TRANSFER_FLAG_WIDTH = 1; 
@@ -126,6 +127,9 @@ logic transaction_type_rd;
 logic transaction_fifo_empty;
 logic transaction_fifo_full; 
 
+
+assign previous_trans_complete = transaction_fifo_empty && rdata_fifo_empty;
+
 // fifo of storing flit status, for dealing with the input flit in order 
 sync_fifo #(
     .DSIZE(6),
@@ -143,7 +147,7 @@ sync_fifo #(
 );
 
 // decoder for indicate flit status (is input flit last transfer (beat) in current AXI trasanction, is the input flit valid data 16B or 8B, etc) 
-noc_response_axi_decoder(
+noc_response_axi_decoder noc_response_axi_decoder_ins(
     .current_flit_info (transaction_type_rd_data),
     .last_write_flit(last_write_flit), 
     .last_read_transfer(last_read_transfer),
@@ -188,16 +192,27 @@ always_comb begin
                                 (noc_in_count_f == 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA); 
 end 
 
-always_comb begin 
-    rdata_fifo_wdata = {valid_last_read_transfer, {noc_data_in[7:0], noc_data_in[15:8], noc_data_in[23:16], noc_data_in[31:24], 
-    noc_data_in[39:32], noc_data_in[47:40], noc_data_in[55:48], noc_data_in[63:56]}};
-    // rdata_fifo_wval = last_read_flit_16B ? (noc_in_count_f >= 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go: 
-    //                     last_read_flit_8B_first ? (noc_in_count_f == 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go:
-    //                     last_read_flit_8B_second ? (noc_in_count_f == 1) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go:
-    //                     0;
-    rdata_fifo_wval = read_size ? (noc_in_count_f >= 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go : 
-                        read_word_select ? (noc_in_count_f == 1) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go :
-                        (noc_in_count_f == 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go;
+if (AXI_DATA_WIDTH == 64) begin 
+    always_comb begin 
+        rdata_fifo_wdata = {valid_last_read_transfer, {<<8{noc_data_in}}};
+
+        rdata_fifo_wval = read_size ? (noc_in_count_f >= 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go : 
+                            read_word_select ? (noc_in_count_f == 1) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go :
+                            (noc_in_count_f == 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go;
+    end 
+end 
+else begin 
+    logic [63:0] first_word;
+    always_ff@(posedge clk or negedge rst_n) begin
+        if (!rst_n) first_word <= 0;
+        else if (noc_in_count_f == 0 && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go) first_word <= noc_data_in;
+        else first_word <= first_word; 
+    end 
+    always_comb begin 
+        rdata_fifo_wdata = {valid_last_read_transfer, {<<8{first_word, noc_data_in}}};
+
+        rdata_fifo_wval = (noc_in_count_f == 1) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go;
+    end 
 end 
 
 always_comb begin 
@@ -273,8 +288,9 @@ always_comb begin
 end 
 
 always_comb begin 
-    m_axi_rdata = m_axi_rvalid ? rdata_fifo_rdata[AXI_DATA_WIDTH - 1: 0] : 64'hca11_ab1e_badc_ab1e;
-    m_axi_rresp = m_axi_rvalid && m_axi_rready ? {AXI_RESP_WIDTH{1'b0}} : 2'b10;
+    //m_axi_rdata = m_axi_rvalid ? rdata_fifo_rdata[AXI_DATA_WIDTH - 1: 0] : 128'hca11_ab1e_badc_ab1e;
+    m_axi_rdata = rdata_fifo_rdata[AXI_DATA_WIDTH - 1: 0];
+    m_axi_rresp = {AXI_RESP_WIDTH{1'b0}};
     m_axi_rvalid = !rdata_fifo_empty;
     m_axi_rlast = m_axi_rvalid && m_axi_rready ? rdata_fifo_rdata[AXI_DATA_WIDTH] : 0;
 end 

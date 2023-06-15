@@ -22,158 +22,88 @@
 // ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-module axi_intf #(
-    parameter AxiDataWidth = 64, 
-    parameter AxiAddrWidth = 64
-)
-(
-
-    input logic clk, 
-    input logic rst_n,
-
-    // write address channel
-    input logic [AxiAddrWidth - 1:0] m_axi_awaddr, 
-    input logic [7:0] m_axi_awlen, 
-    input logic [2:0] m_axi_awsize, 
-    input logic [1:0] m_axi_awburst, 
-    input logic [3:0] m_axi_awcache,
-    input logic [4:0] m_axi_awid,
-    // handshake logic 
-    input logic       m_axi_awvalid, 
-    //output logic      m_axi_awready,
-    input logic      m_axi_awready, 
-
-    //write data channel
-    input logic [AxiDataWidth - 1:0] m_axi_wdata,
-    input logic [(AxiDataWidth/8) -1 :0] m_axi_wstrb,
-    input logic       m_axi_wlast, 
-    // handshake logic 
-    input logic       m_axi_wvalid, 
-    //output logic      m_axi_wready,
-    input logic      m_axi_wready, 
-
-    // write response channel
-    //output logic [1:0] m_axi_bresp,
-    input logic [1:0] m_axi_bresp,
-    input logic       m_axi_bready, 
-    //output logic      m_axi_bvalid,
-    input logic      m_axi_bvalid,
-
-    // read address channel 
-    input logic [AxiAddrWidth - 1:0] m_axi_araddr, 
-    input logic [7:0] m_axi_arlen, 
-    input logic [2:0] m_axi_arsize, 
-    input logic [1:0] m_axi_arburst, 
-    input logic [3:0] m_axi_arcache,
-    // handshake logic 
-    input logic       m_axi_arvalid, 
-    //output logic      m_axi_arready, 
-    input logic      m_axi_arready,
-
-    // read data channel 
-    // output logic [63:0] m_axi_rdata, 
-    // output logic [1:0] m_axi_rresp, 
-    // output logic       m_axi_rlast, 
-    input logic [AxiDataWidth - 1:0] m_axi_rdata, 
-    input logic [1:0] m_axi_rresp, 
-    input logic       m_axi_rlast,
-    input logic       m_axi_ruser, 
-    input logic   [4:0]    m_axi_rid, 
-
-    // handshake logic 
-    //output logic       m_axi_rvalid, 
-    input logic       m_axi_rvalid,
-    input logic       m_axi_rready
- );
-
-
-endmodule 
-
-
 module axi_noc_bridge #(
-    parameter AxiDataWidth = 64, 
-    parameter AxiAddrWidth = 64,
-    parameter AXI_LITE_DATA_WIDTH = 64, 
-    parameter AXI_LITE_ADDR_WIDTH = 64
+    parameter AXI_DATA_WIDTH = 64, 
+    parameter AXI_ADDR_WIDTH = 64
 )
 (
 
-    input logic clk, 
-    input logic rst_n,
+    input logic                                             clk, 
+    input logic                                             rst_n,
 
-    output logic                                           noc_valid_out,
-    output logic [`NOC_DATA_WIDTH-1:0]                 noc_data_out,
-    input  logic                                                       noc_ready_in,
+    output logic                                            noc_valid_out,
+    output logic [`NOC_DATA_WIDTH-1:0]                      noc_data_out,
+    input  logic                                            noc_ready_in,
    
-    input  logic                                                       noc_valid_in,
-    input  logic [`NOC_DATA_WIDTH-1:0]                 noc_data_in,
-    output logic                                               noc_ready_out,
+    input  logic                                            noc_valid_in,
+    input  logic [`NOC_DATA_WIDTH-1:0]                      noc_data_in,
+    output logic                                            noc_ready_out,
 
-    input  logic [`MSG_SRC_CHIPID_WIDTH-1:0]       src_chipid,
-    input  logic [`MSG_SRC_X_WIDTH-1:0]            src_xpos,
-    input  logic [`MSG_SRC_Y_WIDTH-1:0]            src_ypos,
-    input  logic [`MSG_SRC_FBITS_WIDTH-1:0]        src_fbits,
+    input  logic [`MSG_SRC_CHIPID_WIDTH-1:0]                src_chipid,
+    input  logic [`MSG_SRC_X_WIDTH-1:0]                     src_xpos,
+    input  logic [`MSG_SRC_Y_WIDTH-1:0]                     src_ypos,
+    input  logic [`MSG_SRC_FBITS_WIDTH-1:0]                 src_fbits,
 
-    input  logic [`MSG_DST_CHIPID_WIDTH-1:0]       dest_chipid,
-    input  logic [`MSG_DST_X_WIDTH-1:0]            dest_xpos,
-    input  logic [`MSG_DST_Y_WIDTH-1:0]            dest_ypos,
-    input  logic [`MSG_DST_FBITS_WIDTH-1:0]        dest_fbits,
+    input  logic [`MSG_DST_CHIPID_WIDTH-1:0]                dest_chipid,
+    input  logic [`MSG_DST_X_WIDTH-1:0]                     dest_xpos,
+    input  logic [`MSG_DST_Y_WIDTH-1:0]                     dest_ypos,
+    input  logic [`MSG_DST_FBITS_WIDTH-1:0]                 dest_fbits,
 
   `ifndef ARA_REQ2MEM
-    input  logic [`HOME_ID_WIDTH-1:0]              system_tile_count,
-    input  logic [`HOME_ALLOC_METHOD_WIDTH-1:0]    home_alloc_method,
+    input  logic [`HOME_ID_WIDTH-1:0]                       system_tile_count,
+    input  logic [`HOME_ALLOC_METHOD_WIDTH-1:0]             home_alloc_method,
   `endif 
 
     // write address channel
-    input logic [AxiAddrWidth - 1:0] m_axi_awaddr, 
-    input logic [7:0] m_axi_awlen, 
-    input logic [2:0] m_axi_awsize, 
-    input logic [1:0] m_axi_awburst, 
-    input logic [3:0] m_axi_awcache,
-    input logic [4:0] m_axi_awid,
+    input logic [AXI_ADDR_WIDTH - 1:0]                      m_axi_awaddr, 
+    input logic [7:0]                                       m_axi_awlen, 
+    input logic [2:0]                                       m_axi_awsize, 
+    input logic [1:0]                                       m_axi_awburst, 
+    input logic [3:0]                                       m_axi_awcache,
+    input logic [4:0]                                       m_axi_awid,
+
     // handshake logic 
-    input logic       m_axi_awvalid, 
-    output logic      m_axi_awready,
+    input logic                                             m_axi_awvalid, 
+    output logic                                            m_axi_awready,
 
     //write data channel
-    input logic [AxiDataWidth - 1:0] m_axi_wdata,
-    input logic [(AxiDataWidth/8) -1 :0] m_axi_wstrb,
-    input logic       m_axi_wlast, 
+    input logic [AXI_DATA_WIDTH - 1:0]                      m_axi_wdata,
+    input logic [(AXI_DATA_WIDTH/8) -1 :0]                  m_axi_wstrb,
+    input logic                                             m_axi_wlast, 
     // handshake logic 
-    input logic       m_axi_wvalid, 
-    output logic      m_axi_wready,
+    input logic                                             m_axi_wvalid, 
+    output logic                                            m_axi_wready,
 
     // write response channel
-    output logic [1:0] m_axi_bresp,
-    output logic [4:0] m_axi_bid,
-    input logic       m_axi_bready, 
-    output logic      m_axi_bvalid,
+    output logic [1:0]                                      m_axi_bresp,
+    output logic [4:0]                                      m_axi_bid,
+    input logic                                             m_axi_bready, 
+    output logic                                            m_axi_bvalid,
 
     // read address channel 
-    input logic [AxiAddrWidth - 1:0] m_axi_araddr, 
-    input logic [7:0] m_axi_arlen, 
-    input logic [2:0] m_axi_arsize, 
-    input logic [1:0] m_axi_arburst, 
-    input logic [3:0] m_axi_arcache,
-    input logic   [4:0]    m_axi_arid,
+    input logic [AXI_ADDR_WIDTH - 1:0]                      m_axi_araddr, 
+    input logic [7:0]                                       m_axi_arlen, 
+    input logic [2:0]                                       m_axi_arsize, 
+    input logic [1:0]                                       m_axi_arburst, 
+    input logic [3:0]                                       m_axi_arcache,
+    input logic [4:0]                                       m_axi_arid,
     // handshake logic 
-    input logic       m_axi_arvalid, 
-    output logic      m_axi_arready, 
+    input logic                                             m_axi_arvalid, 
+    output logic                                            m_axi_arready, 
 
     // read data channel 
-    output logic [63:0] m_axi_rdata, 
-    output logic [1:0] m_axi_rresp, 
-    output logic       m_axi_rlast, 
-    output logic       m_axi_ruser, 
-    output logic   [4:0]    m_axi_rid, 
+    output logic [AXI_DATA_WIDTH -1:0]                      m_axi_rdata, 
+    output logic [1:0]                                      m_axi_rresp, 
+    output logic                                            m_axi_rlast, 
+    output logic                                            m_axi_ruser, 
+    output logic [4:0]                                      m_axi_rid, 
 
     // handshake logic 
-    output logic       m_axi_rvalid, 
-    input logic      m_axi_rready
+    output logic                                            m_axi_rvalid, 
+    input logic                                             m_axi_rready
  );
 
- // States for Incoming Piton Messages
+
 localparam MSG_TYPE_INVAL          = 2'd0; // Invalid Message
 localparam MSG_TYPE_LOAD           = 2'd1; // Load Request
 localparam MSG_TYPE_STORE          = 2'd2; // Store Request
@@ -181,8 +111,8 @@ localparam MSG_TYPE_STORE          = 2'd2; // Store Request
 localparam MIN_NOC_DATA_WIDTH      = 64; // 8 Bytes
 localparam NOC_HDR_LEN             = 3;
 
-localparam NOC_PAYLOAD_LEN = (AXI_LITE_DATA_WIDTH < MIN_NOC_DATA_WIDTH) ?
-                        3'b1 : AXI_LITE_DATA_WIDTH / MIN_NOC_DATA_WIDTH;
+localparam NOC_PAYLOAD_LEN = (AXI_DATA_WIDTH < MIN_NOC_DATA_WIDTH) ?
+                        3'b1 : AXI_DATA_WIDTH / MIN_NOC_DATA_WIDTH;
 localparam NULL_PAYLOAD_LEN = 2; // we write 16 bytes null data for L2 version load request
 
 localparam AX_SIZE_1B = 0;
@@ -206,7 +136,7 @@ typedef enum logic [1:0] {
   `endif
 } flit_state;        // state for flit output
 
-flit_state                                flit_state_f, flit_state_next;
+flit_state flit_state_f, flit_state_next;
 
 `ifdef ARA_REQ2MEM
     typedef enum logic [1:0] {
@@ -215,10 +145,10 @@ flit_state                                flit_state_f, flit_state_next;
         WAIT_ = 2'd2
     } wstrb_fifo_state;  // state for strobe conversion 
 
-    wstrb_fifo_state                          wstrb_fifo_state_f, wstrb_fifo_state_next;
+    wstrb_fifo_state wstrb_fifo_state_f, wstrb_fifo_state_next;
 `endif 
 
-/* flit fields */
+    /* flit fields */
 logic [`NOC_DATA_WIDTH-1:0]               msg_address;
 logic [`MSG_LENGTH_WIDTH-1:0]             msg_length;
 logic [`MSG_TYPE_WIDTH-1:0]               msg_type;
@@ -243,33 +173,36 @@ logic                                     type_fifo_ren;
 
 logic                                     awaddr_fifo_wval;
 logic                                     awaddr_fifo_full;
-logic [AXI_LITE_ADDR_WIDTH-1:0]           awaddr_fifo_wdata;
+logic [AXI_ADDR_WIDTH-1:0]                awaddr_fifo_wdata;
 logic                                     awaddr_fifo_empty;
-logic [AXI_LITE_ADDR_WIDTH-1:0]           awaddr_fifo_out;
+logic [AXI_ADDR_WIDTH-1:0]                awaddr_fifo_out;
 logic                                     awaddr_fifo_ren;
-logic                                     write_word_select;
+logic [AXI_ADDR_WIDTH-1:0]                awaddr_buffer_q, awaddr_buffer_d;
 
 logic                                     wdata_fifo_wval;
 logic                                     wdata_fifo_full;
-logic [AXI_LITE_DATA_WIDTH-1:0]           wdata_fifo_wdata;
+logic [AXI_DATA_WIDTH-1:0]                wdata_fifo_wdata;
 logic                                     wdata_fifo_empty;
-logic [AXI_LITE_DATA_WIDTH-1:0]           wdata_fifo_out_buffer; // for endian conversion 
-logic [AXI_LITE_DATA_WIDTH-1:0]           wdata_fifo_out;
+logic [AXI_DATA_WIDTH-1:0]                wdata_fifo_out_buffer; // for endian conversion 
+logic [AXI_DATA_WIDTH-1:0]                wdata_fifo_out;
 logic                                     wdata_fifo_ren;
+
 
 logic                                     araddr_fifo_wval;
 logic                                     araddr_fifo_full;
-logic [AXI_LITE_ADDR_WIDTH-1:0]           araddr_fifo_wdata;
+logic [AXI_ADDR_WIDTH-1:0]                araddr_fifo_wdata;
 logic                                     araddr_fifo_empty;
-logic [AXI_LITE_ADDR_WIDTH-1:0]           araddr_fifo_out;
+logic [AXI_ADDR_WIDTH-1:0]                araddr_fifo_out;
 logic                                     araddr_fifo_ren;
+logic [AXI_ADDR_WIDTH-1:0]                araddr_buffer_q, araddr_buffer_d;
 
-logic [AXI_LITE_DATA_WIDTH/8 - 1: 0]      wstrb_fifo_out;
-logic [AXI_LITE_DATA_WIDTH/8 - 1: 0]      wstrb_fifo_wdata; 
+logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_out;
+logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_wdata; 
 logic                                     wstrb_fifo_full;
 logic                                     wstrb_fifo_empty;
 logic                                     wstrb_fifo_ren;
 logic                                     wstrb_fifo_wval;
+logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_mux_out;
 
 logic [7:0]                               awlen_fifo_out;
 logic [7:0]                               awlen_fifo_wdata;
@@ -283,6 +216,7 @@ logic                                     [8:0] awlen_buffer_d;
 logic                                     need_split_w_transaction;
 logic                                     last_write_transfer;
 logic                                     waddr_aligned_with_16B;
+logic                                     write_word_select;
 
 logic [2:0]                               awsize_fifo_out;
 logic [2:0]                               awsize_fifo_wdata;
@@ -305,6 +239,9 @@ logic                                     [8:0] arlen_buffer_q;
 logic                                     [8:0] arlen_buffer_d; 
 logic                                     need_split_r_transaction;
 logic                                     last_read_transfer;
+logic                                     raddr_aligned_with_16B;
+logic                                     read_word_select;
+logic                                     read_size; 
 
 logic [2:0]                               arsize_fifo_out;
 logic [2:0]                               arsize_fifo_wdata;
@@ -316,16 +253,24 @@ logic                                     arsize_fifo_ren;
 logic                                     [3:0] arsize_buffer_q;
 logic                                     [3:0] arsize_buffer_d; 
 
-logic                                     read_size; 
-logic                                     raddr_aligned_with_16B;
-logic [AXI_LITE_ADDR_WIDTH-1:0]  araddr_buffer_q, araddr_buffer_d;
+logic                                     fifo_has_packet;
+logic                                     noc_store_done;
+logic                                     noc_load_done;
+logic [MIN_NOC_DATA_WIDTH-1:0]            out_data [0:NOC_PAYLOAD_LEN-1];
+logic                                     noc_last_header;
+logic                                     noc_last_data;
+logic [2:0]                               noc_cnt;
+logic                                     fifo_rst;
 
-logic [AXI_LITE_DATA_WIDTH/8 - 1: 0]      wstrb_fifo_mux_out;
+// deal with simultaneous read write operation
+logic                                     simu_wr_detected; 
+logic                                     read_buffer_full; 
+
 `ifdef ARA_REQ2MEM
     logic [`MSG_DATA_SIZE_WIDTH - 1:0]        pmesh_data_size;
-    logic [$clog2(AXI_LITE_ADDR_WIDTH) - 1:0] pmesh_addr;
+    logic [$clog2(AXI_ADDR_WIDTH) - 1:0]      pmesh_addr;
     logic [`MSG_DATA_SIZE_WIDTH:0]            buf_pmesh_data_size;
-    logic [$clog2(AXI_LITE_ADDR_WIDTH) - 1:0] buf_pmesh_addr;
+    logic [$clog2(AXI_ADDR_WIDTH) - 1:0]      buf_pmesh_addr;
     logic                                     wstrb_fifoside_valid;
     logic                                     wstrb_fifoside_ready;
     logic                                     wstrb_outputside_valid;
@@ -337,60 +282,46 @@ logic [AXI_LITE_DATA_WIDTH/8 - 1: 0]      wstrb_fifo_mux_out;
     logic [`HOME_ID_WIDTH-1:0]                lhid_s0;
     logic [`HOME_ID_WIDTH-1:0]                lhid_s1;
     logic [`HOME_ID_WIDTH-1:0]                home_addr_bits_s0;
-    logic [`PHY_ADDR_WIDTH-1:0]               axilite2noc_req_address_s0;
+    logic [`PHY_ADDR_WIDTH-1:0]               axi2noc_req_address_s0;
     logic                                     special_l2_addr_s0;
     logic [`NOC_X_WIDTH-1:0]                  lhid_s1_x;
     logic [`NOC_Y_WIDTH-1:0]                  lhid_s1_y;
 `endif
 
-logic                                     fifo_has_packet;
-logic                                     noc_store_done;
-logic                                     noc_load_done;
-logic [MIN_NOC_DATA_WIDTH-1:0]            out_data [0:NOC_PAYLOAD_LEN-1];
-logic                                     noc_last_header;
-logic                                     noc_last_data;
-logic [2:0]                               noc_cnt;
-
-logic                                     fifo_rst;
-
-// deal with simultaneous read write operation
-logic                                     simu_wr_detected; 
-logic                                     read_buffer_full; 
+    logic previous_trans_complete;
 
 /******** Where the magic happens ********/
-noc_response_axi #(
-  `ifdef ARA_REQ2MEM
-    .AXI_LITE_DATA_WIDTH(AXI_LITE_DATA_WIDTH),
-    .AXI_LITE_RESP_WIDTH(2)
-  `else 
-    // .AXI_LITE_DATA_WIDTH(AXI_LITE_DATA_WIDTH),
-    // .AXI_LITE_RESP_WIDTH(2),
-    .AXI_DATA_WIDTH(AXI_LITE_DATA_WIDTH),
-    .AXI_RESP_WIDTH(2),
-    .MSG_TYPE_INVAL(MSG_TYPE_INVAL), 
-    .MSG_TYPE_STORE(MSG_TYPE_STORE), 
-    .MSG_TYPE_LOAD(MSG_TYPE_LOAD)
-  `endif
-) noc_response_axi(
-    .clk(clk),
-    .rst_n(rst_n),
-    .noc_valid_in(noc_valid_in),
-    .noc_data_in(noc_data_in),
-    .noc_ready_out(noc_ready_out),
-  `ifndef ARA_REQ2MEM
-    // .transaction_type_wr_data({last_write_transfer, last_read_transfer, read_16b, type_fifo_out, raddr_aligned_with_16B}), 
-    .transaction_type_wr_data({last_write_transfer, last_read_transfer, read_size, read_word_select, type_fifo_out}), 
-    .transaction_type_wr((noc_store_done | noc_load_done)),
-  `endif
-    .m_axi_rdata(m_axi_rdata),
-    .m_axi_rresp(m_axi_rresp),
-    .m_axi_rlast(m_axi_rlast),
-    .m_axi_rvalid(m_axi_rvalid),
-    .m_axi_rready(m_axi_rready),
-    .m_axi_bresp(m_axi_bresp),
-    .m_axi_bvalid(m_axi_bvalid),
-    .m_axi_bready(m_axi_bready)
-);
+    noc_response_axi #(
+        `ifdef ARA_REQ2MEM
+          .AXI_DATA_WIDTH(AXI_DATA_WIDTH),
+          .AXI_RESP_WIDTH(2)
+        `else 
+          .AXI_DATA_WIDTH(AXI_DATA_WIDTH),
+          .AXI_RESP_WIDTH(2),
+          .MSG_TYPE_INVAL(MSG_TYPE_INVAL), 
+          .MSG_TYPE_STORE(MSG_TYPE_STORE), 
+          .MSG_TYPE_LOAD(MSG_TYPE_LOAD)
+        `endif
+      ) noc_response_axi(
+          .clk(clk),
+          .rst_n(rst_n),
+          .noc_valid_in(noc_valid_in),
+          .noc_data_in(noc_data_in),
+          .noc_ready_out(noc_ready_out),
+        `ifndef ARA_REQ2MEM 
+          .transaction_type_wr_data({last_write_transfer, last_read_transfer, read_size, read_word_select, type_fifo_out}), 
+          .transaction_type_wr((noc_store_done | noc_load_done)),
+        `endif
+          .m_axi_rdata(m_axi_rdata),
+          .m_axi_rresp(m_axi_rresp),
+          .m_axi_rlast(m_axi_rlast),
+          .m_axi_rvalid(m_axi_rvalid),
+          .m_axi_rready(m_axi_rready),
+          .m_axi_bresp(m_axi_bresp),
+          .m_axi_bvalid(m_axi_bvalid),
+          .m_axi_bready(m_axi_bready), 
+          .previous_trans_complete (previous_trans_complete)
+      );
 
 assign m_axi_ruser = 0;
 assign m_axi_rid = 5'b0;
@@ -419,14 +350,14 @@ end
 /****************************************************************************/
 
 assign write_channel_ready = !awaddr_fifo_full && !wdata_fifo_full && !wstrb_fifo_full;
-//assign m_axi_awready = write_channel_ready && !type_fifo_full && !read_buffer_full;
+// assign m_axi_awready = !awaddr_fifo_full && !type_fifo_full && !read_buffer_full && previous_trans_complete;
+// assign m_axi_wready = !wdata_fifo_full && !wstrb_fifo_full && !type_fifo_full && previous_trans_complete;
+// assign m_axi_arready = !araddr_fifo_full && !type_fifo_full && !read_buffer_full && previous_trans_complete;
 assign m_axi_awready = !awaddr_fifo_full && !type_fifo_full && !read_buffer_full;
-//assign m_axi_wready = write_channel_ready && !type_fifo_full;
 assign m_axi_wready = !wdata_fifo_full && !wstrb_fifo_full && !type_fifo_full;
 assign m_axi_arready = !araddr_fifo_full && !type_fifo_full && !read_buffer_full;
-
-assign axi2noc_msg_type_store = m_axi_awvalid && (!read_buffer_full); //give priority to load request if read buffer has something
-assign axi2noc_msg_type_load = m_axi_arvalid || read_buffer_full;
+assign axi2noc_msg_type_store = (m_axi_awvalid && m_axi_awready) && (!read_buffer_full); //give priority to load request if read buffer has something
+assign axi2noc_msg_type_load = (m_axi_arvalid && m_axi_arready) || read_buffer_full;
 
 /* fifo for storing packet type */
 sync_fifo #(
@@ -445,16 +376,12 @@ sync_fifo #(
 );
 
 assign type_fifo_wval = (axi2noc_msg_type_store || axi2noc_msg_type_load) && !type_fifo_full;
-assign type_fifo_ren = (noc_store_done | noc_load_done) && !type_fifo_empty && ((awlen_buffer_q == 1 || (awlen_buffer_q == 2 && waddr_aligned_with_16B)) || ((arlen_buffer_q == 2) && raddr_aligned_with_16B) || (arlen_buffer_q == 1)) ;
+assign type_fifo_ren = (noc_store_done || noc_load_done) && !type_fifo_empty && (last_read_transfer || last_write_transfer);
 assign type_fifo_wdata = (axi2noc_msg_type_store) ? MSG_TYPE_STORE :
                             (axi2noc_msg_type_load) ? MSG_TYPE_LOAD : MSG_TYPE_INVAL;
 
-/* fifo for storing addresses */
-logic [AXI_LITE_ADDR_WIDTH-1:0] awaddr_buffer_q, awaddr_buffer_d;
-
-
 sync_fifo #(
-    .DSIZE(AXI_LITE_ADDR_WIDTH),
+    .DSIZE(AXI_ADDR_WIDTH),
     .ASIZE(5),
     .MEMSIZE(16) // should be 2 ^ (ASIZE-1)
 ) awaddr_fifo (
@@ -467,16 +394,31 @@ sync_fifo #(
     .wval(awaddr_fifo_wval),
     .reset(fifo_rst)
 );
-assign write_word_select = (awaddr_buffer_q[3]) ? 1 : 0; 
+
 assign awaddr_fifo_wval = m_axi_awvalid && m_axi_awready; 
 assign awaddr_fifo_wdata = m_axi_awaddr;
-assign awaddr_fifo_ren = (noc_store_done && !awaddr_fifo_empty && ((awlen_buffer_q <= 2 && waddr_aligned_with_16B) || (awlen_buffer_q == 1)));
 assign waddr_aligned_with_16B = (type_fifo_out == MSG_TYPE_STORE) ? (~awaddr_buffer_q[3] && ~awaddr_buffer_q[2] && ~awaddr_buffer_q[1] && ~awaddr_buffer_q[0]) &&  (awsize_buffer_q == AX_SIZE_8B): 0;
 
-always_comb begin 
-    if (flit_state_f == MSG_STATE_IDLE && !need_split_w_transaction && type_fifo_out == MSG_TYPE_STORE) awaddr_buffer_d = awaddr_fifo_out;
-    else if (noc_store_done && need_split_w_transaction) awaddr_buffer_d =  (awlen_buffer_q >= 2 && waddr_aligned_with_16B ) ? (awaddr_buffer_q + (1 << (awsize_buffer_q + 1))) : (awaddr_buffer_q + (1 << (awsize_buffer_q)));
-    else awaddr_buffer_d = awaddr_buffer_q; 
+if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin 
+    assign awaddr_fifo_ren = (noc_store_done && !awaddr_fifo_empty && ((awlen_buffer_q <= 2 && waddr_aligned_with_16B) || (awlen_buffer_q == 1)));
+    assign write_word_select = (awaddr_buffer_q[3]) ? 1 : 0; 
+
+    always_comb begin 
+        if (flit_state_f == MSG_STATE_IDLE && !need_split_w_transaction && type_fifo_out == MSG_TYPE_STORE) awaddr_buffer_d = awaddr_fifo_out;
+        else if (noc_store_done && need_split_w_transaction) awaddr_buffer_d =  (awlen_buffer_q >= 2 && waddr_aligned_with_16B ) ? (awaddr_buffer_q + (1 << (awsize_buffer_q + 1))) : (awaddr_buffer_q + (1 << (awsize_buffer_q)));
+        else awaddr_buffer_d = awaddr_buffer_q; 
+    end 
+end
+else begin 
+    assign awaddr_fifo_ren = (noc_store_done && !awaddr_fifo_empty && (awlen_buffer_q == 1));
+    assign write_word_select = 0; // no meaning for 128 bits
+
+    always_comb begin 
+        if (flit_state_f == MSG_STATE_IDLE && !need_split_w_transaction && type_fifo_out == MSG_TYPE_STORE) awaddr_buffer_d = awaddr_fifo_out;
+        else if (noc_store_done && need_split_w_transaction) awaddr_buffer_d =  awaddr_buffer_q + (1 << (awsize_buffer_q));
+        else awaddr_buffer_d = awaddr_buffer_q; 
+    end 
+
 end 
 
 always_ff@(posedge clk or negedge rst_n) begin 
@@ -488,7 +430,7 @@ end
 
 /* fifo for wdata */
 sync_fifo #(
-        .DSIZE(AXI_LITE_DATA_WIDTH),
+        .DSIZE(AXI_DATA_WIDTH),
         .ASIZE(5),
         .MEMSIZE(16) // should be 2 ^ (ASIZE-1)    
 ) waddr_fifo (
@@ -502,23 +444,29 @@ sync_fifo #(
         .reset(fifo_rst)
 );
 
-//assign wdata_fifo_out = {<<8{wdata_fifo_out_buffer}};
-assign wdata_fifo_out = {wdata_fifo_out_buffer[7:0], wdata_fifo_out_buffer[15:8], wdata_fifo_out_buffer[23:16], wdata_fifo_out_buffer[31:24], 
-                            wdata_fifo_out_buffer[39:32], wdata_fifo_out_buffer[47:40], wdata_fifo_out_buffer[55:48], wdata_fifo_out_buffer[63:56]};
+assign wdata_fifo_out = {<<8{wdata_fifo_out_buffer}};
+// assign wdata_fifo_out = {wdata_fifo_out_buffer[7:0], wdata_fifo_out_buffer[15:8], wdata_fifo_out_buffer[23:16], wdata_fifo_out_buffer[31:24], 
+//                             wdata_fifo_out_buffer[39:32], wdata_fifo_out_buffer[47:40], wdata_fifo_out_buffer[55:48], wdata_fifo_out_buffer[63:56]};
 assign wdata_fifo_wval = m_axi_wvalid && m_axi_wready;
 assign wdata_fifo_wdata = m_axi_wdata;
 
-always_comb begin 
-    if (flit_state_f == MSG_STATE_NOC_DATA && noc_ready_in && !wdata_fifo_empty) begin 
-        if (waddr_aligned_with_16B && (awlen_buffer_q >= 2)) begin
-            wdata_fifo_ren = (noc_cnt == 0) || noc_store_done;
+if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH)
+    always_comb begin 
+        if (flit_state_f == MSG_STATE_NOC_DATA && noc_ready_in && !wdata_fifo_empty) begin 
+            if (waddr_aligned_with_16B && (awlen_buffer_q >= 2)) begin
+                wdata_fifo_ren = (noc_cnt == 0) || noc_store_done;
+            end 
+            else begin
+                wdata_fifo_ren = noc_store_done ;
+            end 
         end 
-        else begin
-            wdata_fifo_ren = noc_store_done ;
-        end 
+        else wdata_fifo_ren = 0;
     end 
-    else wdata_fifo_ren = 0;
-end 
+else begin 
+    always_comb begin 
+        wdata_fifo_ren = noc_store_done ; 
+    end 
+end
 
 /* fifo for wlen */
 sync_fifo #(
@@ -539,13 +487,24 @@ sync_fifo #(
 assign awlen_fifo_wval = m_axi_awvalid && m_axi_awready;
 assign awlen_fifo_wdata = m_axi_awlen;
 assign need_split_w_transaction = (awlen_buffer_q > 0);
-assign awlen_fifo_ren = (noc_store_done && !awlen_fifo_empty && ((awlen_buffer_q <= 2 && waddr_aligned_with_16B) || (awlen_buffer_q == 1 && !waddr_aligned_with_16B))); 
-assign last_write_transfer = (awlen_buffer_q == 1) || (awlen_buffer_q == 2 && waddr_aligned_with_16B);
+assign awlen_fifo_ren = (noc_store_done && !awlen_fifo_empty && last_write_transfer);
 
-always_comb begin 
-    if ((flit_state_f == MSG_STATE_IDLE) && (awlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_STORE)) awlen_buffer_d = awlen_fifo_out + 1; // no beat left, next transaction
-    else if (noc_store_done) awlen_buffer_d = (awlen_buffer_q >= 2 && waddr_aligned_with_16B) ? (awlen_buffer_q - 2) : (awlen_buffer_q - 1);
-    else awlen_buffer_d = awlen_buffer_q;
+if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin 
+    assign last_write_transfer = (awlen_buffer_q == 1) || (awlen_buffer_q == 2 && waddr_aligned_with_16B);
+    always_comb begin 
+        if ((flit_state_f == MSG_STATE_IDLE) && (awlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_STORE)) awlen_buffer_d = awlen_fifo_out + 1; // no beat left, next transaction
+        else if (noc_store_done) awlen_buffer_d = (awlen_buffer_q >= 2 && waddr_aligned_with_16B) ? (awlen_buffer_q - 2) : (awlen_buffer_q - 1);
+        else awlen_buffer_d = awlen_buffer_q;
+    end 
+end 
+
+else begin  
+    assign last_write_transfer = (awlen_buffer_q == 1);
+    always_comb begin 
+        if ((flit_state_f == MSG_STATE_IDLE) && (awlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_STORE)) awlen_buffer_d = awlen_fifo_out + 1; // no beat left, next transaction
+        else if (noc_store_done) awlen_buffer_d = (awlen_buffer_q - 1);
+        else awlen_buffer_d = awlen_buffer_q;
+    end 
 end 
 
 always_ff @(posedge clk or negedge rst_n) begin 
@@ -583,15 +542,11 @@ always_ff @(posedge clk or negedge rst_n) begin
     else awsize_buffer_q <= awsize_buffer_d;
 end 
 
-
-/****************/ 
-// declaration for strobe to mask conversion 
-// control intreface signal
-
-assign wstrb_fifo_mux_out = (wstrb_fifo_empty) ? 8'b0000_0000 : {wstrb_fifo_out[0], wstrb_fifo_out[1], wstrb_fifo_out[2], wstrb_fifo_out[3], wstrb_fifo_out[4], wstrb_fifo_out[5], wstrb_fifo_out[6], wstrb_fifo_out[7]};
+//assign wstrb_fifo_mux_out = (wstrb_fifo_empty) ? 8'b0000_0000 : {wstrb_fifo_out[0], wstrb_fifo_out[1], wstrb_fifo_out[2], wstrb_fifo_out[3], wstrb_fifo_out[4], wstrb_fifo_out[5], wstrb_fifo_out[6], wstrb_fifo_out[7]};
+assign wstrb_fifo_mux_out = (wstrb_fifo_empty) ? 0 : {<<1{wstrb_fifo_out}};
 
 sync_fifo #(
-        .DSIZE(AXI_LITE_DATA_WIDTH/8),
+        .DSIZE(AXI_DATA_WIDTH/8),
         .ASIZE(5),
         .MEMSIZE(16) // should be 2 ^ (ASIZE-1)
 ) wstrb_fifo (
@@ -605,121 +560,71 @@ sync_fifo #(
         .reset(fifo_rst)
 );
 
-`ifdef ARA_REQ2MEM
-    assign wstrb_fifo_ren = (noc_store_done && !wstrb_fifo_empty); 
-`else 
+if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin
     always_comb begin 
-        if ((flit_state_f == MSG_STATE_HEADER && noc_ready_in && (!wstrb_fifo_empty))) begin
-            if (waddr_aligned_with_16B && (awlen_buffer_q >= 2)) begin 
-                wstrb_fifo_ren = (noc_cnt == 2);
+            if ((flit_state_f == MSG_STATE_HEADER && noc_ready_in && (!wstrb_fifo_empty))) begin
+                if (waddr_aligned_with_16B && (awlen_buffer_q >= 2)) begin 
+                    wstrb_fifo_ren = (noc_cnt == 2);
+                end 
+                else wstrb_fifo_ren = 0;
             end 
-            else wstrb_fifo_ren = 0;
-        end 
-        else wstrb_fifo_ren = noc_store_done;
+            else wstrb_fifo_ren = noc_store_done;
     end 
-`endif 
-    
+end 
+
+else begin 
+    always_comb begin 
+        wstrb_fifo_ren = noc_store_done;
+    end 
+end 
 
 assign wstrb_fifo_wval = m_axi_wvalid && m_axi_wready;
 assign wstrb_fifo_wdata = m_axi_wstrb;
 
-`ifdef ARA_REQ2MEM
-    strb2mask strb2mask_ins (
-        .clk (clk),
-        .rst (fifo_rst),
-        .m_axi_wstrb (wstrb_fifo_mux_out),
-        .pmesh_data_size (pmesh_data_size),
-        .pmesh_addr (pmesh_addr), 
-        .s_channel_valid (wstrb_fifoside_valid),
-        .s_channel_ready(wstrb_fifoside_ready),
-        .d_channel_ready(wstrb_outputside_ready), 
-        .d_channel_valid(wstrb_outputside_valid)
-    );
-
-    //valid state machine 
-    always_ff@ (posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            wstrb_fifo_state_f <= IDLE;
-        end
-        else begin
-            wstrb_fifo_state_f <= wstrb_fifo_state_next;
-        end
-    end
-
-    // flip flop output the strobe conversion module 
-    always_ff@(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            buf_pmesh_addr <= 0;
-            buf_pmesh_data_size <= 0;
-        end
-        else if ((flit_state_f == MSG_STATE_WAIT_STRB) & (wstrb_outputside_ready & wstrb_outputside_valid)) begin
-            buf_pmesh_addr <= pmesh_addr;
-            buf_pmesh_data_size <= pmesh_data_size;
-        end
-        else begin
-            buf_pmesh_addr <= buf_pmesh_addr;
-            buf_pmesh_data_size <= buf_pmesh_data_size;
-        end
-    end
-
-    //state transfer logic
-    always_comb 
-    begin
-        wstrb_fifo_state_next = wstrb_fifo_state_f;
-        unique case (wstrb_fifo_state_f)
-            IDLE: begin 
-                wstrb_fifo_state_next = (fifo_has_packet && type_fifo_out == MSG_TYPE_STORE) 
-                                            ? VALID : wstrb_fifo_state_f;
-            end 
-            VALID: begin 
-                wstrb_fifo_state_next = (wstrb_fifoside_ready) ? WAIT_ : wstrb_fifo_state_f;
-            end
-            WAIT_: begin 
-                wstrb_fifo_state_next = (noc_store_done) ? IDLE : wstrb_fifo_state_f;
-            end 
-            default: begin 
-                wstrb_fifo_state_next = wstrb_fifo_state_f;
-            end 
-        endcase 
-    end 
-
-    assign wstrb_outputside_ready = (flit_state_f == MSG_STATE_WAIT_STRB) && (type_fifo_out == MSG_TYPE_STORE);
-
-    //state output 
-    assign wstrb_fifoside_valid = (wstrb_fifo_state_f == VALID);
-
-`endif 
-
 /** fifo for read len***/
-    sync_fifo #(
-        .DSIZE(8),
-        .ASIZE(5),
-        .MEMSIZE(16) // should be 2 ^ (ASIZE-1)
+sync_fifo #(
+    .DSIZE(8),
+    .ASIZE(5),
+    .MEMSIZE(16) // should be 2 ^ (ASIZE-1)
 ) arlen_fifo (
-        .rdata(arlen_fifo_out),
-        .empty(arlen_fifo_empty),
-        .clk(clk),
-        .ren(arlen_fifo_ren),
-        .wdata(arlen_fifo_wdata),
-        .full(arlen_fifo_full),
-        .wval(arlen_fifo_wval),
-        .reset(fifo_rst)
+    .rdata(arlen_fifo_out),
+    .empty(arlen_fifo_empty),
+    .clk(clk),
+    .ren(arlen_fifo_ren),
+    .wdata(arlen_fifo_wdata),
+    .full(arlen_fifo_full),
+    .wval(arlen_fifo_wval),
+    .reset(fifo_rst)
 );
-logic read_word_select;
-assign read_word_select = (araddr_buffer_q[3] == 1) ? 1 : 0; 
+
 assign arlen_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign arlen_fifo_wdata = m_axi_arlen;
 assign need_split_r_transaction = (arlen_buffer_q > 0);
 assign arlen_fifo_ren = (noc_load_done && !arlen_fifo_empty && last_read_transfer); 
-assign last_read_transfer = ((arlen_buffer_q == 2) && raddr_aligned_with_16B) || (arlen_buffer_q == 1);
-assign read_size = (arlen_buffer_q >= 2) && raddr_aligned_with_16B; // 1 -> 16B, 0 -> 8B
 
-always_comb begin 
-    if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arlen_buffer_d = arlen_fifo_out + 1; // no beat left, next transaction
-    else if (noc_load_done) arlen_buffer_d = (arlen_buffer_q == 1) ? arlen_buffer_q - 1 :
-                                                (arlen_buffer_q >= 2 && !raddr_aligned_with_16B) ? arlen_buffer_q - 1:
+if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin
+    assign read_word_select = (araddr_buffer_q[3] == 1) ? 1 : 0; 
+    assign last_read_transfer = ((arlen_buffer_q == 2) && raddr_aligned_with_16B) || (arlen_buffer_q == 1);
+    assign read_size = (arlen_buffer_q >= 2) && raddr_aligned_with_16B; // 1 -> 16B, 0 -> 8B
+
+    always_comb begin 
+        if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arlen_buffer_d = arlen_fifo_out + 1; // no beat left, next transaction
+        else if (noc_load_done) arlen_buffer_d = (arlen_buffer_q == 1) ? arlen_buffer_q - 1 :
+                                                    (arlen_buffer_q >= 2 && !raddr_aligned_with_16B) ? arlen_buffer_q - 1:
                                                     arlen_buffer_q -2;   
-    else arlen_buffer_d = arlen_buffer_q;
+        else arlen_buffer_d = arlen_buffer_q;
+    end 
+end
+else begin
+    assign read_word_select = 0; // no need for selection in 128 bits version 
+    assign last_read_transfer = (arlen_buffer_q == 1);
+    assign read_size = 1; // 1 -> 16B, 0 -> 8B
+
+    always_comb begin 
+        if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arlen_buffer_d = arlen_fifo_out + 1; // no beat left, next transaction
+        else if (noc_load_done) arlen_buffer_d = arlen_buffer_q - 1;  
+        else arlen_buffer_d = arlen_buffer_q;
+    end 
 end 
 
 always_ff @(posedge clk or negedge rst_n) begin 
@@ -760,7 +665,7 @@ end
 
 /* fifo for read addr */
 sync_fifo #(
-        .DSIZE(AXI_LITE_ADDR_WIDTH),
+        .DSIZE(AXI_ADDR_WIDTH),
         .ASIZE(5),
         .MEMSIZE(16) // should be 2 ^ (ASIZE-1)    
 ) raddr_fifo (
@@ -778,11 +683,20 @@ assign araddr_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign araddr_fifo_wdata = m_axi_araddr;
 assign araddr_fifo_ren = (noc_load_done && !araddr_fifo_empty && last_read_transfer);
 
-always_comb begin 
-    if (flit_state_f == MSG_STATE_IDLE && !need_split_r_transaction && type_fifo_out == MSG_TYPE_LOAD) araddr_buffer_d = araddr_fifo_out;
-    else if (noc_load_done && need_split_r_transaction ) araddr_buffer_d = (raddr_aligned_with_16B) ? araddr_buffer_q + (1 << (arsize_buffer_q + 1)) : araddr_buffer_q + (1 << (arsize_buffer_q)) ; 
-    //else if (noc_load_done && need_split_r_transaction ) araddr_buffer_d = (raddr_aligned_with_16B) ? araddr_buffer_q + 8: araddr_buffer_q + 16 ; 
-    else araddr_buffer_d = araddr_buffer_q; 
+if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin 
+    always_comb begin 
+        if (flit_state_f == MSG_STATE_IDLE && !need_split_r_transaction && type_fifo_out == MSG_TYPE_LOAD) araddr_buffer_d = araddr_fifo_out;
+        else if (noc_load_done && need_split_r_transaction ) araddr_buffer_d = (raddr_aligned_with_16B) ? araddr_buffer_q + (1 << (arsize_buffer_q + 1)) : araddr_buffer_q + (1 << (arsize_buffer_q)) ; 
+        else araddr_buffer_d = araddr_buffer_q; 
+    end 
+end 
+
+else begin 
+    always_comb begin 
+        if (flit_state_f == MSG_STATE_IDLE && !need_split_r_transaction && type_fifo_out == MSG_TYPE_LOAD) araddr_buffer_d = araddr_fifo_out;
+        else if (noc_load_done && need_split_r_transaction ) araddr_buffer_d = araddr_buffer_q + (1 << (arsize_buffer_q)) ; 
+        else araddr_buffer_d = araddr_buffer_q; 
+    end 
 end 
 
 always_ff@(posedge clk or negedge rst_n) begin 
@@ -792,45 +706,12 @@ always_ff@(posedge clk or negedge rst_n) begin
         araddr_buffer_q <= araddr_buffer_d;
 end 
 
-/* 
-start the state machine when fifo is not empty and noc is ready 
-We need to toggle between address and data fifos.
-*/
-
 /*write channel ready: address, data, strobe, read channel ready: address */
 assign fifo_has_packet = (type_fifo_out == MSG_TYPE_STORE) ? (!awaddr_fifo_empty && !wdata_fifo_empty && !wstrb_fifo_empty && !awlen_fifo_empty) :
                             (type_fifo_out == MSG_TYPE_LOAD) ? !araddr_fifo_empty && !arlen_fifo_empty : 1'b0;
 
-`ifdef ARA_REQ2MEM
- assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE && ~wstrb_outputside_valid;
- assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
-
-`else // load now can be done with load_noshare message type 
- assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE;
- assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
-
-// `else // this section is commented since we don't need extra data flit to use swap write back as the replacement of load_noshare
-//  assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE; // L2 supports mask   
-//  assign noc_load_done = noc_last_data && type_fifo_out == MSG_TYPE_LOAD; // We need to file 2 meaningless data flit (16 bytes) for swap_wb load
-`endif
-
-generate begin
- genvar k;
- if (AXI_LITE_DATA_WIDTH < MIN_NOC_DATA_WIDTH) begin
-     for (k=0; k< MIN_NOC_DATA_WIDTH/AXI_LITE_DATA_WIDTH; k = k + 1)
-     begin: DATA_GEN
-         assign out_data[(k+1)*AXI_LITE_DATA_WIDTH-1 : k*AXI_LITE_DATA_WIDTH] = wdata_fifo_out;
-     end
- end
- else begin
-     for (k=0; k<2; k = k + 1)
-     begin: DATA_GEN
-         assign out_data[k] = wdata_fifo_out[(k+1)*MIN_NOC_DATA_WIDTH-1 : k*MIN_NOC_DATA_WIDTH];
-     end
- end
-end
-endgenerate
-
+assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE;
+assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
 
 /* set defaults for the flit */
 always_comb
@@ -842,7 +723,7 @@ begin
     unique case (type_fifo_out)
         MSG_TYPE_STORE: begin
         `ifdef ARA_REQ2MEM
-            msg_type = `MSG_TYPE_NC_STORE_REQ; // axilite peripheral is writing to the memory?
+            msg_type = `MSG_TYPE_NC_STORE_REQ; // axi peripheral is writing to the memory?
             msg_data_size = buf_pmesh_data_size; // fix it for now
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, awaddr_fifo_out[`PHY_ADDR_WIDTH-1:3], buf_pmesh_addr[2:0]};
             msg_length = `MSG_LENGTH_WIDTH'd2 + NOC_PAYLOAD_LEN; // 2 extra headers + 1 data
@@ -1006,15 +887,15 @@ end
     always_comb
     begin
         //special l2 addresses start with 0xA
-        special_l2_addr_s0 = (axilite2noc_req_address_s0[39:36] == 4'b1010);
+        special_l2_addr_s0 = (axi2noc_req_address_s0[39:36] == 4'b1010);
     end
 
     always_comb begin
         unique case (type_fifo_out) 
-            MSG_TYPE_STORE: axilite2noc_req_address_s0 = awaddr_buffer_q[`PHY_ADDR_WIDTH-1:0];
-            MSG_TYPE_LOAD: axilite2noc_req_address_s0 = araddr_buffer_q[`PHY_ADDR_WIDTH-1:0];
-            MSG_TYPE_INVAL:axilite2noc_req_address_s0 = `PHY_ADDR_WIDTH'b0;
-            default: axilite2noc_req_address_s0 = `PHY_ADDR_WIDTH'b0;
+            MSG_TYPE_STORE: axi2noc_req_address_s0 = awaddr_buffer_q[`PHY_ADDR_WIDTH-1:0];
+            MSG_TYPE_LOAD: axi2noc_req_address_s0 = araddr_buffer_q[`PHY_ADDR_WIDTH-1:0];
+            MSG_TYPE_INVAL:axi2noc_req_address_s0 = `PHY_ADDR_WIDTH'b0;
+            default: axi2noc_req_address_s0 = `PHY_ADDR_WIDTH'b0;
         endcase
     end 
 
@@ -1022,26 +903,26 @@ end
     begin
         if (special_l2_addr_s0)
         begin
-            home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_HIGH];
+            home_addr_bits_s0 = axi2noc_req_address_s0[`HOME_ID_ADDR_POS_HIGH];
         end
         else
         begin
             unique case (home_alloc_method) 
             `HOME_ALLOC_LOW_ORDER_BITS:
             begin
-                home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_LOW];
+                home_addr_bits_s0 = axi2noc_req_address_s0[`HOME_ID_ADDR_POS_LOW];
             end
             `HOME_ALLOC_MIDDLE_ORDER_BITS:
             begin
-                home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_MIDDLE];
+                home_addr_bits_s0 = axi2noc_req_address_s0[`HOME_ID_ADDR_POS_MIDDLE];
             end
             `HOME_ALLOC_HIGH_ORDER_BITS:
             begin
-                home_addr_bits_s0 = axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_HIGH];
+                home_addr_bits_s0 = axi2noc_req_address_s0[`HOME_ID_ADDR_POS_HIGH];
             end
             `HOME_ALLOC_MIXED_ORDER_BITS:
             begin
-                home_addr_bits_s0 = (axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_LOW] ^ axilite2noc_req_address_s0[`HOME_ID_ADDR_POS_MIDDLE]);
+                home_addr_bits_s0 = (axi2noc_req_address_s0[`HOME_ID_ADDR_POS_LOW] ^ axi2noc_req_address_s0[`HOME_ID_ADDR_POS_MIDDLE]);
             end
             default: home_addr_bits_s0 = `MSG_LHID_WIDTH'b0;
             endcase
@@ -1072,13 +953,13 @@ begin
             unique case (noc_cnt)
                 3'b001: begin
                     flit[`MSG_DST_CHIPID] = dest_chipid;
-                  `ifdef ARA_REQ2MEM
+                    `ifdef ARA_REQ2MEM
                     flit[`MSG_DST_X] = dest_xpos;
                     flit[`MSG_DST_Y] = dest_ypos;
-                  `else 
+                    `else 
                     flit[`MSG_DST_X] = lhid_s1_x;
                     flit[`MSG_DST_Y] = lhid_s1_y;
-                  `endif
+                    `endif
                     flit[`MSG_DST_FBITS] = dest_fbits; // to memory or L2 cache
                     flit[`MSG_LENGTH] = msg_length;
                     flit[`MSG_TYPE] = msg_type;
@@ -1095,8 +976,13 @@ begin
                 `else 
                     flit[`MSG_ADDR_] = msg_address;
                     flit[`MSG_DATA_SIZE_] = msg_data_size;
-                    flit[`MSG_AMO_MASK0_] = (type_fifo_out == MSG_TYPE_STORE && waddr_aligned_with_16B &&  awlen_buffer_q >= 2) ? wstrb_fifo_mux_out : 
-                                                (write_word_select == 0) ? wstrb_fifo_mux_out : 8'b0;
+                    if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin
+                        flit[`MSG_AMO_MASK0_] = (type_fifo_out == MSG_TYPE_STORE && waddr_aligned_with_16B &&  awlen_buffer_q >= 2) ? wstrb_fifo_mux_out : 
+                        (write_word_select == 0) ? wstrb_fifo_mux_out : 8'b0;
+                    end 
+                    else begin 
+                        flit[`MSG_AMO_MASK0_] = (type_fifo_out == MSG_TYPE_STORE) ? wstrb_fifo_mux_out[15:8] : 0;
+                    end 
                 `endif 
                     flit_ready = 1'b1;                  
                 end
@@ -1113,8 +999,14 @@ begin
                     flit[`MSG_SRC_X_] = src_xpos;
                     flit[`MSG_SRC_Y_] = src_ypos;
                     flit[`MSG_SRC_FBITS_] = src_fbits;
-                    flit[`MSG_AMO_MASK1_] =  (type_fifo_out == MSG_TYPE_STORE && waddr_aligned_with_16B && awlen_buffer_q >= 2) ? wstrb_fifo_mux_out : 
-                                                (write_word_select == 1) ? wstrb_fifo_mux_out : 8'b0;
+                    if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin 
+                        flit[`MSG_AMO_MASK1_] =  (type_fifo_out == MSG_TYPE_STORE && waddr_aligned_with_16B && awlen_buffer_q >= 2) ? wstrb_fifo_mux_out : 
+                        (write_word_select == 1) ? wstrb_fifo_mux_out : 8'b0;
+                    end
+                    else begin 
+                        flit[`MSG_AMO_MASK1_] = (type_fifo_out == MSG_TYPE_STORE) ? wstrb_fifo_mux_out[7:0] : 0;
+                    end 
+
                 `endif 
                     flit_ready = 1'b1;
                 end
@@ -1122,8 +1014,14 @@ begin
         end
 
         MSG_STATE_NOC_DATA: begin
-            //flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == MSG_TYPE_STORE) ? out_data[noc_cnt] : {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
-            flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == MSG_TYPE_STORE) ? wdata_fifo_out : {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
+            if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin
+                flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == MSG_TYPE_STORE) ? wdata_fifo_out : {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
+            end 
+            else begin
+                flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == MSG_TYPE_STORE && noc_cnt == 0) ? wdata_fifo_out[127:64] :
+                                                (type_fifo_out == MSG_TYPE_STORE && noc_cnt == 1) ? wdata_fifo_out[63:0] :
+                                                {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
+            end 
             flit_ready = 1'b1;
         end
 
@@ -1136,10 +1034,5 @@ end
 
 assign noc_valid_out = flit_ready;
 assign noc_data_out = flit;
-
-/******* error code generation ******/ 
-// assert (m_axi_awsize != 3'b011) $display ("nightmare happens, the size is not 8 bytes");
-
-
 
 endmodule
