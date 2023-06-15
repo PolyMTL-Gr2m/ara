@@ -186,6 +186,7 @@ logic [AXI_DATA_WIDTH-1:0]                wdata_fifo_out_buffer; // for endian c
 logic [AXI_DATA_WIDTH-1:0]                wdata_fifo_out;
 logic                                     wdata_fifo_ren;
 
+
 logic                                     araddr_fifo_wval;
 logic                                     araddr_fifo_full;
 logic [AXI_ADDR_WIDTH-1:0]                araddr_fifo_wdata;
@@ -397,7 +398,7 @@ sync_fifo #(
     .wval(awaddr_fifo_wval),
     .reset(fifo_rst)
 );
-assign write_word_select = (awaddr_buffer_q[3]) ? 1 : 0; 
+
 assign awaddr_fifo_wval = m_axi_awvalid && m_axi_awready; 
 assign awaddr_fifo_wdata = m_axi_awaddr;
 assign waddr_aligned_with_16B = (type_fifo_out == MSG_TYPE_STORE) ? (~awaddr_buffer_q[3] && ~awaddr_buffer_q[2] && ~awaddr_buffer_q[1] && ~awaddr_buffer_q[0]) &&  (awsize_buffer_q == AX_SIZE_8B): 0;
@@ -599,8 +600,7 @@ sync_fifo #(
     .wval(arlen_fifo_wval),
     .reset(fifo_rst)
 );
-logic read_word_select;
-assign read_word_select = (araddr_buffer_q[3] == 1) ? 1 : 0; 
+
 assign arlen_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign arlen_fifo_wdata = m_axi_arlen;
 assign need_split_r_transaction = (arlen_buffer_q > 0);
