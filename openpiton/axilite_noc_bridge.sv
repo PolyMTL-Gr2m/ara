@@ -230,7 +230,7 @@ noc_response_axilite #(
     .noc_data_in(noc_data_in),
     .noc_ready_out(noc_ready_out),
   `ifndef ARA_REQ2MEM
-    .transaction_type_wr_data({type_fifo_out, word_select}), 
+    .transaction_type_wr_data({1'b1, 1'b1, 1'b0, read_word_select, type_fifo_out}), 
     .transaction_type_wr(type_fifo_ren),
   `endif
     .m_axi_rdata(m_axi_rdata),
@@ -310,7 +310,8 @@ sync_fifo #(
     .wval(awaddr_fifo_wval),
     .reset(fifo_rst)
 );
-
+logic write_word_select;
+assign write_word_select = (type_fifo_out == MSG_TYPE_STORE && awaddr_fifo_out[3] == 1) ? 1 : 0;
 assign awaddr_fifo_wval = m_axi_awvalid && m_axi_awready; 
 assign awaddr_fifo_wdata = m_axi_awaddr;
 assign awaddr_fifo_ren = (noc_store_done && !awaddr_fifo_empty);
@@ -340,7 +341,7 @@ assign wdata_fifo_ren = (noc_store_done && !wdata_fifo_empty);
 // declaration for strobe to mask conversion 
 // control intreface signal
 
-assign wstrb_fifo_mux_out = (wstrb_fifo_empty) ? 8'b0000_0000 : {<<8{wstrb_fifo_out}};
+assign wstrb_fifo_mux_out = (wstrb_fifo_empty) ? 8'b0000_0000 : {<<1{wstrb_fifo_out}};
 
 sync_fifo #(
 	.DSIZE(AXI_LITE_DATA_WIDTH/8),
@@ -444,7 +445,7 @@ sync_fifo #(
 	.wval(araddr_fifo_wval),
 	.reset(fifo_rst)
 );
-assign word_select = (type_fifo_out == MSG_TYPE_LOAD) ? (araddr_fifo_out[3]) : 0;  
+assign read_word_select = (type_fifo_out == MSG_TYPE_LOAD) ? (araddr_fifo_out[3]) : 0;  
 assign araddr_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign araddr_fifo_wdata = m_axi_araddr;
 assign araddr_fifo_ren = (noc_load_done && !araddr_fifo_empty);
@@ -503,12 +504,13 @@ begin
             msg_type = `MSG_TYPE_NC_STORE_REQ; // axilite peripheral is writing to the memory?
             msg_data_size = buf_pmesh_data_size; // fix it for now
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, awaddr_fifo_out[`PHY_ADDR_WIDTH-1:3], buf_pmesh_addr[2:0]};
+            msg_length = `MSG_LENGTH_WIDTH'd2 + NOC_PAYLOAD_LEN; // 2 extra headers + 1 data
         `else 
             msg_type = `MSG_TYPE_SWAPWB_REQ;
-            msg_data_size = `MSG_DATA_SIZE_8B; // fix it for now
+            msg_data_size = `MSG_DATA_SIZE_16B; // fix it for now
             msg_address = {{`MSG_ADDR_WIDTH-`PHY_ADDR_WIDTH{1'b0}}, awaddr_fifo_out[`PHY_ADDR_WIDTH-1:0]};
+            msg_length = `MSG_LENGTH_WIDTH'd2 + 2;
         `endif
-            msg_length = `MSG_LENGTH_WIDTH'd2 + NOC_PAYLOAD_LEN; // 2 extra headers + 1 data
         end
 
         MSG_TYPE_LOAD: begin
@@ -564,7 +566,7 @@ begin
         noc_last_header = (flit_state_f == MSG_STATE_HEADER &&
                                     noc_cnt == NOC_HDR_LEN) ? 1'b1 : 1'b0;
         noc_last_data = (flit_state_f == MSG_STATE_NOC_DATA &&
-                                    noc_cnt == (msg_length - 3)) ? 1'b1 : 1'b0;
+                                    noc_cnt == (msg_length - NOC_HDR_LEN )) ? 1'b1 : 1'b0;
     end
     else begin 
         noc_last_header = 1'b0;
@@ -758,7 +760,7 @@ begin
                 `else 
                     flit[`MSG_ADDR_] = msg_address;
                     flit[`MSG_DATA_SIZE_] = msg_data_size;
-                    flit[`MSG_AMO_MASK0_] = (type_fifo_out == MSG_TYPE_STORE) ? wstrb_fifo_mux_out : 8'b0;
+                    flit[`MSG_AMO_MASK0_] = (type_fifo_out == MSG_TYPE_STORE && (write_word_select == 0)) ? wstrb_fifo_mux_out : 8'b0;
                 `endif 
                     flit_ready = 1'b1;                  
                 end
@@ -775,7 +777,7 @@ begin
                     flit[`MSG_SRC_X_] = src_xpos;
                     flit[`MSG_SRC_Y_] = src_ypos;
                     flit[`MSG_SRC_FBITS_] = src_fbits;
-                    flit[`MSG_AMO_MASK1_] = {`MSG_AMO_MASK1_WIDTH{1'b0}};
+                    flit[`MSG_AMO_MASK1_] = (type_fifo_out == MSG_TYPE_STORE && (write_word_select == 1)) ? wstrb_fifo_mux_out : 8'b0;
                 `endif 
                     flit_ready = 1'b1;
                 end
@@ -783,7 +785,8 @@ begin
         end
 
         MSG_STATE_NOC_DATA: begin
-            flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == MSG_TYPE_STORE) ? out_data[noc_cnt] : {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
+            flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == MSG_TYPE_STORE) ? wdata_fifo_out : {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
+            //flit[`NOC_DATA_WIDTH-1:0] = (type_fifo_out == MSG_TYPE_STORE) ? out_data[noc_cnt] : {`NOC_DATA_WIDTH{1'b0}}; //wdata_fifo_out;
             flit_ready = 1'b1;
         end
 
@@ -796,77 +799,5 @@ end
 
 assign noc_valid_out = flit_ready;
 assign noc_data_out = flit;
-
-
-/* Dump store addr and data to file. */
-integer file;
-initial begin
-    file = $fopen("axilite_noc.log", "w");
-end
-
-always @(posedge clk)
-begin
-    if (awaddr_fifo_ren)
-    begin
-        $fwrite(file, "awaddr-fifo %064x\n", awaddr_fifo_out);
-        $fflush(file);
-    end
-    if (wdata_fifo_ren)
-    begin
-        $fwrite(file, "wdata-fifo %064x\n", wdata_fifo_out);
-        $fflush(file);
-    end
-    if (araddr_fifo_ren)
-    begin
-        $fwrite(file, "araddr-fifo %064x\n", araddr_fifo_out);
-        $fflush(file);
-    end
-    /*if (noc2_valid_out && noc2_ready_in) begin
-        $fwrite(file, "bridge-write-data %064x\n", noc2_data_out);
-        $fflush(file);
-    end */
-end
-
-/* Dump store addr and data to file. */
-integer file3;
-initial begin
-    file3 = $fopen("axilite_noc1_store.log", "w");
-end
-always @(posedge clk)
-begin
-    if (noc_valid_out && noc_ready_in)
-    begin
-        $fwrite(file3, "noc1_data_out %064x\n", noc_data_out);
-        $fflush(file3);
-    end
-end
-
-/* Dump store addr and data to file. */
-integer file2;
-initial begin
-    file2 = $fopen("axilite_noc2_load.log", "w");
-end
-always @(posedge clk)
-begin
-    if ((type_fifo_out == MSG_TYPE_LOAD) && noc_valid_in && noc_ready_out)
-    begin
-        $fwrite(file2, "noc2_data_in %064x\n", noc_data_in);
-        $fflush(file2);
-    end
-end
-
-/* Dump axi read data to file. */
-integer file4;
-initial begin
-    file4 = $fopen("axilite_read_data.log", "w");
-end
-always @(posedge clk)
-begin
-    if (m_axi_rvalid && m_axi_rready)
-    begin
-        $fwrite(file4, "rdata %x\n", m_axi_rdata);
-        $fflush(file4);
-    end
-end
 
 endmodule 
