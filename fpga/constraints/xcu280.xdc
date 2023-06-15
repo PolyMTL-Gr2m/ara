@@ -67,11 +67,12 @@ set_property -dict {PACKAGE_PIN BP23 IOSTANDARD LVCMOS18} [get_ports exit_o[0]]
 
 ## CLK
 set_property -dict {PACKAGE_PIN BJ24 IOSTANDARD LVCMOS18} [get_ports clk_i]
+## set_property -dict {PACKAGE_PIN BJ43 IOSTANDARD LVDS} [get_ports SYS_CLK0_P]
 
 ## RESET
 set_property -dict {PACKAGE_PIN BH26 IOSTANDARD LVCMOS18} [get_ports rst_ni]
 
 ## UART
-set_property -dict {PACKAGE_PIN A28 IOSTANDARD LVCMOS18} [get_ports tx_o]
-set_property -dict {PACKAGE_PIN B33 IOSTANDARD LVCMOS18} [get_ports rx_i]
+set_property -dict {PACKAGE_PIN B33 IOSTANDARD LVCMOS18} [get_ports tx_o]
+set_property -dict {PACKAGE_PIN A28 IOSTANDARD LVCMOS18} [get_ports rx_i]
 
