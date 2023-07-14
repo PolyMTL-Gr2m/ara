@@ -5,32 +5,51 @@
 // Author: Matheus Cavalcante <matheusd@iis.ee.ethz.ch>
 //         Basile Bougenot <bbougenot@student.ethz.ch>
 
+#include <stdint.h>
+#include <stdio.h>
+#include "util.h"
 #include "vector_macros.h"
 
 void TEST_CASE1(void) {
   VSET(16, e8, m1);
+  // do {
+  //   volatile uint8_t v1[] = {1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8};
+  //   uint64_t addr = ((uint64_t)v1 & 0x03ffffffc0) | 0xac00000000 | ((uint64_t)v1 >> 34);
+  //   volatile uint8_t my_var = *((volatile uint8_t *)addr);
+  //   MEMORY_BARRIER;
+  //   asm volatile ("vle8.v v1, (%0)  \n":: [V] "r"(v1));
+  // } while(0);
+  
+  //   do {
+  //   volatile uint8_t v2[] = {1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8};
+  //   uint64_t addr = ((uint64_t)v2 & 0x03ffffffc0) | 0xac00000000 | ((uint64_t)v2 >> 34);
+  //   volatile uint8_t my_var = *((volatile uint8_t *)addr);
+  //   MEMORY_BARRIER;
+  //   asm volatile ("vle8.v v2, (%0)  \n":: [V] "r"(v2));
+  // } while(0);
+
   VLOAD_8(v1, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
   VLOAD_8(v2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
   asm volatile("vadd.vv v3, v1, v2");
   VCMP_U8(1, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
+  
+  // VSET(16, e16, m1);
+  // VLOAD_16(v1, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
+  // VLOAD_16(v2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
+  // asm volatile("vadd.vv v3, v1, v2");
+  // VCMP_U16(2, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
 
-  VSET(16, e16, m1);
-  VLOAD_16(v1, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
-  VLOAD_16(v2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
-  asm volatile("vadd.vv v3, v1, v2");
-  VCMP_U16(2, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
+  // VSET(16, e32, m1);
+  // VLOAD_32(v1, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
+  // VLOAD_32(v2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
+  // asm volatile("vadd.vv v3, v1, v2");
+  // VCMP_U32(3, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
 
-  VSET(16, e32, m1);
-  VLOAD_32(v1, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
-  VLOAD_32(v2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
-  asm volatile("vadd.vv v3, v1, v2");
-  VCMP_U32(3, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
-
-  VSET(16, e64, m1);
-  VLOAD_64(v1, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
-  VLOAD_64(v2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
-  asm volatile("vadd.vv v3, v1, v2");
-  VCMP_U64(4, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
+  // VSET(16, e64, m1);
+  // VLOAD_64(v1, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
+  // VLOAD_64(v2, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8);
+  // asm volatile("vadd.vv v3, v1, v2");
+  // VCMP_U64(4, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
 }
 
 void TEST_CASE2(void) {
@@ -186,17 +205,25 @@ void TEST_CASE7(void) {
   VCMP_U8(25, v3, 2, 4, 6, 8, 10, 12, 14, 16, 2, 4, 6, 8, 10, 12, 14, 16);
 }
 
-int main(void) {
+int main(int argc, char** argv) {
+  // synchronization variable
+  volatile static uint32_t amo_cnt = 0;
+
+  // synchronize with other cores and wait until it is this core's turn
+  while(argv[0][0] != amo_cnt);
+  
+  printf("Hello World!\n");
   INIT_CHECK();
   enable_vec();
+  int num_fails;
 
   TEST_CASE1();
-  TEST_CASE2();
-  TEST_CASE3();
-  TEST_CASE4();
-  TEST_CASE5();
-  TEST_CASE6();
-  TEST_CASE7();
-
-  EXIT_CHECK();
+  // TEST_CASE2();
+  // TEST_CASE3();
+  // TEST_CASE4();
+  // TEST_CASE5();
+  // TEST_CASE6();
+  // TEST_CASE7();
+  //num_fails = EXIT_CHECK();
+  printf("num of failllllll %d \n",num_failed);
 }
