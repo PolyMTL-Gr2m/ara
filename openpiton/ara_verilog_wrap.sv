@@ -21,9 +21,9 @@ module ara_verilog_wrap
     // Support for floating-point data types
     parameter fpu_support_e              FPUSupport            = FPUSupportHalfSingleDouble,
     // External support for vfrec7, vfrsqrt7
-    parameter fpext_support_e                   FPExtSupport       = FPExtSupportEnable,
+    parameter fpext_support_e            FPExtSupport          = FPExtSupportEnable,
     // Support for fixed-point data types
-    parameter fixpt_support_e                   FixPtSupport       = FixedPointEnable,
+    parameter fixpt_support_e            FixPtSupport          = FixedPointEnable,
     // AXI Interface
     parameter int unsigned               AxiDataWidth          = 32*NrLanes,
     parameter int unsigned               AxiAddrWidth          = 64,
@@ -178,9 +178,6 @@ module ara_verilog_wrap
   ara_axi_req_t  ara_axi_req;
   ara_axi_resp_t ara_axi_resp;
 
-
-
-  
    
   
     //////////////////////
@@ -312,7 +309,7 @@ module ara_verilog_wrap
       CachedRegionAddrBase:  CachedRegionAddrBase,
       CachedRegionLength:    CachedRegionLength,
       // cache config
-      AxiCompliant:     Axi64BitCompliant, // Not sure it's a typo (Original: Axi64BitCompliant:1'b0 )
+      AxiCompliant:          Axi64BitCompliant, // Not sure it's a typo (Original: Axi64BitCompliant:1'b0 )
       SwapEndianess:         SwapEndianess,
       // debug
       DmBaseAddress:         DmBaseAddress,
@@ -325,7 +322,7 @@ module ara_verilog_wrap
 
   ariane #(
     .ArianeCfg     (ArianeOpenPitonCfg         )
-  ) i_ariane (
+  ) ariane (
     .clk_i            (clk_i                 ),
     .rst_ni           (spc_grst_l            ),
     .boot_addr_i,
@@ -345,77 +342,8 @@ module ara_verilog_wrap
 `endif
   );
 
-
-
-
-
-
-
-
-    
-  //   ariane #(
-  //     .ArianeCfg ( ArianeOpenPitonCfg )
-  //   ) ariane (
-  //     .clk_i            ( clk_i                ),
-  //     .rst_ni           ( spc_grst_l           ),
-  //     .boot_addr_i                             ,// constant
-  //     .hart_id_i                               ,// constant
-  //     .irq_i            ( irq                  ),
-  //     .ipi_i            ( ipi                  ),
-  //     .time_irq_i       ( time_irq             ),
-  //     .debug_req_i      ( debug_req            ),
-  //     // Accelerator ports, connection to Ara
-  //     .acc_req_o        (acc_req               ),
-  //     .acc_req_valid_o  (acc_req_valid         ),
-  //     .acc_req_ready_i  (acc_req_ready         ),
-  //     .acc_resp_i       (acc_resp              ),
-  //     .acc_resp_valid_i (acc_resp_valid        ),
-  //     .acc_resp_ready_o (acc_resp_ready        ),
-  //     // .acc_cons_en_o    (acc_cons_en           ),
-  //     // .inval_addr_i     (inval_addr            ),
-  //     // .inval_valid_i    (inval_valid           ),
-  //     // .inval_ready_o    (inval_ready           ),
-  //   `ifdef PITON_ARIANE
-  //     .l15_req_o   ( l15_req   ),
-  //     .l15_rtrn_i  ( l15_rtrn  )
-  // `else
-  //     .axi_req_o   ( axi_req   ),
-  //     .axi_resp_i  ( axi_resp  )
-  // `endif
-  //   );
-
-
   logic  scan_enable_i;
   assign scan_enable_i = 0;
-
-  // ara #(
-  //   .NrLanes     (NrLanes         ),
-  //   .FPUSupport  (FPUSupport      ),
-  //   .AxiDataWidth(AxiWideDataWidth),
-  //   .AxiAddrWidth(AxiAddrWidth    ),
-  //   .axi_ar_t    (ara_axi_ar_chan_t    ),
-  //   .axi_r_t     (ara_axi_r_chan_t     ),
-  //   .axi_aw_t    (ara_axi_aw_chan_t    ),
-  //   .axi_w_t     (ara_axi_w_chan_t     ),
-  //   .axi_b_t     (ara_axi_b_chan_t     ),
-  //   .axi_req_t   (ara_axi_req_t        ),
-  //   .axi_resp_t  (ara_axi_resp_t       )
-  // ) i_ara (
-  //   .clk_i           (clk_i         ),
-  //   .rst_ni          (rst_ni        ),
-  //   .scan_enable_i   (scan_enable_i ),
-  //   .scan_data_i     (1'b0          ),
-  //   .scan_data_o     (/* Unused */  ),
-  //   .acc_req_i       (acc_req       ),
-  //   .acc_req_valid_i (acc_req_valid ),
-  //   .acc_req_ready_o (acc_req_ready ),
-  //   .acc_resp_o      (acc_resp      ),
-  //   .acc_resp_valid_o(acc_resp_valid),
-  //   .acc_resp_ready_i(acc_resp_ready),
-  //   .axi_req_o       (ara_axi_req   ),
-  //   .axi_resp_i      (ara_axi_resp  )
-  // );
-
 
   ara #(
     .NrLanes     (NrLanes          ),
@@ -442,173 +370,13 @@ module ara_verilog_wrap
     .axi_req_o       (ara_axi_req   ),
     .axi_resp_i      (ara_axi_resp  )
   );
-
-  //////////////////////
-  //  Memory Regions  //
-  //////////////////////
-
-  // localparam NrAXIMasters = 1; // Actually masters, but slaves on the crossbar
-
-  // typedef enum int unsigned {
-  //   NOC = 0
-  // } axi_slaves_e;
-  // localparam NrAXISlaves = NOC + 1;
-
-  // Memory Map
-  // 1GByte of DDR (split between two chips on Genesys2)
-  // localparam logic [63:0] DRAMLength = 64'h40000000; // unused since xbar cancelled 
-  // localparam logic [63:0] CTRLLength = 64'h1000; // unused since xbar cancelled 
-  // localparam logic [63:0] NOCL2Length = 64'h1000; // unused since xbar cancelled 
-
-  /*typedef enum logic [63:0] {
-    DRAMBase = 64'h8000_0000,
-    CTRLBase = 64'hD000_0000, 
-    NOCL2Base = 64'hD00_1000
-  } soc_bus_start_e;*/
-
-
+  
   // Buses
-  //system_req_t  system_axi_req;
-  //system_resp_t system_axi_resp;
-
-  // soc_wide_req_t    [NrAXISlaves-1:0] periph_wide_axi_req;
-  // soc_wide_resp_t   [NrAXISlaves-1:0] periph_wide_axi_resp;
-  // soc_narrow_req_t  [NrAXISlaves-1:0] periph_narrow_axi_req;
-  // soc_narrow_resp_t [NrAXISlaves-1:0] periph_narrow_axi_resp;
-
-  //soc_wide_req_t    periph_wide_axi_req;
-  //soc_wide_resp_t   periph_wide_axi_resp;
   soc_narrow_req_t  periph_narrow_axi_req;
   soc_narrow_resp_t periph_narrow_axi_resp;
   soc_narrow_req_t  periph_cut_narrow_axi_req;
   soc_narrow_resp_t periph_cut_narrow_axi_resp;
 
-
-
-  ////////////////
-  //  Crossbar  //
-  ////////////////
-
-  /*localparam axi_pkg::xbar_cfg_t XBarCfg = '{
-    NoSlvPorts        : NrAXIMasters,
-    NoMstPorts        : NrAXISlaves,
-    MaxMstTrans       : 4,
-    MaxSlvTrans       : 4,
-    FallThrough       : 1'b0,
-    LatencyMode       : axi_pkg::CUT_MST_PORTS,
-    AxiIdWidthSlvPorts: AxiSocIdWidth,
-    AxiIdUsedSlvPorts : AxiSocIdWidth,
-    UniqueIds         : 1'b0,
-    AxiAddrWidth      : AxiAddrWidth,
-    AxiDataWidth      : AxiWideDataWidth,
-    NoAddrRules       : NrAXISlaves
-  };
-  axi_pkg::xbar_rule_64_t [NrAXISlaves-1:0] routing_rules;
-  assign routing_rules = '{
-    '{idx: CTRL, start_addr: CTRLBase, end_addr: CTRLBase + CTRLLength},
-    '{idx: NOC, start_addr: NOCL2Base, end_addr: NOCL2Base + NOCL2Length}
-  };
-  axi_xbar #(
-    .Cfg          (XBarCfg                ),
-    .slv_aw_chan_t(system_aw_chan_t       ),
-    .mst_aw_chan_t(soc_wide_aw_chan_t     ),
-    .w_chan_t     (system_w_chan_t        ),
-    .slv_b_chan_t (system_b_chan_t        ),
-    .mst_b_chan_t (soc_wide_b_chan_t      ),
-    .slv_ar_chan_t(system_ar_chan_t       ),
-    .mst_ar_chan_t(soc_wide_ar_chan_t     ),
-    .slv_r_chan_t (system_r_chan_t        ),
-    .mst_r_chan_t (soc_wide_r_chan_t      ),
-    .slv_req_t    (system_req_t           ),
-    .slv_resp_t   (system_resp_t          ),
-    .mst_req_t    (soc_wide_req_t         ),
-    .mst_resp_t   (soc_wide_resp_t        ),
-    .rule_t       (axi_pkg::xbar_rule_64_t)
-  ) i_soc_xbar (
-    .clk_i                (clk_i               ),
-    .rst_ni               (rst_ni              ),
-    .test_i               (1'b0                ),
-    .slv_ports_req_i      (system_axi_req      ),
-    .slv_ports_resp_o     (system_axi_resp     ),
-    .mst_ports_req_o      (periph_wide_axi_req ),
-    .mst_ports_resp_i     (periph_wide_axi_resp),
-    .addr_map_i           (routing_rules       ),
-    .en_default_mst_port_i('0                  ),
-    .default_mst_port_i   ('0                  )
-  );*/
-
-  /////////////////////////
-  //  Control registers  //
-  /////////////////////////
-  /*
-  soc_narrow_lite_req_t  axi_lite_ctrl_registers_req;
-  soc_narrow_lite_resp_t axi_lite_ctrl_registers_resp;
-  logic [63:0] event_trigger;
-  axi_dw_converter #(
-    .AxiSlvPortDataWidth(AxiWideDataWidth    ),
-    .AxiMstPortDataWidth(AxiNarrowDataWidth  ),
-    .AxiAddrWidth       (AxiAddrWidth        ),
-    .AxiIdWidth         (AxiSocIdWidth       ),
-    .AxiMaxReads        (2                   ),
-    .ar_chan_t          (soc_wide_ar_chan_t  ),
-    .mst_r_chan_t       (soc_narrow_r_chan_t ),
-    .slv_r_chan_t       (soc_wide_r_chan_t   ),
-    .aw_chan_t          (soc_narrow_aw_chan_t),
-    .b_chan_t           (soc_narrow_b_chan_t ),
-    .mst_w_chan_t       (soc_narrow_w_chan_t ),
-    .slv_w_chan_t       (soc_wide_w_chan_t   ),
-    .axi_mst_req_t      (soc_narrow_req_t    ),
-    .axi_mst_resp_t     (soc_narrow_resp_t   ),
-    .axi_slv_req_t      (soc_wide_req_t      ),
-    .axi_slv_resp_t     (soc_wide_resp_t     )
-  ) i_axi_slave_ctrl_dwc_csr (
-    .clk_i     (clk_i                       ),
-    .rst_ni    (rst_ni                      ),
-    .slv_req_i (periph_wide_axi_req[CTRL]   ),
-    .slv_resp_o(periph_wide_axi_resp[CTRL]  ),
-    .mst_req_o (periph_narrow_axi_req[CTRL] ),
-    .mst_resp_i(periph_narrow_axi_resp[CTRL])
-  );
-  axi_to_axi_lite #(
-    .AxiAddrWidth   (AxiAddrWidth          ),
-    .AxiDataWidth   (AxiNarrowDataWidth    ),
-    .AxiIdWidth     (AxiSocIdWidth         ),
-    .AxiUserWidth   (AxiUserWidth          ),
-    .AxiMaxReadTxns (1                     ),
-    .AxiMaxWriteTxns(1                     ),
-    .FallThrough    (1'b0                  ),
-    .full_req_t     (soc_narrow_req_t      ),
-    .full_resp_t    (soc_narrow_resp_t     ),
-    .lite_req_t     (soc_narrow_lite_req_t ),
-    .lite_resp_t    (soc_narrow_lite_resp_t)
-  ) i_axi_to_axi_lite_csr (
-    .clk_i     (clk_i                        ),
-    .rst_ni    (rst_ni                       ),
-    .test_i    (1'b0                         ),
-    .slv_req_i (periph_narrow_axi_req[CTRL]  ),
-    .slv_resp_o(periph_narrow_axi_resp[CTRL] ),
-    .mst_req_o (axi_lite_ctrl_registers_req  ),
-    .mst_resp_i(axi_lite_ctrl_registers_resp )
-  );
-  ctrl_registers #(
-    .DRAMBaseAddr   (DRAMBase              ),
-    .DRAMLength     (DRAMLength            ),
-    .DataWidth      (AxiNarrowDataWidth    ),
-    .AddrWidth      (AxiAddrWidth          ),
-    .axi_lite_req_t (soc_narrow_lite_req_t ),
-    .axi_lite_resp_t(soc_narrow_lite_resp_t)
-  ) i_ctrl_registers (
-    .clk_i                (clk_i                       ),
-    .rst_ni               (rst_ni                      ),
-    .axi_lite_slave_req_i (axi_lite_ctrl_registers_req ),
-    .axi_lite_slave_resp_o(axi_lite_ctrl_registers_resp),
-    .hw_cnt_en_o          (hw_cnt_en_o                 ),
-    .dram_base_addr_o     (// Unsed                    ),
-    .dram_end_addr_o      (// Unsed                    ),
-    .exit_o               (exit_o                      ),
-    .event_trigger_o      (event_trigger)
-  );
-  */
 
   /////////////////////////
   //  NOC Bridge         //
