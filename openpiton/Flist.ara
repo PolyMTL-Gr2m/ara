@@ -5,7 +5,6 @@
 +incdir+../../../include
 
 
-
 ../hardware/include/rvv_pkg.sv
 ../hardware/include/ara_pkg.sv
 ../openpiton/sync_fifo.v 
@@ -32,8 +31,10 @@
 ../hardware/src/axi_to_mem.sv
 ../hardware/src/ctrl_registers.sv
 ../hardware/src/cva6_accel_first_pass_decoder.sv
+../hardware/src/lane/power_gating_generic.sv
 ../hardware/src/lane/fixed_p_rounding.sv
 ../hardware/src/lane/operand_queues_stage.sv
+../hardware/src/lane/ara_popcnt.sv
 ../hardware/src/lane/simd_alu.sv
 ../hardware/src/lane/valu.sv
 ../hardware/src/lane/vmfpu.sv
@@ -46,6 +47,8 @@
 ../hardware/src/lane/simd_mul.sv
 ../hardware/src/lane/vector_regfile.sv
 ../hardware/src/masku/masku.sv
+../hardware/src/sldu/p2_stride_gen.sv
+../hardware/src/sldu/sldu_op_dp.sv
 ../hardware/src/sldu/sldu.sv
 ../hardware/src/vlsu/addrgen.sv
 ../hardware/src/vlsu/vldu.sv

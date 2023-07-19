@@ -1035,4 +1035,8 @@ end
 assign noc_valid_out = flit_ready;
 assign noc_data_out = flit;
 
+<<<<<<< HEAD
 endmodule
+=======
+endmodule
+>>>>>>> 37de0a75fe97ef8f4d13821dc23ae26797435baa
