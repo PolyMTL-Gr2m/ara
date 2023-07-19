@@ -202,32 +202,6 @@ reg  [`MSG_LENGTH_WIDTH-1:0] msg_counter_f;
 `endif
 
 
-wire store_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_NODATA_ACK;
-wire load_ack = noc_data_in[`MSG_TYPE] == `MSG_TYPE_DATA_ACK;
-
-reg [2:0] transaction_type_rd_data; 
-logic transaction_type_rd; 
-logic transaction_fifo_empty;
-logic transaction_fifo_full; 
-
-
-/* fifo for storing transaction type */
-sync_fifo #(
-	.DSIZE(3),
-	.ASIZE(5),
-	.MEMSIZE(16) // should be 2 ^ (ASIZE-1)
-) type_fifo (
-	.rdata(transaction_type_rd_data),
-	.empty(transaction_fifo_empty),
-	.clk(clk),
-	.ren(transaction_type_rd),
-	.wdata(transaction_type_wr_data),
-	.full(transaction_fifo_full),
-	.wval(transaction_type_wr),
-	.reset(rst)
-);
-
-
 // Should we read data from noc_data_in?
 assign noc_io_go = noc_valid_in && noc_ready_out;
 
@@ -314,6 +288,9 @@ begin
               `ifndef ARA_REQ2MEM
                 transaction_type_rd = 1;
               `endif
+            end
+            else begin
+                msg_counter_next = (noc_io_go) ? msg_counter_f + 1'b1 : msg_counter_f;
             end
         end
       `ifndef ARA_REQ2MEM

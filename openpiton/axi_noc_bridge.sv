@@ -179,6 +179,7 @@ logic [AXI_ADDR_WIDTH-1:0]                awaddr_fifo_out;
 logic                                     awaddr_fifo_ren;
 logic [AXI_ADDR_WIDTH-1:0]                awaddr_buffer_q, awaddr_buffer_d;
 
+logic                                     wdata_fifo_wval;
 logic                                     wdata_fifo_full;
 logic [AXI_DATA_WIDTH-1:0]                wdata_fifo_wdata;
 logic                                     wdata_fifo_empty;
@@ -197,6 +198,11 @@ logic [AXI_ADDR_WIDTH-1:0]                araddr_buffer_q, araddr_buffer_d;
 
 logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_out;
 logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_wdata; 
+logic                                     wstrb_fifo_full;
+logic                                     wstrb_fifo_empty;
+logic                                     wstrb_fifo_ren;
+logic                                     wstrb_fifo_wval;
+logic [AXI_DATA_WIDTH/8 - 1: 0]           wstrb_fifo_mux_out;
 
 logic [7:0]                               awlen_fifo_out;
 logic [7:0]                               awlen_fifo_wdata;
@@ -211,16 +217,6 @@ logic                                     need_split_w_transaction;
 logic                                     last_write_transfer;
 logic                                     waddr_aligned_with_16B;
 logic                                     write_word_select;
-
-logic [2:0]                               awsize_fifo_out;
-logic [2:0]                               awsize_fifo_wdata;
-logic                                     awsize_fifo_empty;
-logic                                     awsize_fifo_full;
-logic                                     awsize_fifo_wval;
-logic                                     awsize_fifo_ren;
-
-logic                                     [3:0] awsize_buffer_q;
-logic                                     [3:0] awsize_buffer_d; 
 
 logic [2:0]                               awsize_fifo_out;
 logic [2:0]                               awsize_fifo_wdata;
@@ -656,16 +652,6 @@ assign arsize_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign arsize_fifo_wdata = m_axi_arsize;
 assign arsize_fifo_ren = arlen_fifo_ren;
 
-
-always_comb begin 
-    if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arsize_buffer_d = arsize_fifo_out; // no beat left, next transaction  
-    else arsize_buffer_d = arsize_buffer_q;
-end 
-
-always_ff @(posedge clk or negedge rst_n) begin 
-    if (!rst_n) arsize_buffer_q <= 0;
-    else arsize_buffer_q <= arsize_buffer_d;
-end
 
 always_comb begin 
     if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arsize_buffer_d = arsize_fifo_out; // no beat left, next transaction  
