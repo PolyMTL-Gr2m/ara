@@ -308,20 +308,22 @@ module ara_verilog_wrap
       NrPMPEntries:          NrPMPEntries
     };
 
-  localparam ariane_pkg::cva6_cfg_t CVA6Cfg = {
-      unsigned'(2                                       ),  // NrCommitPorts
-      unsigned'(0                                       ),  // IsRVFI
-      unsigned'(AxiAddrWidth                            ),  // AxiAddrWidth
-      unsigned'(AxiNarrowDataWidth                      ),  // AxiDataWidth
-      unsigned'(AxiIdWidth                              ),  // AxiIdWidth
-      unsigned'(AxiUserWidth                            )   // AxiUserWidth
+  localparam ariane_pkg::cva6_cfg_t CVA6Cfg = '{
+    NrCommitPorts: 2                 ,
+    IsRVFI       : 0                 ,
+    AxiAddrWidth : AxiAddrWidth      ,
+    AxiDataWidth : AxiNarrowDataWidth,
+    AxiIdWidth   : AxiIdWidth        ,
+    AxiUserWidth : AxiUserWidth       
   };
 
   ariane #(
-    .CVA6Cfg          (CVA6Cfg               ),
-    .ArianeCfg        (ArianeOpenPitonCfg    ),
-    .noc_req_t        ( wt_cache_pkg::l15_req_t ),
-    .noc_resp_t       ( wt_cache_pkg::l15_rtrn_t )
+    .CVA6Cfg          (CVA6Cfg                    ),
+    .cvxif_req_t      (acc_pkg::accelerator_req_t ),
+    .cvxif_resp_t     (acc_pkg::accelerator_resp_t),
+    .ArianeCfg        (ArianeOpenPitonCfg         ),
+    .noc_req_t        (wt_cache_pkg::l15_req_t    ),
+    .noc_resp_t       (wt_cache_pkg::l15_rtrn_t   )
   ) ariane (
     .clk_i            (clk_i                 ),
     .rst_ni           (spc_grst_l            ),
@@ -331,6 +333,8 @@ module ara_verilog_wrap
     .ipi_i            (ipi                   ),
     .time_irq_i       (time_irq              ),
     .debug_req_i      (debug_req             ),
+    .cvxif_req_o      (acc_req               ),
+    .cvxif_resp_i     (acc_resp              ),
     .noc_req_o        (l15_req               ),
     .noc_resp_i       (l15_rtrn              )
   );
@@ -791,3 +795,4 @@ axilite_noc_bridge #(
 `endif
 
 endmodule : ara_verilog_wrap
+
