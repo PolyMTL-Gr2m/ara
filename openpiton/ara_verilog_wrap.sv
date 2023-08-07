@@ -189,15 +189,7 @@ module ara_verilog_wrap
   
     // Accelerator ports
     accelerator_req_t                     acc_req;
-    logic                                 acc_req_valid;
-    logic                                 acc_req_ready;
     accelerator_resp_t                    acc_resp;
-    logic                                 acc_resp_valid;
-    logic                                 acc_resp_ready;
-    logic                                 acc_cons_en; // unused
-    logic              [AxiAddrWidth-1:0] inval_addr;
-    logic                                 inval_valid;
-    logic                                 inval_ready;
   
   
     /////////////////////////////
@@ -316,12 +308,22 @@ module ara_verilog_wrap
       NrPMPEntries:          NrPMPEntries
     };
 
-
-
-
+  localparam ariane_pkg::cva6_cfg_t CVA6Cfg = '{
+    NrCommitPorts: 2                 ,
+    IsRVFI       : 0                 ,
+    AxiAddrWidth : AxiAddrWidth      ,
+    AxiDataWidth : AxiNarrowDataWidth,
+    AxiIdWidth   : AxiIdWidth        ,
+    AxiUserWidth : AxiUserWidth       
+  };
 
   ariane #(
-    .ArianeCfg     (ArianeOpenPitonCfg         )
+    .CVA6Cfg          (CVA6Cfg                    ),
+    .cvxif_req_t      (acc_pkg::accelerator_req_t ),
+    .cvxif_resp_t     (acc_pkg::accelerator_resp_t),
+    .ArianeCfg        (ArianeOpenPitonCfg         ),
+    .noc_req_t        (wt_cache_pkg::l15_req_t    ),
+    .noc_resp_t       (wt_cache_pkg::l15_rtrn_t   )
   ) ariane (
     .clk_i            (clk_i                 ),
     .rst_ni           (spc_grst_l            ),
@@ -331,15 +333,10 @@ module ara_verilog_wrap
     .ipi_i            (ipi                   ),
     .time_irq_i       (time_irq              ),
     .debug_req_i      (debug_req             ),
-    // Accelerator ports
-`ifdef PITON_ARIANE
-    .l15_req_o        (l15_req               ),
-    .l15_rtrn_i       (l15_rtrn              )
-`else
-    // Memory interface
-    .axi_req_o        (ariane_narrow_axi_req ),
-    .axi_resp_i       (ariane_narrow_axi_resp)
-`endif
+    .cvxif_req_o      (acc_req               ),
+    .cvxif_resp_i     (acc_resp              ),
+    .noc_req_o        (l15_req               ),
+    .noc_resp_i       (l15_rtrn              )
   );
 
   logic  scan_enable_i;
@@ -376,11 +373,6 @@ module ara_verilog_wrap
   soc_narrow_resp_t periph_narrow_axi_resp;
   soc_narrow_req_t  periph_cut_narrow_axi_req;
   soc_narrow_resp_t periph_cut_narrow_axi_resp;
-
-
-  /////////////////////////
-  //  NOC Bridge         //
-  /////////////////////////
 
   /////////////////////////
   //  NOC Bridge         //
@@ -803,3 +795,4 @@ axilite_noc_bridge #(
 `endif
 
 endmodule : ara_verilog_wrap
+
