@@ -317,27 +317,33 @@ module ara_verilog_wrap
     AxiUserWidth : AxiUserWidth       
   };
 
-  ariane #(
-    .CVA6Cfg          (CVA6Cfg                    ),
-    .cvxif_req_t      (acc_pkg::accelerator_req_t ),
-    .cvxif_resp_t     (acc_pkg::accelerator_resp_t),
-    .ArianeCfg        (ArianeOpenPitonCfg         ),
-    .noc_req_t        (wt_cache_pkg::l15_req_t    ),
-    .noc_resp_t       (wt_cache_pkg::l15_rtrn_t   )
+  cva6 #(
+    .CVA6Cfg              (CVA6Cfg                    ),
+    .rvfi_instr_t         (rvfi_instr_t               ),
+    .cvxif_req_t          (acc_pkg::accelerator_req_t ),
+    .cvxif_resp_t         (acc_pkg::accelerator_resp_t),
+    .ArianeCfg            (ArianeOpenPitonCfg         ),
+    .axi_ar_chan_t        (ariane_axi::ar_chan_t      ),
+    .axi_aw_chan_t        (ariane_axi::aw_chan_t      ),
+    .axi_w_chan_t         (ariane_axi::w_chan_t       ),
+    .noc_req_t            (wt_cache_pkg::l15_req_t    ),
+    .noc_resp_t           (wt_cache_pkg::l15_rtrn_t   )
   ) ariane (
-    .clk_i            (clk_i                 ),
-    .rst_ni           (spc_grst_l            ),
-    .boot_addr_i,
-    .hart_id_i  ,
-    .irq_i            (irq                   ),
-    .ipi_i            (ipi                   ),
-    .time_irq_i       (time_irq              ),
-    .debug_req_i      (debug_req             ),
-    .cvxif_req_o      (acc_req               ),
-    .cvxif_resp_i     (acc_resp              ),
-    .noc_req_o        (l15_req               ),
-    .noc_resp_i       (l15_rtrn              )
+    .clk_i                ( clk_i                     ),
+    .rst_ni               ( spc_grst_l                ),
+    .boot_addr_i          (                           ),
+    .hart_id_i            (                           ),
+    .irq_i                ( irq                       ),
+    .ipi_i                ( ipi                       ),
+    .time_irq_i           ( time_irq                  ),
+    .debug_req_i          ( debug_req                 ),
+    .rvfi_o               (                           ),
+    .cvxif_req_o          ( acc_req                   ),
+    .cvxif_resp_i         ( acc_resp                  ),
+    .noc_req_o            ( l15_req                   ),
+    .noc_resp_i           ( l15_rtrn                  )
   );
+
 
   logic  scan_enable_i;
   assign scan_enable_i = 0;
