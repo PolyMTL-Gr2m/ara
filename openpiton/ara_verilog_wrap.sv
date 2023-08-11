@@ -167,14 +167,11 @@ module ara_verilog_wrap
   `AXI_TYPEDEF_ALL(ara_axi, axi_addr_t, axi_core_id_t, axi_data_t, axi_strb_t, axi_user_t)
   // `AXI_TYPEDEF_ALL(ariane_axi, axi_addr_t, axi_core_id_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
 
-  `AXI_TYPEDEF_ALL(soc_narrow, axi_addr_t, axi_soc_id_t, axi_narrow_data_t, axi_narrow_strb_t,
-  axi_user_t)
+  `AXI_TYPEDEF_ALL(soc_narrow, axi_addr_t, axi_soc_id_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(soc_wide, axi_addr_t, axi_soc_id_t, axi_data_t, axi_strb_t, axi_user_t)
   `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
   
 
-  system_req_t system_axi_req;
-  system_resp_t system_axi_resp;
   ara_axi_req_t  ara_axi_req;
   ara_axi_resp_t ara_axi_resp;
 
@@ -319,20 +316,17 @@ module ara_verilog_wrap
 
   cva6 #(
     .CVA6Cfg              (CVA6Cfg                    ),
-    .rvfi_instr_t         (rvfi_instr_t               ),
+    .rvfi_instr_t         (logic                      ),
     .cvxif_req_t          (acc_pkg::accelerator_req_t ),
     .cvxif_resp_t         (acc_pkg::accelerator_resp_t),
     .ArianeCfg            (ArianeOpenPitonCfg         ),
-    .axi_ar_chan_t        (ariane_axi::ar_chan_t      ),
-    .axi_aw_chan_t        (ariane_axi::aw_chan_t      ),
-    .axi_w_chan_t         (ariane_axi::w_chan_t       ),
     .noc_req_t            (wt_cache_pkg::l15_req_t    ),
     .noc_resp_t           (wt_cache_pkg::l15_rtrn_t   )
-  ) ariane (
+  ) i_cva6 (
     .clk_i                ( clk_i                     ),
     .rst_ni               ( spc_grst_l                ),
-    .boot_addr_i          (                           ),
-    .hart_id_i            (                           ),
+    .boot_addr_i,
+    .hart_id_i  ,
     .irq_i                ( irq                       ),
     .ipi_i                ( ipi                       ),
     .time_irq_i           ( time_irq                  ),
