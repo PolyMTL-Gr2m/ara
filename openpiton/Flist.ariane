@@ -61,7 +61,7 @@ $ARIANE_ROOT/vendor/pulp-platform/tech_cells_generic/src/rtl/tc_clk.sv
 $ARIANE_ROOT/core/cache_subsystem/axi_adapter.sv
 $ARIANE_ROOT/core/alu.sv
 $ARIANE_ROOT/core/fpu_wrap.sv
-$ARIANE_ROOT/corev_apu/src/ariane.sv
+$ARIANE_ROOT/../ara/openpiton/ariane.sv
 $ARIANE_ROOT/core/cva6.sv
 $ARIANE_ROOT/core/branch_unit.sv
 $ARIANE_ROOT/core/compressed_decoder.sv
