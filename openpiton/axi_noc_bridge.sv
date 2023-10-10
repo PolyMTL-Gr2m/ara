@@ -514,7 +514,7 @@ end
 
 /**fifo for wsize**/
 sync_fifo #(
-        .DSIZE(8),
+        .DSIZE(3),
         .ASIZE(5),
         .MEMSIZE(16) // should be 2 ^ (ASIZE-1)
 ) awsize_fifo (
@@ -634,7 +634,7 @@ end
 
 /** fifo for read len***/
 sync_fifo #(
-    .DSIZE(8),
+    .DSIZE(3),
     .ASIZE(5),
     .MEMSIZE(16) // should be 2 ^ (ASIZE-1)
 ) arsize_fifo (
@@ -804,7 +804,8 @@ begin
 end 
 
 
-always_ff@(posedge clk or negedge rst_n)
+//always_ff@(posedge clk or negedge rst_n)
+always_comb
 begin
     flit_state_next = flit_state_f;
     unique case (flit_state_f)
@@ -1035,8 +1036,4 @@ end
 assign noc_valid_out = flit_ready;
 assign noc_data_out = flit;
 
-<<<<<<< HEAD
 endmodule
-=======
-endmodule
->>>>>>> 37de0a75fe97ef8f4d13821dc23ae26797435baa

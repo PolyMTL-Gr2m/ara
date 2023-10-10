@@ -472,7 +472,7 @@ assign fifo_has_packet = (type_fifo_out == MSG_TYPE_STORE) ? (!awaddr_fifo_empty
 //  assign noc_load_done = noc_last_data && type_fifo_out == MSG_TYPE_LOAD; // We need to file 2 meaningless data flit (16 bytes) for swap_wb load
 `endif
 
-generate begin
+
  genvar k;
  if (AXI_LITE_DATA_WIDTH < MIN_NOC_DATA_WIDTH) begin
      for (k=0; k< MIN_NOC_DATA_WIDTH/AXI_LITE_DATA_WIDTH; k = k + 1)
@@ -486,8 +486,6 @@ generate begin
          assign out_data[k] = wdata_fifo_out[(k+1)*MIN_NOC_DATA_WIDTH-1 : k*MIN_NOC_DATA_WIDTH];
      end
  end
-end
-endgenerate
 
 
 
