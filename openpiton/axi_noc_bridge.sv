@@ -1011,6 +1011,9 @@ begin
                 `endif 
                     flit_ready = 1'b1;
                 end
+                default: begin
+                    flit_ready = 1'b0;
+                end
             endcase
         end
 

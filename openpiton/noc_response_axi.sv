@@ -84,7 +84,7 @@ module noc_response_axi #(
 
 localparam LAST_TRANSFER_FLAG_WIDTH = 1; 
 
-typedef enum logic [2:0] {
+typedef enum logic [1:0] {
     NOC_IN_STATE_HEADER          = 2'b00, // Header 0
     NOC_IN_STATE_READ_DATA       = 2'b01, // Data Lines
     NOC_IN_STATE_STORE_ACK       = 2'b10  // for the fifo read when store happens
