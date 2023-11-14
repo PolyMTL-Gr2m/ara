@@ -44,7 +44,7 @@ always_comb begin
 end 
 
 endmodule 
-module noc_response_axi #(
+module noc_response_axi import wt_cache_pkg::*; #(
     parameter AXI_DATA_WIDTH  = 64,
   `ifndef ARA_REQ2MEM
     parameter MSG_TYPE_INVAL       = 2'd0, // Invalid Message
@@ -84,7 +84,7 @@ module noc_response_axi #(
 
 localparam LAST_TRANSFER_FLAG_WIDTH = 1; 
 
-typedef enum logic [2:0] {
+typedef enum logic [1:0] {
     NOC_IN_STATE_HEADER          = 2'b00, // Header 0
     NOC_IN_STATE_READ_DATA       = 2'b01, // Data Lines
     NOC_IN_STATE_STORE_ACK       = 2'b10  // for the fifo read when store happens
@@ -194,7 +194,8 @@ end
 
 if (AXI_DATA_WIDTH == 64) begin 
     always_comb begin 
-        rdata_fifo_wdata = {valid_last_read_transfer, {<<8{noc_data_in}}};
+        //rdata_fifo_wdata = {valid_last_read_transfer, {<<8{noc_data_in}}};
+        rdata_fifo_wdata = {valid_last_read_transfer, swendian64(noc_data_in)};
 
         rdata_fifo_wval = read_size ? (noc_in_count_f >= 0) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go : 
                             read_word_select ? (noc_in_count_f == 1) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go :
@@ -209,7 +210,8 @@ else begin
         else first_word <= first_word; 
     end 
     always_comb begin 
-        rdata_fifo_wdata = {valid_last_read_transfer, {<<8{first_word, noc_data_in}}};
+        //rdata_fifo_wdata = {valid_last_read_transfer, {<<8{first_word, noc_data_in}}};
+        rdata_fifo_wdata = {valid_last_read_transfer, swendian64({first_word, noc_data_in})};
 
         rdata_fifo_wval = (noc_in_count_f == 1) && (noc_in_state_f == NOC_IN_STATE_READ_DATA) && noc_io_go;
     end 

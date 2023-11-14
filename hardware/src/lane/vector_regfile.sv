@@ -79,7 +79,7 @@ module vector_regfile import ara_pkg::*; #(
     assign vrf_clk = clk_i;
 `endif
 
-    tc_sram #(
+    tc_sram_wrapper #(
       .NumWords (NumWords ),
       .DataWidth(DataWidth),
       .NumPorts (1        )

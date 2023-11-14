@@ -232,7 +232,7 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   );
 
 `ifndef SPYGLASS
-  tc_sram #(
+  tc_sram_wrapper #(
     .NumWords (L2NumWords  ),
     .NumPorts (1           ),
     .DataWidth(AxiDataWidth),
