@@ -847,8 +847,7 @@ begin
 end 
 
 
-//always_ff@(posedge clk or negedge rst_n)
-always_comb
+always_comb //@(posedge clk or negedge rst_n)
 begin
     flit_state_next = flit_state_f;
     unique case (flit_state_f)
