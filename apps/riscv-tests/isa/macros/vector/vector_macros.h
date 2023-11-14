@@ -104,9 +104,11 @@ int test_case;
   do {                                                              \
     MEMORY_BARRIER;                                                 \
     if (num_failed > 0) {                                           \
+      printf("Num failed : %d\r\n", num_failed);                    \
       return num_failed;                                            \
     }                                                               \
     else {                                                          \
+      printf("No fail\r\n");                                        \
       return 0;                                                     \
     }                                                               \
   } while(0);                                                       \
