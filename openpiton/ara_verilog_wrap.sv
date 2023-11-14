@@ -167,14 +167,11 @@ module ara_verilog_wrap
   `AXI_TYPEDEF_ALL(ara_axi, axi_addr_t, axi_core_id_t, axi_data_t, axi_strb_t, axi_user_t)
   // `AXI_TYPEDEF_ALL(ariane_axi, axi_addr_t, axi_core_id_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
 
-  `AXI_TYPEDEF_ALL(soc_narrow, axi_addr_t, axi_soc_id_t, axi_narrow_data_t, axi_narrow_strb_t,
-  axi_user_t)
+  `AXI_TYPEDEF_ALL(soc_narrow, axi_addr_t, axi_soc_id_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(soc_wide, axi_addr_t, axi_soc_id_t, axi_data_t, axi_strb_t, axi_user_t)
   `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
   
 
-  system_req_t system_axi_req;
-  system_resp_t system_axi_resp;
   ara_axi_req_t  ara_axi_req;
   ara_axi_resp_t ara_axi_resp;
 
@@ -316,6 +313,7 @@ module ara_verilog_wrap
     AxiIdWidth   : AxiIdWidth        ,
     AxiUserWidth : AxiUserWidth       
   };
+
 
   ariane #(
     .CVA6Cfg          (CVA6Cfg                    ),
