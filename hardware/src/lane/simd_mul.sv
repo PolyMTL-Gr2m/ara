@@ -242,6 +242,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     end : gen_mul
 
     always_comb begin : p_mul
+      r = '0;
       unique case (op)
         // Single-Width integer multiply instructions
         VMUL: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0];
