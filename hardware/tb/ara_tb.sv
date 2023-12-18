@@ -10,6 +10,8 @@ import "DPI-C" function void read_elf (input string filename);
 import "DPI-C" function byte get_section (output longint address, output longint len);
 import "DPI-C" context function byte read_section(input longint address, inout byte buffer[]);
 
+`define STRINGIFY(x) `"x`"
+
 module ara_tb;
 
   /*****************
@@ -27,7 +29,9 @@ module ara_tb;
   localparam NrLanes = 0;
   `endif
 
-  localparam ClockPeriod = 1ns;
+  localparam ClockPeriod  = 1ns;
+  // Axi response delay [ps]
+  localparam int unsigned AxiRespDelay = 200;
 
   localparam AxiAddrWidth      = 64;
   localparam AxiWideDataWidth  = 64 * NrLanes / 2;
@@ -44,18 +48,22 @@ module ara_tb;
   logic clk;
   logic rst_n;
 
-  // Toggling the clock
-  always #(ClockPeriod/2) clk = !clk;
-
   // Controlling the reset
   initial begin
     clk   = 1'b0;
     rst_n = 1'b0;
 
-    repeat (5)
-      #(ClockPeriod);
+    // Synch reset for TB memories
+    repeat (10) #(ClockPeriod/2) clk = ~clk;
+    clk = 1'b0;
 
+    // Asynch reset for main system
+    repeat (5) #(ClockPeriod);
     rst_n = 1'b1;
+    repeat (5) #(ClockPeriod);
+
+    // Start the clock
+    forever #(ClockPeriod/2) clk = ~clk;
   end
 
   /*********
@@ -71,7 +79,8 @@ module ara_tb;
   ara_testharness #(
     .NrLanes     (NrLanes         ),
     .AxiAddrWidth(AxiAddrWidth    ),
-    .AxiDataWidth(AxiWideDataWidth)
+    .AxiDataWidth(AxiWideDataWidth),
+    .AxiRespDelay(AxiRespDelay    )
   ) dut (
     .clk_i (clk  ),
     .rst_ni(rst_n),
@@ -129,6 +138,55 @@ module ara_tb;
     end
   end : dram_init
 
+`ifndef TARGET_GATESIM
+
+  /*************************
+   *  PRINT STORED VALUES  *
+   *************************/
+
+  // This is useful to check that the ideal dispatcher simulation was correct
+
+`ifndef IDEAL_DISPATCHER
+  localparam OutResultFile = "../gold_results.txt";
+`else
+  localparam OutResultFile = "../id_results.txt";
+`endif
+
+  int fd;
+
+  data_t                     ara_w;
+  logic [AxiWideBeWidth-1:0] ara_w_strb;
+  logic                      ara_w_valid;
+  logic                      ara_w_ready;
+
+  // Avoid dumping what it's not measured, e.g. cache warming
+  logic dump_en_mask;
+
+  initial begin
+    fd = $fopen(OutResultFile, "w");
+    $display("Dump results on %s", OutResultFile);
+  end
+
+  assign ara_w       = dut.i_ara_soc.i_system.i_ara.i_vlsu.axi_req.w.data;
+  assign ara_w_strb  = dut.i_ara_soc.i_system.i_ara.i_vlsu.axi_req.w.strb;
+  assign ara_w_valid = dut.i_ara_soc.i_system.i_ara.i_vlsu.axi_req.w_valid;
+  assign ara_w_ready = dut.i_ara_soc.i_system.i_ara.i_vlsu.axi_resp.w_ready;
+
+`ifndef IDEAL_DISPATCHER
+  assign dump_en_mask = dut.i_ara_soc.hw_cnt_en_o[0];
+`else
+  // Ideal-Dispatcher system does not warm the scalar cache
+  assign dump_en_mask = 1'b1;
+`endif
+  always_ff @(posedge clk)
+    if (dump_en_mask)
+      if (ara_w_valid && ara_w_ready)
+        for (int b = 0; b < AxiWideBeWidth; b++)
+          if (ara_w_strb[b])
+            $fdisplay(fd, "%0x", ara_w[b*8 +: 8]);
+
+`endif
+
   /*********
    *  EOC  *
    *********/
@@ -138,11 +196,75 @@ module ara_tb;
       if (exit >> 1) begin
         $warning("Core Test ", $sformatf("*** FAILED *** (tohost = %0d)", (exit >> 1)));
       end else begin
+        // Print vector HW runtime
+`ifndef TARGET_GATESIM
+        $display("[hw-cycles]: %d", int'(dut.runtime_buf_q));
+`endif
         $info("Core Test ", $sformatf("*** SUCCESS *** (tohost = %0d)", (exit >> 1)));
       end
 
+`ifndef TARGET_GATESIM
+      $fclose(fd);
+`endif
       $finish(exit >> 1);
     end
   end
+
+// Dump VCD with a SW trigger
+`ifdef VCD_DUMP
+
+  /****************
+  *  VCD DUMPING  *
+  ****************/
+
+`ifdef VCD_PATH
+  string vcd_path = `STRINGIFY(`VCD_PATH);
+`else
+  string vcd_path = "../vcd/last_sim.vcd";
+`endif
+
+  localparam logic [63:0] VCD_TRIGGER_ON  = 64'h0000_0000_0000_0001;
+  localparam logic [63:0] VCD_TRIGGER_OFF = 64'hFFFF_FFFF_FFFF_FFFF;
+
+  event start_dump_event;
+  event stop_dump_event;
+
+  logic [63:0] event_trigger_reg;
+  logic        dumping = 1'b0;
+
+  assign event_trigger_reg =
+           dut.i_ara_soc.i_ctrl_registers.event_trigger_o;
+
+  initial begin
+    $display("VCD_DUMP successfully defined\n");
+  end
+
+  always_ff @(posedge clk) begin
+    if(event_trigger_reg == VCD_TRIGGER_ON && !dumping) begin
+       $display("[TB - VCD] START DUMPING\n");
+       -> start_dump_event;
+       dumping = 1'b1;
+    end
+    if(event_trigger_reg == VCD_TRIGGER_OFF) begin
+       -> stop_dump_event;
+       $display("[TB - VCD] STOP DUMPING\n");
+    end
+  end
+
+  initial begin
+    @(start_dump_event);
+    $dumpfile(vcd_path);
+    $dumpvars(0, dut.i_ara_soc.i_system);
+    $dumpon;
+
+    #1 $display("[TB - VCD] DUMPING...\n");
+
+    @(stop_dump_event)
+    $dumpoff;
+    $dumpflush;
+    $finish;
+  end
+
+`endif
 
 endmodule : ara_tb

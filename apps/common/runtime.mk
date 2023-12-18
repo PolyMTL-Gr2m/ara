@@ -68,8 +68,14 @@ RISCV_SIM_MOD ?= $(ISA_SIM_MOD_INSTALL_DIR)/bin/spike
 RISCV_SIM_OPT ?= --isa=rv64gcv_zfh --varch="vlen:4096,elen:64"
 RISCV_SIM_MOD_OPT ?= --isa=rv64gcv_zfh --varch="vlen:4096,elen:64" -d
 
+# Python
+PYTHON ?= python3
+
 # Defines
 ENV_DEFINES ?=
+ifeq ($(vcd_dump),1)
+ENV_DEFINES += -DVCD_DUMP=1
+endif
 MAKE_DEFINES = -DNR_LANES=$(nr_lanes) -DVLEN=$(vlen)
 DEFINES += $(ENV_DEFINES) $(MAKE_DEFINES)
 
@@ -77,9 +83,9 @@ DEFINES += $(ENV_DEFINES) $(MAKE_DEFINES)
 RISCV_WARNINGS += -Wunused-variable -Wall -Wextra -Wno-unused-command-line-argument # -Werror
 
 # LLVM Flags
-# LLVM_FLAGS     ?= -march=rv64gcv_zfh_zvfh0p1 -menable-experimental-extensions -mabi=$(RISCV_ABI) -mno-relax -fuse-ld=lld
-LLVM_FLAGS     ?= -march=rv64gcv -menable-experimental-extensions -mabi=$(RISCV_ABI) -mno-relax -fuse-ld=lld
-RISCV_FLAGS    ?= $(LLVM_FLAGS) -mcmodel=medany -I$(CURDIR)/common -std=gnu99 -O3 -ffast-math -fno-common -fno-builtin-printf $(DEFINES) $(RISCV_WARNINGS)
+LLVM_FLAGS     ?= -march=rv64gcv_zfh_zvfh0p1 -menable-experimental-extensions -mabi=$(RISCV_ABI) -mno-relax -fuse-ld=lld
+LLVM_V_FLAGS   ?= -fno-vectorize -mllvm -scalable-vectorization=off -mllvm -riscv-v-vector-bits-min=0 -Xclang -target-feature -Xclang +no-optimized-zero-stride-load
+RISCV_FLAGS    ?= $(LLVM_FLAGS) $(LLVM_V_FLAGS) -mcmodel=medany -I$(CURDIR)/common -std=gnu99 -O3 -ffast-math -fno-common -fno-builtin-printf $(DEFINES) $(RISCV_WARNINGS)
 RISCV_CCFLAGS  ?= $(RISCV_FLAGS) -ffunction-sections -fdata-sections
 RISCV_CCFLAGS_SPIKE  ?= $(RISCV_FLAGS) $(SPIKE_CCFLAGS) -ffunction-sections -fdata-sections
 RISCV_CXXFLAGS ?= $(RISCV_FLAGS) -ffunction-sections -fdata-sections
@@ -99,9 +105,9 @@ else
 endif
 
 # Compile two different versions of the runtime, since we cannot link code compiled with two different toolchains
-RUNTIME_GCC   ?= common/crt0-gcc.S.o common/printf-gcc.c.o common/string-gcc.c.o common/serial-gcc.c.o
-RUNTIME_LLVM  ?= common/crt0-llvm.S.o common/printf-llvm.c.o common/string-llvm.c.o common/serial-llvm.c.o
-RUNTIME_SPIKE ?= $(spike_env_dir)/benchmarks/common/crt.S.o.spike $(spike_env_dir)/benchmarks/common/syscalls.c.o.spike
+RUNTIME_GCC   ?= common/crt0-gcc.S.o common/printf-gcc.c.o common/string-gcc.c.o common/serial-gcc.c.o common/util-gcc.c.o
+RUNTIME_LLVM  ?= common/crt0-llvm.S.o common/printf-llvm.c.o common/string-llvm.c.o common/serial-llvm.c.o common/util-llvm.c.o
+RUNTIME_SPIKE ?= $(spike_env_dir)/benchmarks/common/crt.S.o.spike $(spike_env_dir)/benchmarks/common/syscalls.c.o.spike common/util.c.o.spike
 
 .INTERMEDIATE: $(RUNTIME_GCC) $(RUNTIME_LLVM)
 

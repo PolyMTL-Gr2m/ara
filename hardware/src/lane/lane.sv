@@ -13,6 +13,10 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
     parameter  int           unsigned NrLanes         = 1, // Number of lanes
     // Support for floating-point data types
     parameter  fpu_support_e          FPUSupport      = FPUSupportHalfSingleDouble,
+    // External support for vfrec7, vfrsqrt7
+    parameter  fpext_support_e        FPExtSupport    = FPExtSupportEnable,
+    // Support for fixed-point data types
+    parameter  fixpt_support_e        FixPtSupport    = FixedPointEnable,
     // Dependant parameters. DO NOT CHANGE!
     // VRF Parameters
     localparam int           unsigned MaxVLenPerLane  = VLEN / NrLanes,       // In bits
@@ -350,9 +354,11 @@ module lane import ara_pkg::*; import rvv_pkg::*; #(
   logic sldu_alu_ready, sldu_mfpu_ready;
 
   vector_fus_stage #(
-    .NrLanes   (NrLanes   ),
-    .FPUSupport(FPUSupport),
-    .vaddr_t   (vaddr_t   )
+    .NrLanes     (NrLanes     ),
+    .FPUSupport  (FPUSupport  ),
+    .FPExtSupport(FPExtSupport),
+    .FixPtSupport(FixPtSupport),
+    .vaddr_t     (vaddr_t     )
   ) i_vfus (
     .clk_i                (clk_i                                  ),
     .rst_ni               (rst_ni                                 ),

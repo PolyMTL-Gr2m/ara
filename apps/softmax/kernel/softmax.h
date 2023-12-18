@@ -1,4 +1,4 @@
-// Copyright 2020 ETH Zurich and University of Bologna.
+// Copyright 2022 ETH Zurich and University of Bologna.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -13,10 +13,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
 
-// Author: Matteo Perotti
+#ifndef _SOFTMAX_H_
+#define _SOFTMAX_H_
 
-void dropout_gold(const unsigned int n, const float *i, const float scale,
-                  const int32_t *sel, float *o);
-void dropout_vec(const unsigned int n, const float *i, const float scale,
-                 const int32_t *sel, float *o);
+void softmax(const float *i, const float *o, const float *buf,
+             uint64_t channels, uint64_t innerSize);
+
+void softmax_vec(const float *i, const float *o, uint64_t channels,
+                 uint64_t innerSize);
+
+#endif

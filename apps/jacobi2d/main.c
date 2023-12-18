@@ -73,190 +73,31 @@ WITH ACCESS OR USE OF THE SOFTWARE.
 // Porting to Ara SW environment
 // Author: Matteo Perotti, ETH Zurich, <mperotti@iis.ee.ethz.ch>
 
-#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "riscv_vector.h"
+#include "kernel/jacobi2d.h"
 #include "runtime.h"
+#include "util.h"
 
 #ifndef SPIKE
 #include "printf.h"
 #endif
 
-// Define vector size
-#if defined(SIMTINY)
-#define N 256
-#define TSTEPS 1
-#elif defined(SIMSMALL)
-#define N 128
-#define TSTEPS 10
-#elif defined(SIMMEDIUM)
-#define N 256
-#define TSTEPS 100
-#elif defined(SIMLARGE)
-#define N 256
-#define TSTEPS 2000
-#else
-#define N 32
-#define TSTEPS 1
-// #define N 64
-// #define TSTEPS 4
-#endif
+// The padded matrices should be aligned in SW not on the padding,
+// but on the actual data.
+// R and C contain the padding as well.
+extern uint64_t R;
+extern uint64_t C;
 
-#define FABS(x) ((x < 0) ? -x : x)
+extern uint64_t TSTEPS;
 
-// The vector algorithm seems not to be parametrized on the data type
-// So, don't change this parameter if also the vector implementation is used
-#define DATA_TYPE double
-// Threshold for FP numbers comparison during the final check
-#define THRESHOLD 0.000000000001
-// #define SOURCE_PRINT
-// #define RESULT_PRINT
-
-static void init_array(uint32_t n, DATA_TYPE A[N][N], DATA_TYPE B[N][N]);
-void kernel_jacobi_2d_vector(uint32_t n, DATA_TYPE A[N][N], DATA_TYPE B[N][N]);
-static void jacobi_2d_scalar(uint32_t tsteps, uint32_t n, DATA_TYPE A[N][N],
-                             DATA_TYPE B[N][N]);
-static void jacobi_2d_vector(uint32_t tsteps, uint32_t n, DATA_TYPE A[N][N],
-                             DATA_TYPE B[N][N]);
-int check_result(DATA_TYPE A_s[N][N], DATA_TYPE B_s[N][N], DATA_TYPE A_v[N][N],
-                 DATA_TYPE B_v[N][N], uint32_t n);
-void output_printfile(uint32_t n, DATA_TYPE A[N][N]);
-DATA_TYPE similarity_check(DATA_TYPE a, DATA_TYPE b, double threshold);
-
-DATA_TYPE A_s[N][N] __attribute__((aligned(32 * NR_LANES), section(".l2")));
-DATA_TYPE B_s[N][N] __attribute__((aligned(32 * NR_LANES), section(".l2")));
-DATA_TYPE A_v[N][N] __attribute__((aligned(32 * NR_LANES), section(".l2")));
-DATA_TYPE B_v[N][N] __attribute__((aligned(32 * NR_LANES), section(".l2")));
-
-/* Array initialization. */
-static void init_array(uint32_t n, DATA_TYPE A[N][N], DATA_TYPE B[N][N]) {
-  for (uint32_t i = 0; i < n; i++)
-    for (uint32_t j = 0; j < n; j++) {
-      A[i][j] = ((DATA_TYPE)i * (j + 2) + 2) / n;
-      B[i][j] = ((DATA_TYPE)i * (j + 3) + 3) / n;
-    }
-}
-
-void kernel_jacobi_2d_vector(uint32_t n, DATA_TYPE A[N][N], DATA_TYPE B[N][N]) {
-  vfloat64m1_t xU;
-  vfloat64m1_t xUtmp;
-  vfloat64m1_t xUleft;
-  vfloat64m1_t xUright;
-  vfloat64m1_t xUtop;
-  vfloat64m1_t xUbottom;
-  vfloat64m1_t xConstant;
-
-  DATA_TYPE izq, der;
-  uint32_t size_y = n - 2;
-  uint32_t size_x = n - 2;
-
-  // unsigned long int gvl = __builtin_epi_vsetvl(size_y, __epi_e64, __epi_m1);
-  size_t gvl = vsetvl_e64m1(size_y); // PLCT
-
-  xConstant = vfmv_v_f_f64m1(0.20, gvl);
-
-  for (uint32_t j = 1; j <= size_x; j = j + gvl) {
-    gvl = vsetvl_e64m1(size_x - j + 1);
-    xU = vle64_v_f64m1(&A[1][j], gvl);
-    xUtop = vle64_v_f64m1(&A[0][j], gvl);
-    xUbottom = vle64_v_f64m1(&A[2][j], gvl);
-
-    for (uint32_t i = 1; i <= size_y; i++) {
-      if (i != 1) {
-        xUtop = xU;
-        xU = xUbottom;
-        xUbottom = vle64_v_f64m1(&A[i + 1][j], gvl);
-      }
-      izq = A[i][j - 1];
-      der = A[i][j + gvl];
-      xUleft = vfslide1up_vf_f64m1(xU, izq, gvl);
-      xUright = vfslide1down_vf_f64m1(xU, der, gvl);
-      xUtmp = vfadd_vv_f64m1(xUleft, xUright, gvl);
-      xUtmp = vfadd_vv_f64m1(xUtmp, xUtop, gvl);
-      xUtmp = vfadd_vv_f64m1(xUtmp, xUbottom, gvl);
-      xUtmp = vfadd_vv_f64m1(xUtmp, xU, gvl);
-      xUtmp = vfmul_vv_f64m1(xUtmp, xConstant, gvl);
-      vse64_v_f64m1(&B[i][j], xUtmp, gvl);
-      //      if (i == 1 && j == 1) printf("0.2 * (%llx + %llx + %llx + %llx +
-      // %llx) = %llx\n", A[i][j], A[i][j - 1], A[i][1 + j], A[1 + i][j], A[i -
-      // 1][j], B[i][j]);
-    }
-  }
-  asm volatile("fence" ::);
-}
-
-/* Main computational kernel. The whole function will be timed,
-   including the call and return. */
-static void jacobi_2d_scalar(uint32_t tsteps, uint32_t n, DATA_TYPE A[N][N],
-                             DATA_TYPE B[N][N]) {
-  for (uint32_t t = 0; t < tsteps; t++) {
-    for (uint32_t i = 1; i < n - 1; i++)
-      for (uint32_t j = 1; j < n - 1; j++) {
-        B[i][j] = (0.2) * (A[i][j] + A[i][j - 1] + A[i][1 + j] + A[1 + i][j] +
-                           A[i - 1][j]);
-        //        if (i == 1 && j == 1) printf("0.2 * (%llx + %llx + %llx + %llx
-        // + %llx) = %llx\n", A[i][j], A[i][j - 1], A[i][1 + j], A[1 + i][j],
-        // A[i - 1][j], B[i][j]);
-      }
-    for (uint32_t i = 1; i < n - 1; i++)
-      for (uint32_t j = 1; j < n - 1; j++)
-        A[i][j] = (0.2) * (B[i][j] + B[i][j - 1] + B[i][1 + j] + B[1 + i][j] +
-                           B[i - 1][j]);
-  }
-}
-
-/* Main computational kernel. The whole function will be timed,
-   including the call and return. */
-static void jacobi_2d_vector(uint32_t tsteps, uint32_t n, DATA_TYPE A[N][N],
-                             DATA_TYPE B[N][N]) {
-  for (uint32_t t = 0; t < tsteps; t++) {
-    kernel_jacobi_2d_vector(n, A, B);
-    kernel_jacobi_2d_vector(n, B, A);
-  }
-}
-
-int check_result(DATA_TYPE A_s[N][N], DATA_TYPE B_s[N][N], DATA_TYPE A_v[N][N],
-                 DATA_TYPE B_v[N][N], uint32_t n) {
-  for (uint32_t i = 0; i < n; i++) {
-    for (uint32_t j = 0; j < n; j++) {
-      if (!similarity_check(A_s[i][j], A_v[i][j], THRESHOLD) ||
-          !similarity_check(B_s[i][j], B_v[i][j], THRESHOLD)) {
-        printf("Error: A_s[%d][%d] = %llx != A_v[%d][%d] = %llx || B_s[%d][%d] "
-               "= %llx != B_v[%d][%d] = %llx",
-               i, j, A_s[i][j], i, j, A_v[i][j], i, j, B_s[i][j], i, j,
-               B_v[i][j]);
-        return -1;
-      }
-    }
-  }
-  printf("Passed.\n");
-  return 0;
-}
-
-void output_printfile(uint32_t n, DATA_TYPE A[N][N]) {
-  for (uint32_t i = 0; i < n; i++)
-    for (uint32_t j = 0; j < n; j++) {
-      printf("A[%d][%d] = %llx, ", i, j, A[i][j]);
-      if (j == n - 1)
-        printf("A[%d][%d] = %llx\n", i, j, A[i][j]);
-    }
-}
-
-// Return 0 if the two FP numbers differ by more than a threshold
-DATA_TYPE similarity_check(DATA_TYPE a, DATA_TYPE b, double threshold) {
-  DATA_TYPE diff = a - b;
-  if (FABS(diff) > threshold) {
-    printf("fabs(diff): %llx, threshold: %llx\n", diff, threshold);
-    return 0;
-  } else
-    return 1;
-}
+extern DATA_TYPE A_s[] __attribute__((aligned(4 * NR_LANES), section(".l2")));
+extern DATA_TYPE B_s[] __attribute__((aligned(4 * NR_LANES), section(".l2")));
+extern DATA_TYPE A_v[] __attribute__((aligned(4 * NR_LANES), section(".l2")));
+extern DATA_TYPE B_v[] __attribute__((aligned(4 * NR_LANES), section(".l2")));
 
 int main() {
-
-  int error;
-
   printf("\n");
   printf("==============\n");
   printf("=  JACOBI2D  =\n");
@@ -264,38 +105,54 @@ int main() {
   printf("\n");
   printf("\n");
 
-  /* Initialize array(s). */
-  printf("Initializing the arrays...\n");
-  init_array(N, A_s, B_s);
-  init_array(N, A_v, B_v);
+  int error = 0;
+
+  // Align the matrices so that the vector store will also be aligned
+  size_t mtx_offset = ((4 * NR_LANES) / sizeof(DATA_TYPE)) - 1;
+  DATA_TYPE *A_fixed_s = A_s + mtx_offset;
+  DATA_TYPE *A_fixed_v = A_v + mtx_offset;
+  DATA_TYPE *B_fixed_s = B_s + mtx_offset;
+  DATA_TYPE *B_fixed_v = B_v + mtx_offset;
+
+  // Check that the matrices are aligned on the actual output data
+  // NR_LANES can be maximum 16 here
+  if (((uint64_t)(B_fixed_v + 1) & (0x3f / (16 / NR_LANES))) != 0) {
+    printf("Fatal warning: the matrices are not correctly aligned.\n");
+    return -1;
+  } else {
+    printf("The store address 0x%lx is correctly aligned.\n",
+           (uint64_t)(B_fixed_v + 1));
+  }
 
 #ifdef SOURCE_PRINT
   printf("Scalar A mtx:\n");
-  output_printfile(N, A_s);
+  output_printfile(R, C, A_fixed_s);
   printf("Vector A mtx:\n");
-  output_printfile(N, A_v);
+  output_printfile(R, C, A_fixed_v);
   printf("Scalar B mtx:\n");
-  output_printfile(N, B_s);
+  output_printfile(R, C, B_fixed_s);
   printf("Vector B mtx:\n");
-  output_printfile(N, B_v);
-#endif // RESULT_PRINT
+  output_printfile(R, C, B_fixed_v);
+#endif
 
+#ifndef VCD_DUMP
   // Measure scalar kernel execution
   printf("Processing the scalar benchmark\n");
   start_timer();
-  jacobi_2d_scalar(TSTEPS, N, A_s, B_s);
+  j2d_s(R, C, A_fixed_s, B_fixed_s, TSTEPS);
   stop_timer();
   printf("Scalar jacobi2d cycle count: %d\n", get_timer());
+#endif
 
   // Measure vector kernel execution
   printf("Processing the vector benchmark\n");
   start_timer();
-  jacobi_2d_vector(TSTEPS, N, A_v, B_v);
+  j2d_v(R, C, A_fixed_v, B_fixed_v, TSTEPS);
   stop_timer();
   int64_t runtime = get_timer();
-  // 2* since we have 2 jacobi kernels, one on A_v, one on B_v
+  // 2* since we have 2 jacobi kernels, one on A_fixed_v, one on B_fixed_v
   // TSTEPS*5*N*N is the number of DPFLOP to compute
-  float performance = 2.0 * (TSTEPS * 5.0 * N * N / runtime);
+  float performance = (2.0 * TSTEPS * 5.0 * (R - 1) * (C - 1) / runtime);
   float utilization = 100.0 * performance / NR_LANES;
   printf("Vector jacobi2d cycle count: %d\n", runtime);
   printf("The performance is %f DPFLOP/cycle (%f%% utilization).\n",
@@ -303,17 +160,26 @@ int main() {
 
 #ifdef RESULT_PRINT
   printf("Scalar A mtx:\n");
-  output_printfile(N, A_s);
+  output_printfile(R, C, A_fixed_s);
   printf("Vector A mtx:\n");
-  output_printfile(N, A_v);
+  output_printfile(R, C, A_fixed_v);
   printf("Scalar B mtx:\n");
-  output_printfile(N, B_s);
+  output_printfile(R, C, B_fixed_s);
   printf("Vector B mtx:\n");
-  output_printfile(N, B_v);
-#endif // RESULT_PRINT
+  output_printfile(R, C, B_fixed_v);
+#endif
 
   printf("Checking the results:\n");
-  error = check_result(A_s, B_s, A_v, B_v, N);
+  for (uint32_t i = 0; i < R; i++)
+    for (uint32_t j = 0; j < C; j++)
+      if (!similarity_check(A_fixed_s[i * C + j], A_fixed_v[i * C + j],
+                            THRESHOLD)) {
+        printf("Error: [%d, %d], %f, %f\n", i, j, A_fixed_s[i * C + j],
+               A_fixed_v[i * C + j]);
+        error = 1;
+      }
+  if (!error)
+    printf("Check successful: no errors.\n");
 
   return error;
 }

@@ -32,6 +32,19 @@ package ara_pkg;
 
   // Ara Features.
 
+  // Fixed-point support
+  typedef enum logic {
+    FixedPointDisable = 1'b0,
+    FixedPointEnable  = 1'b1
+  } fixpt_support_e;
+
+  // FP support outside of the FPU (external)
+  // vfrec7, vfrsqrt7, round-toward-odd
+  typedef enum logic {
+    FPExtSupportDisable = 1'b0,
+    FPExtSupportEnable  = 1'b1
+  } fpext_support_e;
+
   // The three bits correspond to {RVVD, RVVF, RVVH}
   typedef enum logic [2:0] {
     FPUSupportNone             = 3'b000,
@@ -80,6 +93,7 @@ package ara_pkg;
   localparam int unsigned ValuInsnQueueDepth = 4;
   localparam int unsigned VlduInsnQueueDepth = 4;
   localparam int unsigned VstuInsnQueueDepth = 4;
+  localparam int unsigned VaddrgenInsnQueueDepth = 4;
   localparam int unsigned SlduInsnQueueDepth = 2;
   localparam int unsigned NoneInsnQueueDepth = 1;
   // Ara supports MaskuInsnQueueDepth = 1 only.
@@ -97,11 +111,11 @@ package ara_pkg;
   //  Operations  //
   //////////////////
 
-  typedef enum logic [6:0] {
+  typedef enum logic [7:0] {
     // Arithmetic and logic instructions
     VADD, VSUB, VADC, VSBC, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR,
     // Fixed point
-    VSADDU, VSADD, VSSUBU, VSSUB, VAADDU, VAADD, VASUBU, VASUB, VSMUL, VSSRL, VSSRA, VNCLIP, VNCLIPU,
+    VSADDU, VSADD, VSSUBU, VSSUB, VAADDU, VAADD, VASUBU, VASUB, VSSRL, VSSRA, VNCLIP, VNCLIPU,
     // Shifts,
     VSLL, VSRL, VSRA, VNSRL, VNSRA,
     // Popcount instruction
@@ -116,18 +130,20 @@ package ara_pkg;
     VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX, VWREDSUMU, VWREDSUM,
     // Mul/Mul-Add
     VMUL, VMULH, VMULHU, VMULHSU, VMACC, VNMSAC, VMADD, VNMSUB,
+    // Fixed point multiplication
+    VSMUL,
     // Div
     VDIVU, VDIV, VREMU, VREM,
     // FPU
     VFADD, VFSUB, VFRSUB, VFMUL, VFDIV, VFRDIV, VFMACC, VFNMACC, VFMSAC, VFNMSAC, VFMADD, VFNMADD, VFMSUB,
-    VFNMSUB, VFSQRT, VFMIN, VFMAX, VFCLASS, VFSGNJ, VFSGNJN, VFSGNJX, VFCVTXUF, VFCVTXF, VFCVTFXU, VFCVTFX,
-    VFCVTRTZXUF, VFCVTRTZXF, VFCVTFF,
+    VFNMSUB, VFSQRT, VFMIN, VFMAX, VFREC7, VFRSQRT7, VFCLASS, VFSGNJ, VFSGNJN, VFSGNJX, VFCVTXUF, VFCVTXF, VFCVTFXU, VFCVTFX,
+    VFCVTRTZXUF, VFCVTRTZXF, VFNCVTRODFF, VFCVTFF,
     // Floating-point reductions
     VFREDUSUM, VFREDOSUM, VFREDMIN, VFREDMAX, VFWREDUSUM, VFWREDOSUM,
     // Floating-point comparison instructions
     VMFEQ, VMFLE, VMFLT, VMFNE, VMFGT, VMFGE,
     // Integer comparison instructions
-    VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT,
+    VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSBF, VMSOF, VMSIF, VIOTA, VID, VCPOP, VFIRST, VMSGT,
     // Integer add-with-carry and subtract-with-borrow carry-out instructions
     VMADC, VMSBC,
     // Mask operations
@@ -151,6 +167,11 @@ package ara_pkg;
   function automatic is_store(ara_op_e op);
     is_store = op inside {[VSE:VSXE]};
   endfunction : is_store
+
+  // Return true of op is either VCPOP or VFIRST
+  function automatic vd_scalar(ara_op_e op);
+    vd_scalar = op inside {[VCPOP:VFIRST]};
+  endfunction : vd_scalar
 
   typedef enum logic [1:0] {
     NO_RED,
@@ -180,9 +201,7 @@ package ara_pkg;
     OpQueueConversionZExt8,
     OpQueueConversionSExt8,
     OpQueueConversionWideFP2,
-    OpQueueIntReductionZExt,
-    OpQueueFloatReductionZExt,
-    OpQueueFloatReductionWideZExt,
+    OpQueueReductionZExt,
     OpQueueAdjustFPCvt
   } opqueue_conversion_e;
   // OpQueueAdjustFPCvt is introduced to support widening FP conversions, to comply with the
@@ -224,8 +243,8 @@ package ara_pkg;
   /////////////////////////////
 
   // Use Ariane's accelerator interface.
-  typedef ariane_pkg::accelerator_req_t accelerator_req_t;
-  typedef ariane_pkg::accelerator_resp_t accelerator_resp_t;
+  typedef acc_pkg::accelerator_req_t accelerator_req_t;
+  typedef acc_pkg::accelerator_resp_t accelerator_resp_t;
 
   /////////////////////////
   //  Backend interface  //
@@ -275,6 +294,7 @@ package ara_pkg;
     // 2nd scalar operand: stride for constant-strided vector load/stores, slide offset for vector
     // slides
     elen_t stride;
+    logic is_stride_np2;
 
     // Destination vector register
     logic [4:0] vd;
@@ -375,6 +395,7 @@ package ara_pkg;
 
     // 2nd scalar operand: stride for constant-strided vector load/stores
     elen_t stride;
+    logic is_stride_np2;
 
     // Destination vector register
     logic [4:0] vd;
@@ -457,6 +478,12 @@ package ara_pkg;
             idx[3] = 6; idx[2] = 2; idx[1] = 4; idx[0] = 0;
             return idx[byte_idx[2:0]];
           end
+          default: begin
+            automatic vlen_t [7:0] idx;
+            idx[7] = 7; idx[6] = 6; idx[5] = 5; idx[4] = 4;
+            idx[3] = 3; idx[2] = 2; idx[1] = 1; idx[0] = 0;
+            return idx[byte_idx[2:0]];
+          end
         endcase
       2: unique case (ew)
           rvv_pkg::EW64: begin
@@ -489,6 +516,14 @@ package ara_pkg;
             idx[11] = 13; idx[10] = 05; idx[09] = 09; idx[08] = 01;
             idx[07] = 14; idx[06] = 06; idx[05] = 10; idx[04] = 02;
             idx[03] = 12; idx[02] = 04; idx[01] = 08; idx[00] = 00;
+            return idx[byte_idx[3:0]];
+          end
+          default: begin
+            automatic vlen_t [15:0] idx;
+            idx[15] = 15; idx[14] = 14; idx[13] = 13; idx[12] = 12;
+            idx[11] = 11; idx[10] = 10; idx[09] = 09; idx[08] = 08;
+            idx[07] = 07; idx[06] = 06; idx[05] = 05; idx[04] = 04;
+            idx[03] = 03; idx[02] = 02; idx[01] = 01; idx[00] = 00;
             return idx[byte_idx[3:0]];
           end
         endcase
@@ -539,6 +574,18 @@ package ara_pkg;
             idx[11] = 26; idx[10] = 18; idx[09] = 10; idx[08] = 02;
             idx[07] = 28; idx[06] = 20; idx[05] = 12; idx[04] = 04;
             idx[03] = 24; idx[02] = 16; idx[01] = 08; idx[00] = 00;
+            return idx[byte_idx[4:0]];
+          end
+          default: begin
+            automatic vlen_t [31:0] idx;
+            idx[31] = 31; idx[30] = 30; idx[29] = 29; idx[28] = 28;
+            idx[27] = 27; idx[26] = 26; idx[25] = 25; idx[24] = 24;
+            idx[23] = 23; idx[22] = 22; idx[21] = 21; idx[20] = 20;
+            idx[19] = 19; idx[18] = 18; idx[17] = 17; idx[16] = 16;
+            idx[15] = 15; idx[14] = 14; idx[13] = 13; idx[12] = 12;
+            idx[11] = 11; idx[10] = 10; idx[09] = 09; idx[08] = 08;
+            idx[07] = 07; idx[06] = 06; idx[05] = 05; idx[04] = 04;
+            idx[03] = 03; idx[02] = 02; idx[01] = 01; idx[00] = 00;
             return idx[byte_idx[4:0]];
           end
         endcase
@@ -621,6 +668,26 @@ package ara_pkg;
             idx[11] = 28; idx[10] = 20; idx[09] = 12; idx[08] = 04;
             idx[07] = 56; idx[06] = 48; idx[05] = 40; idx[04] = 32;
             idx[03] = 24; idx[02] = 16; idx[01] = 08; idx[00] = 00;
+            return idx[byte_idx[5:0]];
+          end
+          default: begin
+            automatic vlen_t [63:0] idx;
+            idx[63] = 63; idx[62] = 62; idx[61] = 61; idx[60] = 60;
+            idx[59] = 59; idx[58] = 58; idx[57] = 57; idx[56] = 56;
+            idx[55] = 55; idx[54] = 54; idx[53] = 53; idx[52] = 52;
+            idx[51] = 51; idx[50] = 50; idx[49] = 49; idx[48] = 48;
+            idx[47] = 47; idx[46] = 46; idx[45] = 45; idx[44] = 44;
+            idx[43] = 43; idx[42] = 42; idx[41] = 41; idx[40] = 40;
+            idx[39] = 39; idx[38] = 38; idx[37] = 37; idx[36] = 36;
+            idx[35] = 35; idx[34] = 34; idx[33] = 33; idx[32] = 32;
+            idx[31] = 31; idx[30] = 30; idx[29] = 29; idx[28] = 28;
+            idx[27] = 27; idx[26] = 26; idx[25] = 25; idx[24] = 24;
+            idx[23] = 23; idx[22] = 22; idx[21] = 21; idx[20] = 20;
+            idx[19] = 19; idx[18] = 18; idx[17] = 17; idx[16] = 16;
+            idx[15] = 15; idx[14] = 14; idx[13] = 13; idx[12] = 12;
+            idx[11] = 11; idx[10] = 10; idx[09] = 09; idx[08] = 08;
+            idx[07] = 07; idx[06] = 06; idx[05] = 05; idx[04] = 04;
+            idx[03] = 03; idx[02] = 02; idx[01] = 01; idx[00] = 00;
             return idx[byte_idx[5:0]];
           end
         endcase
@@ -769,7 +836,44 @@ package ara_pkg;
             idx[003] = 024; idx[002] = 016; idx[001] = 008; idx[000] = 000;
             return idx[byte_idx[6:0]];
           end
+          default: begin
+            automatic vlen_t [127:0] idx;
+            idx[127] = 127; idx[126] = 126; idx[125] = 125; idx[124] = 124;
+            idx[123] = 123; idx[122] = 122; idx[121] = 121; idx[120] = 120;
+            idx[119] = 119; idx[118] = 118; idx[117] = 117; idx[116] = 116;
+            idx[115] = 115; idx[114] = 114; idx[113] = 113; idx[112] = 112;
+            idx[111] = 111; idx[110] = 110; idx[109] = 109; idx[108] = 108;
+            idx[107] = 107; idx[106] = 106; idx[105] = 105; idx[104] = 104;
+            idx[103] = 103; idx[102] = 102; idx[101] = 101; idx[100] = 100;
+            idx[099] = 099; idx[098] = 098; idx[097] = 097; idx[096] = 096;
+            idx[095] = 095; idx[094] = 094; idx[093] = 093; idx[092] = 092;
+            idx[091] = 091; idx[090] = 090; idx[089] = 089; idx[088] = 088;
+            idx[087] = 087; idx[086] = 086; idx[085] = 085; idx[084] = 084;
+            idx[083] = 083; idx[082] = 082; idx[081] = 081; idx[080] = 080;
+            idx[079] = 079; idx[078] = 078; idx[077] = 077; idx[076] = 076;
+            idx[075] = 075; idx[074] = 074; idx[073] = 073; idx[072] = 072;
+            idx[071] = 071; idx[070] = 070; idx[069] = 069; idx[068] = 068;
+            idx[067] = 067; idx[066] = 066; idx[065] = 065; idx[064] = 064;
+            idx[063] = 063; idx[062] = 062; idx[061] = 061; idx[060] = 060;
+            idx[059] = 059; idx[058] = 058; idx[057] = 057; idx[056] = 056;
+            idx[055] = 055; idx[054] = 054; idx[053] = 053; idx[052] = 052;
+            idx[051] = 051; idx[050] = 050; idx[049] = 049; idx[048] = 048;
+            idx[047] = 047; idx[046] = 046; idx[045] = 045; idx[044] = 044;
+            idx[043] = 043; idx[042] = 042; idx[041] = 041; idx[040] = 040;
+            idx[039] = 039; idx[038] = 038; idx[037] = 037; idx[036] = 036;
+            idx[035] = 035; idx[034] = 034; idx[033] = 033; idx[032] = 032;
+            idx[031] = 031; idx[030] = 030; idx[029] = 029; idx[028] = 028;
+            idx[027] = 027; idx[026] = 026; idx[025] = 025; idx[024] = 024;
+            idx[023] = 023; idx[022] = 022; idx[021] = 021; idx[020] = 020;
+            idx[019] = 019; idx[018] = 018; idx[017] = 017; idx[016] = 016;
+            idx[015] = 015; idx[014] = 014; idx[013] = 013; idx[012] = 012;
+            idx[011] = 011; idx[010] = 010; idx[009] = 009; idx[008] = 008;
+            idx[007] = 007; idx[006] = 006; idx[005] = 005; idx[004] = 004;
+            idx[003] = 003; idx[002] = 002; idx[001] = 001; idx[000] = 000;
+            return idx[byte_idx[6:0]];
+          end
         endcase
+      default: $error("Error. Supported number of lanes are 1, 2, 4, 8, 16.");
     endcase
 
   /*automatic vlen_t [8*MaxNrLanes-1:0] element_shuffle_index;
@@ -830,22 +934,28 @@ package ara_pkg;
           index[shuffle_index(b, NrLanes, ew)] = b;
         return index[byte_index[6:0]];
       end
+      default: begin
+        automatic vlen_t [31:0] index;
+        for (int b = 0; b < 32; b++)
+          index[shuffle_index(b, NrLanes, ew)] = b;
+        return index[byte_index[4:0]];
+      end
     endcase
   endfunction : deshuffle_index
 
   /////////////////////////
-  //  Fixed-Point        //
+  ////// Fixed-Point //////
   /////////////////////////
 
-  typedef logic                       vxsat_t;
-  typedef logic [1:0]                 vxrm_t;
+  typedef logic        vxsat_e;
+  typedef logic [1:0]  vxrm_t;
 
   typedef union packed {
     logic [0:0][7:0] w64;
     logic [1:0][3:0] w32;
     logic [3:0][1:0] w16;
     logic [7:0][0:0] w8;
-  } alu_vxsat_t;
+  } vxsat_t;
 
   /////////////////////////
   //  MASKU definitions  //
@@ -877,8 +987,8 @@ package ara_pkg;
 
   // Differenciate between SLDU and ADDRGEN operands from opqueue
   typedef enum logic {
-    SLDU    = 1'b0,
-    ADDRGEN = 1'b1
+    ALU_SLDU     = 1'b0,
+    MFPU_ADDRGEN = 1'b1
   } target_fu_e;
 
   // This is the interface between the lane's sequencer and the operand request stage, which
@@ -891,6 +1001,8 @@ package ara_pkg;
     logic scale_vl; // Rescale vl taking into account the new and old EEW
 
     resize_e cvt_resize;    // Resizing of FP conversions
+
+    logic is_reduct; // Is this a reduction?
 
     rvv_pkg::vew_e eew;        // Effective element width
     opqueue_conversion_e conv; // Type conversion
@@ -911,6 +1023,7 @@ package ara_pkg;
     vlen_t vl;                 // Vector length
     opqueue_conversion_e conv; // Type conversion
     logic [1:0] ntr_red;       // Neutral type for reductions
+    logic is_reduct;           // Is this a reduction?
     target_fu_e target_fu;     // Target FU of the opqueue (if it is not clear)
   } operand_queue_cmd_t;
 
@@ -995,5 +1108,937 @@ package ara_pkg;
     axi_pkg::len_t len;
     logic is_load;
   } addrgen_axi_req_t;
+
+
+    ////////////////////////
+    // VFREC7 & VFRSQRT7 //
+    ///////////////////////
+
+  localparam int unsigned LUT_BITS = 7;
+
+  localparam int unsigned E16_BITS = 16;
+  localparam int unsigned E32_BITS = 32;
+  localparam int unsigned E64_BITS = 64;
+
+  localparam int unsigned EXP_BITS_E16 = 5;
+  localparam int unsigned EXP_BITS_E32 = 8;
+  localparam int unsigned EXP_BITS_E64 = 11;
+
+  localparam int unsigned VF_TYPE_SEL_BITS = 10;
+
+  localparam logic [4:0]  E16_2xB = 5'd30;
+  localparam logic [7:0]  E32_2xB = 8'd254;
+  localparam logic [10:0] E64_2xB = 11'd2046;
+
+  localparam logic [15:0] E16_NaN  = 16'h7e00;
+  localparam logic [15:0] E16_pInf = 16'h7c00;
+  localparam logic [15:0] E16_mInf = 16'hfc00;
+
+  localparam logic [14:0] E16_Max  = 15'h7bff;     // Max Number without sign
+  localparam logic [14:0] E16_Inf  = 15'h7c00;     // Inf without sign
+
+  localparam logic [31:0] E32_NaN  = 32'h7fc00000;
+  localparam logic [31:0] E32_pInf = 32'h7f800000;
+  localparam logic [31:0] E32_mInf = 32'hff800000;
+
+  localparam logic [30:0] E32_Max  = 31'h7f7fffff;  // Max Number without sign
+  localparam logic [30:0] E32_Inf  = 31'h7f800000;  // Inf without sign
+
+  localparam logic [63:0] E64_NaN  = 64'h7ff8000000000000;
+  localparam logic [63:0] E64_pInf = 64'h7ff0000000000000;
+  localparam logic [63:0] E64_mInf = 64'hfff0000000000000;
+
+  localparam logic  [5:0] E16_3xB = 6'd45;
+  localparam logic  [8:0] E32_3xB = 9'd381;
+  localparam logic [11:0] E64_3xB = 12'd3069;
+
+  localparam logic [62:0] E64_Max  = 63'h7fefffffffffffff; // Max Number without sign
+  localparam logic [62:0] E64_Inf  = 63'h7ff0000000000000; // Inf without sign
+
+  // Structure containing 5 bit flag and desired output
+ typedef struct packed {
+  fpnew_pkg::status_t ex_flag;
+  fp16_t              vf7_e16;
+ } vf7_flag_out_e16;
+
+  typedef struct packed {
+  fpnew_pkg::status_t ex_flag;
+  fp32_t              vf7_e32;
+  } vf7_flag_out_e32;
+
+ typedef struct packed {
+  fpnew_pkg::status_t ex_flag;
+  fp64_t              vf7_e64;
+  } vf7_flag_out_e64;
+
+  // vfrec7 LUT
+  function automatic logic [LUT_BITS-1:0] vfrec7_lut(logic [LUT_BITS-1:0] vfrec7_lut_select);
+    logic [LUT_BITS-1:0] vfrec7_lut_out;
+    unique case (vfrec7_lut_select)
+      7'd0  : vfrec7_lut_out=7'd127;
+      7'd1  : vfrec7_lut_out=7'd125;
+      7'd2  : vfrec7_lut_out=7'd123;
+      7'd3  : vfrec7_lut_out=7'd121;
+      7'd4  : vfrec7_lut_out=7'd119;
+      7'd5  : vfrec7_lut_out=7'd117;
+      7'd6  : vfrec7_lut_out=7'd116;
+      7'd7  : vfrec7_lut_out=7'd114;
+      7'd8  : vfrec7_lut_out=7'd112;
+      7'd9  : vfrec7_lut_out=7'd110;
+      7'd10 : vfrec7_lut_out=7'd109;
+      7'd11 : vfrec7_lut_out=7'd107;
+      7'd12 : vfrec7_lut_out=7'd105;
+      7'd13 : vfrec7_lut_out=7'd104;
+      7'd14 : vfrec7_lut_out=7'd102;
+      7'd15 : vfrec7_lut_out=7'd100;
+      7'd16 : vfrec7_lut_out=7'd99;
+      7'd17 : vfrec7_lut_out=7'd97;
+      7'd18 : vfrec7_lut_out=7'd96;
+      7'd19 : vfrec7_lut_out=7'd94;
+      7'd20 : vfrec7_lut_out=7'd93;
+      7'd21 : vfrec7_lut_out=7'd91;
+      7'd22 : vfrec7_lut_out=7'd90;
+      7'd23 : vfrec7_lut_out=7'd88;
+      7'd24 : vfrec7_lut_out=7'd87;
+      7'd25 : vfrec7_lut_out=7'd85;
+      7'd26 : vfrec7_lut_out=7'd84;
+      7'd27 : vfrec7_lut_out=7'd83;
+      7'd28 : vfrec7_lut_out=7'd81;
+      7'd29 : vfrec7_lut_out=7'd80;
+      7'd30 : vfrec7_lut_out=7'd79;
+      7'd31 : vfrec7_lut_out=7'd77;
+      7'd32 : vfrec7_lut_out=7'd76;
+      7'd33 : vfrec7_lut_out=7'd75;
+      7'd34 : vfrec7_lut_out=7'd74;
+      7'd35 : vfrec7_lut_out=7'd72;
+      7'd36 : vfrec7_lut_out=7'd71;
+      7'd37 : vfrec7_lut_out=7'd70;
+      7'd38 : vfrec7_lut_out=7'd69;
+      7'd39 : vfrec7_lut_out=7'd68;
+      7'd40 : vfrec7_lut_out=7'd66;
+      7'd41 : vfrec7_lut_out=7'd65;
+      7'd42 : vfrec7_lut_out=7'd64;
+      7'd43 : vfrec7_lut_out=7'd63;
+      7'd44 : vfrec7_lut_out=7'd62;
+      7'd45 : vfrec7_lut_out=7'd61;
+      7'd46 : vfrec7_lut_out=7'd60;
+      7'd47 : vfrec7_lut_out=7'd59;
+      7'd48 : vfrec7_lut_out=7'd58;
+      7'd49 : vfrec7_lut_out=7'd57;
+      7'd50 : vfrec7_lut_out=7'd56;
+      7'd51 : vfrec7_lut_out=7'd55;
+      7'd52 : vfrec7_lut_out=7'd54;
+      7'd53 : vfrec7_lut_out=7'd53;
+      7'd54 : vfrec7_lut_out=7'd52;
+      7'd55 : vfrec7_lut_out=7'd51;
+      7'd56 : vfrec7_lut_out=7'd50;
+      7'd57 : vfrec7_lut_out=7'd49;
+      7'd58 : vfrec7_lut_out=7'd48;
+      7'd59 : vfrec7_lut_out=7'd47;
+      7'd60 : vfrec7_lut_out=7'd46;
+      7'd61 : vfrec7_lut_out=7'd45;
+      7'd62 : vfrec7_lut_out=7'd44;
+      7'd63 : vfrec7_lut_out=7'd43;
+      7'd64 : vfrec7_lut_out=7'd42;
+      7'd65 : vfrec7_lut_out=7'd41;
+      7'd66 : vfrec7_lut_out=7'd40;
+      7'd67 : vfrec7_lut_out=7'd40;
+      7'd68 : vfrec7_lut_out=7'd39;
+      7'd69 : vfrec7_lut_out=7'd38;
+      7'd70 : vfrec7_lut_out=7'd37;
+      7'd71 : vfrec7_lut_out=7'd36;
+      7'd72 : vfrec7_lut_out=7'd35;
+      7'd73 : vfrec7_lut_out=7'd35;
+      7'd74 : vfrec7_lut_out=7'd34;
+      7'd75 : vfrec7_lut_out=7'd33;
+      7'd76 : vfrec7_lut_out=7'd32;
+      7'd77 : vfrec7_lut_out=7'd31;
+      7'd78 : vfrec7_lut_out=7'd31;
+      7'd79 : vfrec7_lut_out=7'd30;
+      7'd80 : vfrec7_lut_out=7'd29;
+      7'd81 : vfrec7_lut_out=7'd28;
+      7'd82 : vfrec7_lut_out=7'd28;
+      7'd83 : vfrec7_lut_out=7'd27;
+      7'd84 : vfrec7_lut_out=7'd26;
+      7'd85 : vfrec7_lut_out=7'd25;
+      7'd86 : vfrec7_lut_out=7'd25;
+      7'd87 : vfrec7_lut_out=7'd24;
+      7'd88 : vfrec7_lut_out=7'd23;
+      7'd89 : vfrec7_lut_out=7'd23;
+      7'd90 : vfrec7_lut_out=7'd22;
+      7'd91 : vfrec7_lut_out=7'd21;
+      7'd92 : vfrec7_lut_out=7'd21;
+      7'd93 : vfrec7_lut_out=7'd20;
+      7'd94 : vfrec7_lut_out=7'd19;
+      7'd95 : vfrec7_lut_out=7'd19;
+      7'd96 : vfrec7_lut_out=7'd18;
+      7'd97 : vfrec7_lut_out=7'd17;
+      7'd98 : vfrec7_lut_out=7'd17;
+      7'd99 : vfrec7_lut_out=7'd16;
+      7'd100: vfrec7_lut_out=7'd15;
+      7'd101: vfrec7_lut_out=7'd15;
+      7'd102: vfrec7_lut_out=7'd14;
+      7'd103: vfrec7_lut_out=7'd14;
+      7'd104: vfrec7_lut_out=7'd13;
+      7'd105: vfrec7_lut_out=7'd12;
+      7'd106: vfrec7_lut_out=7'd12;
+      7'd107: vfrec7_lut_out=7'd11;
+      7'd108: vfrec7_lut_out=7'd11;
+      7'd109: vfrec7_lut_out=7'd10;
+      7'd110: vfrec7_lut_out=7'd9;
+      7'd111: vfrec7_lut_out=7'd9;
+      7'd112: vfrec7_lut_out=7'd8;
+      7'd113: vfrec7_lut_out=7'd8;
+      7'd114: vfrec7_lut_out=7'd7;
+      7'd115: vfrec7_lut_out=7'd7;
+      7'd116: vfrec7_lut_out=7'd6;
+      7'd117: vfrec7_lut_out=7'd5;
+      7'd118: vfrec7_lut_out=7'd5;
+      7'd119: vfrec7_lut_out=7'd4;
+      7'd120: vfrec7_lut_out=7'd4;
+      7'd121: vfrec7_lut_out=7'd3;
+      7'd122: vfrec7_lut_out=7'd3;
+      7'd123: vfrec7_lut_out=7'd2;
+      7'd124: vfrec7_lut_out=7'd2;
+      7'd125: vfrec7_lut_out=7'd1;
+      7'd126: vfrec7_lut_out=7'd1;
+      7'd127: vfrec7_lut_out=7'd0;
+      default: vfrec7_lut_out=7'd0;
+    endcase
+    return vfrec7_lut_out;
+  endfunction : vfrec7_lut
+
+  // vfrec7 result (sew: 16 bit)
+  function automatic vf7_flag_out_e16 vfrec7_fp16(logic [VF_TYPE_SEL_BITS-1:0] vfpu_result, logic [E16_BITS-1:0] operand_a_delay, fpnew_pkg::roundmode_e fp_rm_process);
+    vf7_flag_out_e16 vfrec7_o, vfrec7_out;
+
+    fp16_t vfrec7_i, vfrec7_n_excep, vfrec7_sub;
+
+    logic select_vfrec7_out;
+
+    logic en_rm;
+
+    vfrec7_o       = 21'd0;
+    vfrec7_out     = 21'd0;
+    vfrec7_i       = 16'd0;
+    vfrec7_n_excep = 16'd0;
+    vfrec7_sub     = 16'd0;
+
+    en_rm =  fp_rm_process==fpnew_pkg::RTZ
+          ||(fp_rm_process==fpnew_pkg::RDN && ~operand_a_delay[E16_BITS-1])
+          ||(fp_rm_process==fpnew_pkg::RUP &&  operand_a_delay[E16_BITS-1]);
+
+      //subnormal inputs with sig=0.. or sig=1..
+    unique case (operand_a_delay[9])
+      1'b0: begin
+        vfrec7_sub.e = 5'd0 - 5'd1;                    //0 minus number of leading zeros in sig
+        vfrec7_sub.m = {operand_a_delay[7:0], 2'b00};  //left-shifting by 2
+      end
+      1'b1: begin
+        vfrec7_sub.e = 5'd0;                          //0 minus number of leading zeros in sig
+        vfrec7_sub.m = {operand_a_delay[8:0], 1'b0};  //left-shifting by 1
+      end
+      default:;
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::NEGSUBNORM: begin //SUBNORMAL
+        vfrec7_i.e  = vfrec7_sub.e;
+        vfrec7_i.m  = vfrec7_sub.m;
+      end
+      fpnew_pkg::POSNORM,
+      fpnew_pkg::NEGNORM: begin // NORMAL
+        vfrec7_i.e  = operand_a_delay[14:10];
+        vfrec7_i.m  = operand_a_delay[9:0];
+      end
+      default: begin
+        vfrec7_i.e = 'x;
+        vfrec7_i.m = 'x;
+      end
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::NEGINF: vfrec7_o.vf7_e16 = {1'b1, 15'd0};
+      fpnew_pkg::POSINF: vfrec7_o.vf7_e16 = 16'd0;
+      fpnew_pkg::SNAN : begin
+        vfrec7_o.vf7_e16    = E16_NaN;
+        vfrec7_o.ex_flag.NV = 1'b1;
+      end
+      fpnew_pkg::QNAN : vfrec7_o.vf7_e16 = E16_NaN;
+      fpnew_pkg::NEGZERO: begin
+        vfrec7_o.vf7_e16    = E16_mInf;
+        vfrec7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSZERO: begin
+        vfrec7_o.vf7_e16    = E16_pInf;
+        vfrec7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::NEGSUBNORM,
+      fpnew_pkg::POSNORM,
+      fpnew_pkg::NEGNORM: begin
+        //Output exponent can be found by
+        //exp_o = 2*B-1-exp_i
+        //      = 2*B+(~exp_i)
+        vfrec7_n_excep.e = E16_2xB +(~vfrec7_i.e);
+        //Output significand(mantissa) can be found by using lookup table
+        vfrec7_n_excep.m[9:3] = vfrec7_lut(vfrec7_i.m[9:3]);
+
+         //if output is subnormal
+         // output exponent is equal to zero
+        unique case (vfrec7_n_excep.e)
+          5'b0_0000: begin
+            vfrec7_o.vf7_e16.e      = 5'b0_0000;
+            vfrec7_o.vf7_e16.m[9:2] = {1'b1, vfrec7_n_excep.m[9:3]}; //concating 1 at MSB
+          end
+          5'b1_1111: begin
+            vfrec7_o.vf7_e16.e      = 5'b0_0000;
+            vfrec7_o.vf7_e16.m[9:1] = {2'b01, vfrec7_n_excep.m[9:3]}; //concating 1 at MSB and shiting by 1
+          end
+          default: begin
+            vfrec7_o.vf7_e16.e      = vfrec7_n_excep.e;
+            vfrec7_o.vf7_e16.m[9:3] = vfrec7_n_excep.m[9:3];
+          end
+        endcase
+
+         //The output sign equals the input sign.
+        vfrec7_o.vf7_e16.s = operand_a_delay[15];
+      end
+      default:;
+    endcase
+
+    // check if input number is subnormal number  with sig=00..
+    select_vfrec7_out =  (operand_a_delay[9:8]==2'b00)
+                      && (vfpu_result==fpnew_pkg::POSSUBNORM
+                      ||  vfpu_result==fpnew_pkg::NEGSUBNORM);
+
+    unique case (select_vfrec7_out)
+      1'b0: vfrec7_out = vfrec7_o;
+      1'b1:  begin
+
+        // if input number  is subnormal with sig=00.. then
+        // output is equal to infinity or  +-finite value (greatest magnitude)
+        // depending on rounding modes
+        unique case (en_rm)
+          1'b0: vfrec7_out.vf7_e16 = {vfrec7_o.vf7_e16.s, E16_Inf}; // infinity
+          1'b1: vfrec7_out.vf7_e16 = {vfrec7_o.vf7_e16.s, E16_Max}; // greatest magnitude
+          default:;
+        endcase
+
+        vfrec7_out.ex_flag.NX  = 1'b1;
+        vfrec7_out.ex_flag.OF  = 1'b1;
+      end
+      default:;
+    endcase
+    return vfrec7_out;
+  endfunction : vfrec7_fp16
+
+  // vfrec7 result (sew: 32 bit)
+  function automatic vf7_flag_out_e32 vfrec7_fp32(logic [VF_TYPE_SEL_BITS-1:0] vfpu_result, logic [E32_BITS-1:0] operand_a_delay, fpnew_pkg::roundmode_e fp_rm_process);
+    vf7_flag_out_e32 vfrec7_o, vfrec7_out;
+
+    fp32_t vfrec7_i, vfrec7_n_excep, vfrec7_sub;
+
+    logic select_vfrec7_out;
+    logic en_rm;
+
+    vfrec7_o       = 37'd0;
+    vfrec7_out     = 37'd0;
+    vfrec7_i       = 32'd0;
+    vfrec7_n_excep = 32'd0;
+    vfrec7_sub     = 32'd0;
+
+    en_rm =  fp_rm_process==fpnew_pkg::RTZ
+         || (fp_rm_process==fpnew_pkg::RDN && ~operand_a_delay[E32_BITS-1])
+         || (fp_rm_process==fpnew_pkg::RUP &&  operand_a_delay[E32_BITS-1]);
+
+    //subnormal inputs with sig=0.. or sig=1..
+    unique case (operand_a_delay[22])
+      1'b0: begin
+        vfrec7_sub.e = 8'd0-8'd1;                    //0 minus number of leading zeros in sig
+        vfrec7_sub.m = {operand_a_delay[20:0], 2'b00}; //left-shifting by 2
+      end
+      1'b1: begin
+        vfrec7_sub.e = 8'd0;                          //0 minus number of leading zeros in sig
+        vfrec7_sub.m = {operand_a_delay[21:0], 1'b0};  //left-shifting by 1
+      end
+      default:;
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::NEGSUBNORM: begin //SUBNORMAL
+        vfrec7_i.e  = vfrec7_sub.e;
+        vfrec7_i.m  = vfrec7_sub.m;
+      end
+      fpnew_pkg:: POSNORM,
+      fpnew_pkg:: NEGNORM: begin // NORMAL
+        vfrec7_i.e  = operand_a_delay[30:23];
+        vfrec7_i.m  = operand_a_delay[22:0];
+      end
+      default: begin
+        vfrec7_i.e = 'x;
+        vfrec7_i.m = 'x;
+      end
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::NEGINF: vfrec7_o.vf7_e32 = {1'b1, 31'd0};
+      fpnew_pkg::POSINF: vfrec7_o.vf7_e32 = 32'd0;
+      fpnew_pkg::SNAN: begin
+        vfrec7_o.vf7_e32    = E32_NaN;
+        vfrec7_o.ex_flag.NV = 1'b1;
+      end
+      fpnew_pkg::QNAN: vfrec7_o.vf7_e32 = E32_NaN;
+      fpnew_pkg::NEGZERO: begin
+        vfrec7_o.vf7_e32    = E32_mInf;
+        vfrec7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSZERO: begin
+        vfrec7_o.vf7_e32    = E32_pInf;
+        vfrec7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::NEGSUBNORM,
+      fpnew_pkg::POSNORM,
+      fpnew_pkg::NEGNORM: begin
+        //Output exponent can be found by
+        //exp_o = 2*B-1-exp_i
+        //      = 2*B+(~exp_i)
+        vfrec7_n_excep.e = E32_2xB +(~vfrec7_i.e);
+
+        //Output significand(mantissa) can be found by using lookup table
+        vfrec7_n_excep.m[22:16] = vfrec7_lut(vfrec7_i.m[22:16]);
+
+        //if output is subnormal
+        // output exponent is equal to zero
+        unique case (vfrec7_n_excep.e)
+          8'h00 : begin
+            vfrec7_o.vf7_e32.e        = 8'h00;
+            vfrec7_o.vf7_e32.m[22:15] = {1'b1, vfrec7_n_excep.m[22:16]}; //concating 1 at MSB
+          end
+          8'hff : begin
+            vfrec7_o.vf7_e32.e        = 8'h00;
+            vfrec7_o.vf7_e32.m[22:14] = {2'b01, vfrec7_n_excep.m[22:16]}; //concating 1 at MSB and shiting by 1
+          end
+          default:  begin
+            vfrec7_o.vf7_e32.e        = vfrec7_n_excep.e;
+            vfrec7_o.vf7_e32.m[22:15] = vfrec7_n_excep.m[22:15];
+          end
+        endcase
+
+        //The output sign equals the input sign.
+        vfrec7_o.vf7_e32.s = operand_a_delay[31];
+      end
+      default:;
+    endcase
+
+    // check if input number is subnormal number  with sig=00..
+    select_vfrec7_out = (operand_a_delay[22:21]==2'b00)
+                     && (vfpu_result==fpnew_pkg::POSSUBNORM
+                     ||  vfpu_result==fpnew_pkg::NEGSUBNORM);
+
+    unique case (select_vfrec7_out)
+      1'b0: vfrec7_out = vfrec7_o;
+      1'b1: begin
+        // if input number  is subnormal with sig=00.. then
+        // output is equal to infinity or  +-finite value (greatest magnitude)
+        // depending on rounding modes
+        unique case (en_rm)
+          1'b0: vfrec7_out.vf7_e32 = {vfrec7_o.vf7_e32.s, E32_Inf}; // infinity
+          1'b1: vfrec7_out.vf7_e32 = {vfrec7_o.vf7_e32.s, E32_Max}; // greatest magnitude
+          default:;
+        endcase
+
+        vfrec7_out.ex_flag.NX  = 1'b1;
+        vfrec7_out.ex_flag.OF  = 1'b1;
+      end
+      default:;
+    endcase
+    return vfrec7_out;
+  endfunction : vfrec7_fp32
+
+  // vfrec7 result (sew: 64 bit)
+  function automatic vf7_flag_out_e64 vfrec7_fp64(logic [VF_TYPE_SEL_BITS-1:0] vfpu_result, logic [E64_BITS-1:0] operand_a_delay,fpnew_pkg::roundmode_e fp_rm_process);
+    vf7_flag_out_e64 vfrec7_o, vfrec7_out;
+
+    fp64_t vfrec7_i, vfrec7_n_excep, vfrec7_sub;
+
+    logic select_vfrec7_out;
+    logic en_rm;
+
+    vfrec7_o       = 69'd0;
+    vfrec7_out     = 69'd0;
+    vfrec7_i       = 64'd0;
+    vfrec7_n_excep = 64'd0;
+    vfrec7_sub     = 64'd0;
+
+    en_rm =  fp_rm_process==fpnew_pkg::RTZ
+         || (fp_rm_process==fpnew_pkg::RDN && ~operand_a_delay[E64_BITS-1])
+         || (fp_rm_process==fpnew_pkg::RUP &&  operand_a_delay[E64_BITS-1]);
+
+    //subnormal inputs with sig=0.. or sig=1..
+    unique case (operand_a_delay[51])
+      1'b0: begin
+        vfrec7_sub.e = 11'd0-11'd1;                    //0 minus number of leading zeros in sig
+        vfrec7_sub.m = {operand_a_delay[49:0], 2'b00}; //left-shifting by 2
+      end
+      1'b1: begin
+        vfrec7_sub.e = 11'd0;                          //0 minus number of leading zeros in sig
+        vfrec7_sub.m = {operand_a_delay[50:0], 1'b0};  //left-shifting by 1
+      end
+      default:;
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::NEGSUBNORM: begin //SUBNORMAL
+        vfrec7_i.e  = vfrec7_sub.e;
+        vfrec7_i.m  = vfrec7_sub.m;
+      end
+      fpnew_pkg::POSNORM,
+      fpnew_pkg::NEGNORM: begin // NORMAL
+        vfrec7_i.e  = operand_a_delay[62:52];
+        vfrec7_i.m  = operand_a_delay[51:0];
+      end
+      default: begin
+        vfrec7_i.e = 'x;
+        vfrec7_i.m = 'x;
+      end
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::NEGINF: vfrec7_o.vf7_e64 = {1'b1, 63'd0};
+      fpnew_pkg::POSINF: vfrec7_o.vf7_e64 = 64'd0;
+      fpnew_pkg::SNAN: begin
+        vfrec7_o.vf7_e64    = E64_NaN;
+        vfrec7_o.ex_flag.NV = 1'b1;
+      end
+      fpnew_pkg::QNAN : vfrec7_o.vf7_e64 = E64_NaN;
+      fpnew_pkg::NEGZERO: begin
+        vfrec7_o.vf7_e64    = E64_mInf;
+        vfrec7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg:: POSZERO: begin
+        vfrec7_o.vf7_e64    = E64_pInf;
+        vfrec7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::NEGSUBNORM,
+      fpnew_pkg::POSNORM,
+      fpnew_pkg::NEGNORM: begin
+        //Output exponent can be found by
+        //exp_o = 2*B-1-exp_i
+        //      = 2*B+(~exp_i)
+        vfrec7_n_excep.e = E64_2xB +(~vfrec7_i.e);
+
+        //Output significand(mantissa) can be found by using lookup table
+        vfrec7_n_excep.m[51:45] = vfrec7_lut(vfrec7_i.m[51:45]);
+
+          //if output is subnormal
+          // output exponent is equal to zero
+        unique case (vfrec7_n_excep.e)
+          11'h000 : begin
+            vfrec7_o.vf7_e64.e        = 11'h000;
+            vfrec7_o.vf7_e64.m[51:44] = {1'b1, vfrec7_n_excep.m[51:45]}; //concating 1 at MSB
+          end
+          11'h7ff: begin
+            vfrec7_o.vf7_e64.e        = 11'h000;
+            vfrec7_o.vf7_e64.m[51:43] = {2'b01, vfrec7_n_excep.m[51:45]}; //concating 1 at MSB and shiting by 1
+          end
+          default:begin
+            vfrec7_o.vf7_e64.e        = vfrec7_n_excep.e;
+            vfrec7_o.vf7_e64.m[51:45] = vfrec7_n_excep.m[51:45];
+          end
+        endcase
+
+        //The output sign equals the input sign.
+        vfrec7_o.vf7_e64.s = operand_a_delay[63];
+      end
+      default:;
+    endcase
+
+    // check if input number is subnormal number  with sig=00..
+    select_vfrec7_out = (operand_a_delay[51:50]==2'b00)
+                     && (vfpu_result==fpnew_pkg::POSSUBNORM
+                     ||  vfpu_result==fpnew_pkg::NEGSUBNORM);
+
+    unique case (select_vfrec7_out)
+      1'b0: vfrec7_out = vfrec7_o;
+      1'b1: begin
+        // if input number  is subnormal with sig=00.. then
+        // output is equal to infinity or  +-finite value (greatest magnitude)
+        // depending on rounding modes
+        unique case (en_rm)
+          1'b0:vfrec7_out.vf7_e64 = {vfrec7_o.vf7_e64.s, E64_Inf}; // infinity
+          1'b1:vfrec7_out.vf7_e64 = {vfrec7_o.vf7_e64.s, E64_Max}; // greatest magnitude
+          default:;
+        endcase
+
+        vfrec7_out.ex_flag.NX  = 1'b1;
+        vfrec7_out.ex_flag.OF  = 1'b1;
+      end
+      default:;
+    endcase
+    return vfrec7_out;
+  endfunction : vfrec7_fp64
+
+  // vfrsqrt7 LUT
+  function automatic logic [LUT_BITS-1:0] vfrsqrt7_lut(logic [LUT_BITS-1:0] vfrsqrt7_lut_select);
+    logic [LUT_BITS-1:0] vfrsqrt7_lut_out;
+    unique case (vfrsqrt7_lut_select)
+      7'd0  : vfrsqrt7_lut_out=7'd52;
+      7'd1  : vfrsqrt7_lut_out=7'd51;
+      7'd2  : vfrsqrt7_lut_out=7'd50;
+      7'd3  : vfrsqrt7_lut_out=7'd48;
+      7'd4  : vfrsqrt7_lut_out=7'd47;
+      7'd5  : vfrsqrt7_lut_out=7'd46;
+      7'd6  : vfrsqrt7_lut_out=7'd44;
+      7'd7  : vfrsqrt7_lut_out=7'd43;
+      7'd8  : vfrsqrt7_lut_out=7'd42;
+      7'd9  : vfrsqrt7_lut_out=7'd41;
+      7'd10 : vfrsqrt7_lut_out=7'd40;
+      7'd11 : vfrsqrt7_lut_out=7'd39;
+      7'd12 : vfrsqrt7_lut_out=7'd38;
+      7'd13 : vfrsqrt7_lut_out=7'd36;
+      7'd14 : vfrsqrt7_lut_out=7'd35;
+      7'd15 : vfrsqrt7_lut_out=7'd34;
+      7'd16 : vfrsqrt7_lut_out=7'd33;
+      7'd17 : vfrsqrt7_lut_out=7'd32;
+      7'd18 : vfrsqrt7_lut_out=7'd31;
+      7'd19 : vfrsqrt7_lut_out=7'd30;
+      7'd20 : vfrsqrt7_lut_out=7'd30;
+      7'd21 : vfrsqrt7_lut_out=7'd29;
+      7'd22 : vfrsqrt7_lut_out=7'd28;
+      7'd23 : vfrsqrt7_lut_out=7'd27;
+      7'd24 : vfrsqrt7_lut_out=7'd26;
+      7'd25 : vfrsqrt7_lut_out=7'd25;
+      7'd26 : vfrsqrt7_lut_out=7'd24;
+      7'd27 : vfrsqrt7_lut_out=7'd23;
+      7'd28 : vfrsqrt7_lut_out=7'd23;
+      7'd29 : vfrsqrt7_lut_out=7'd22;
+      7'd30 : vfrsqrt7_lut_out=7'd21;
+      7'd31 : vfrsqrt7_lut_out=7'd20;
+      7'd32 : vfrsqrt7_lut_out=7'd19;
+      7'd33 : vfrsqrt7_lut_out=7'd19;
+      7'd34 : vfrsqrt7_lut_out=7'd18;
+      7'd35 : vfrsqrt7_lut_out=7'd17;
+      7'd36 : vfrsqrt7_lut_out=7'd16;
+      7'd37 : vfrsqrt7_lut_out=7'd16;
+      7'd38 : vfrsqrt7_lut_out=7'd15;
+      7'd39 : vfrsqrt7_lut_out=7'd14;
+      7'd40 : vfrsqrt7_lut_out=7'd14;
+      7'd41 : vfrsqrt7_lut_out=7'd13;
+      7'd42 : vfrsqrt7_lut_out=7'd12;
+      7'd43 : vfrsqrt7_lut_out=7'd12;
+      7'd44 : vfrsqrt7_lut_out=7'd11;
+      7'd45 : vfrsqrt7_lut_out=7'd10;
+      7'd46 : vfrsqrt7_lut_out=7'd10;
+      7'd47 : vfrsqrt7_lut_out=7'd9;
+      7'd48 : vfrsqrt7_lut_out=7'd9;
+      7'd49 : vfrsqrt7_lut_out=7'd8;
+      7'd50 : vfrsqrt7_lut_out=7'd7;
+      7'd51 : vfrsqrt7_lut_out=7'd7;
+      7'd52 : vfrsqrt7_lut_out=7'd6;
+      7'd53 : vfrsqrt7_lut_out=7'd6;
+      7'd54 : vfrsqrt7_lut_out=7'd5;
+      7'd55 : vfrsqrt7_lut_out=7'd4;
+      7'd56 : vfrsqrt7_lut_out=7'd4;
+      7'd57 : vfrsqrt7_lut_out=7'd3;
+      7'd58 : vfrsqrt7_lut_out=7'd3;
+      7'd59 : vfrsqrt7_lut_out=7'd2;
+      7'd60 : vfrsqrt7_lut_out=7'd2;
+      7'd61 : vfrsqrt7_lut_out=7'd1;
+      7'd62 : vfrsqrt7_lut_out=7'd1;
+      7'd63 : vfrsqrt7_lut_out=7'd0;
+      7'd64 : vfrsqrt7_lut_out=7'd127;
+      7'd65 : vfrsqrt7_lut_out=7'd125;
+      7'd66 : vfrsqrt7_lut_out=7'd123;
+      7'd67 : vfrsqrt7_lut_out=7'd121;
+      7'd68 : vfrsqrt7_lut_out=7'd119;
+      7'd69 : vfrsqrt7_lut_out=7'd118;
+      7'd70 : vfrsqrt7_lut_out=7'd116;
+      7'd71 : vfrsqrt7_lut_out=7'd114;
+      7'd72 : vfrsqrt7_lut_out=7'd113;
+      7'd73 : vfrsqrt7_lut_out=7'd111;
+      7'd74 : vfrsqrt7_lut_out=7'd109;
+      7'd75 : vfrsqrt7_lut_out=7'd108;
+      7'd76 : vfrsqrt7_lut_out=7'd106;
+      7'd77 : vfrsqrt7_lut_out=7'd105;
+      7'd78 : vfrsqrt7_lut_out=7'd103;
+      7'd79 : vfrsqrt7_lut_out=7'd102;
+      7'd80 : vfrsqrt7_lut_out=7'd100;
+      7'd81 : vfrsqrt7_lut_out=7'd99;
+      7'd82 : vfrsqrt7_lut_out=7'd97;
+      7'd83 : vfrsqrt7_lut_out=7'd96;
+      7'd84 : vfrsqrt7_lut_out=7'd95;
+      7'd85 : vfrsqrt7_lut_out=7'd93;
+      7'd86 : vfrsqrt7_lut_out=7'd92;
+      7'd87 : vfrsqrt7_lut_out=7'd91;
+      7'd88 : vfrsqrt7_lut_out=7'd90;
+      7'd89 : vfrsqrt7_lut_out=7'd88;
+      7'd90 : vfrsqrt7_lut_out=7'd87;
+      7'd91 : vfrsqrt7_lut_out=7'd86;
+      7'd92 : vfrsqrt7_lut_out=7'd85;
+      7'd93 : vfrsqrt7_lut_out=7'd84;
+      7'd94 : vfrsqrt7_lut_out=7'd83;
+      7'd95 : vfrsqrt7_lut_out=7'd82;
+      7'd96 : vfrsqrt7_lut_out=7'd80;
+      7'd97 : vfrsqrt7_lut_out=7'd79;
+      7'd98 : vfrsqrt7_lut_out=7'd78;
+      7'd99 : vfrsqrt7_lut_out=7'd77;
+      7'd100: vfrsqrt7_lut_out=7'd76;
+      7'd101: vfrsqrt7_lut_out=7'd75;
+      7'd102: vfrsqrt7_lut_out=7'd74;
+      7'd103: vfrsqrt7_lut_out=7'd73;
+      7'd104: vfrsqrt7_lut_out=7'd72;
+      7'd105: vfrsqrt7_lut_out=7'd71;
+      7'd106: vfrsqrt7_lut_out=7'd70;
+      7'd107: vfrsqrt7_lut_out=7'd70;
+      7'd108: vfrsqrt7_lut_out=7'd69;
+      7'd109: vfrsqrt7_lut_out=7'd68;
+      7'd110: vfrsqrt7_lut_out=7'd67;
+      7'd111: vfrsqrt7_lut_out=7'd66;
+      7'd112: vfrsqrt7_lut_out=7'd65;
+      7'd113: vfrsqrt7_lut_out=7'd64;
+      7'd114: vfrsqrt7_lut_out=7'd63;
+      7'd115: vfrsqrt7_lut_out=7'd63;
+      7'd116: vfrsqrt7_lut_out=7'd62;
+      7'd117: vfrsqrt7_lut_out=7'd61;
+      7'd118: vfrsqrt7_lut_out=7'd60;
+      7'd119: vfrsqrt7_lut_out=7'd59;
+      7'd120: vfrsqrt7_lut_out=7'd59;
+      7'd121: vfrsqrt7_lut_out=7'd58;
+      7'd122: vfrsqrt7_lut_out=7'd57;
+      7'd123: vfrsqrt7_lut_out=7'd56;
+      7'd124: vfrsqrt7_lut_out=7'd56;
+      7'd125: vfrsqrt7_lut_out=7'd55;
+      7'd126: vfrsqrt7_lut_out=7'd54;
+      7'd127: vfrsqrt7_lut_out=7'd53;
+      default: vfrsqrt7_lut_out=7'd53;
+    endcase
+    return vfrsqrt7_lut_out;
+  endfunction : vfrsqrt7_lut
+
+  // vfrsqrt7 results
+
+  // vfrsqrt7 result (sew: 16 bit)
+  function automatic vf7_flag_out_e16 vfrsqrt7_fp16(logic [VF_TYPE_SEL_BITS-1:0] vfpu_result, logic [E16_BITS-1:0] operand_a_delay, logic [3:0] leading_zeros_count);
+    vf7_flag_out_e16 vfrsqrt7_o;
+    fp16_t           vfrsqrt7_i;
+
+    logic [EXP_BITS_E16:0] vfrsqrt7_exp_i, vfrsqrt7_exp_o;
+
+    vfrsqrt7_o     = 21'd0;
+    vfrsqrt7_i     = 16'd0;
+    vfrsqrt7_exp_o = 6'd0;
+    vfrsqrt7_exp_i = 6'd0;
+
+    unique case (vfpu_result[6:5])
+      // POSSUBNORM
+      2'b01: begin
+        // As input is subnormal, So
+        // input exponent:
+        // 0 minus the number of leading zeros
+        vfrsqrt7_exp_i = 6'd0 - ({2'b00, leading_zeros_count});
+        // the normalized input significand(mantissa)
+        // is given by shifting the input significand left by
+        // 1 minus the input exponent
+        vfrsqrt7_i.m = operand_a_delay[9:0] << (6'd1 - vfrsqrt7_exp_i);
+      end
+      // POSNORM
+      2'b10: begin
+        vfrsqrt7_exp_i = {1'b0, operand_a_delay[14:10]};
+        vfrsqrt7_i.m   = operand_a_delay[9:0];
+      end
+      default: begin
+        vfrsqrt7_exp_i = 'x;
+        vfrsqrt7_i.m   = 'x;
+      end
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::NEGINF,
+      fpnew_pkg::NEGNORM,
+      fpnew_pkg::NEGSUBNORM,
+      fpnew_pkg::SNAN: begin
+        vfrsqrt7_o.vf7_e16    = E16_NaN;
+        vfrsqrt7_o.ex_flag.NV = 1'b1;
+      end
+      fpnew_pkg::QNAN: vfrsqrt7_o.vf7_e16 = E16_NaN;
+      fpnew_pkg::NEGZERO: begin
+        vfrsqrt7_o.vf7_e16    = E16_mInf;
+        vfrsqrt7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSZERO: begin
+        vfrsqrt7_o.vf7_e16    = E16_pInf;
+        vfrsqrt7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSINF: vfrsqrt7_o.vf7_e16 = 16'd0;
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::POSNORM: begin
+        // Output exponent can be found by
+        // exp_o = (3*B-1-exp_i )/2
+        //       = (3*B+(~exp_i))/2
+        vfrsqrt7_exp_o = E16_3xB + (~vfrsqrt7_exp_i);
+        // Dividing by 2
+        vfrsqrt7_o.vf7_e16.e = vfrsqrt7_exp_o[5:1];
+        // Output significand(mantissa) can be found by using lookup table
+        // The address for LUT is found by concatenating LSB of the normalized input exponent and
+        // the six MSBs of the normalized input significand
+        vfrsqrt7_o.vf7_e16.m[9:3] = vfrsqrt7_lut({vfrsqrt7_exp_i[0],vfrsqrt7_i.m[9:4]});
+        // The output sign equals the input sign.
+        vfrsqrt7_o.vf7_e16.s = vfrsqrt7_i.s;
+      end
+      default:;
+    endcase
+    return vfrsqrt7_o;
+  endfunction : vfrsqrt7_fp16
+
+  // vfrsqrt7 result (sew: 32 bit)
+  function automatic vf7_flag_out_e32 vfrsqrt7_fp32(logic [VF_TYPE_SEL_BITS-1:0] vfpu_result, logic [E32_BITS-1:0] operand_a_delay, logic [4:0] leading_zeros_count);
+    vf7_flag_out_e32 vfrsqrt7_o;
+    fp32_t          vfrsqrt7_i;
+
+    logic [EXP_BITS_E32:0] vfrsqrt7_exp_i, vfrsqrt7_exp_o;
+
+    vfrsqrt7_o     = 37'd0;
+    vfrsqrt7_i     = 32'd0;
+    vfrsqrt7_exp_o = 9'd0;
+    vfrsqrt7_exp_i = 9'd0;
+
+    unique case (vfpu_result[6:5])
+      // POSSUBNORM
+      2'b01: begin
+        //As input is subnormal, So
+        //input exponent:
+        //0 minus the number of leading zeros
+        vfrsqrt7_exp_i = 9'd0 - ({4'b0000, leading_zeros_count});
+        //the normalized input significand(mantissa)
+        //is given by shifting the input significand left by
+        //1 minus the input exponent
+        vfrsqrt7_i.m = operand_a_delay[22:0] << (9'd1 - vfrsqrt7_exp_i);
+      end
+      // POSNORM
+      2'b10: begin
+        vfrsqrt7_exp_i = {1'b0, operand_a_delay[30:23]};
+        vfrsqrt7_i.m   = operand_a_delay[22:0];
+      end
+      default: begin
+        vfrsqrt7_exp_i = 'x;
+        vfrsqrt7_i.m   = 'x;
+      end
+    endcase
+
+    unique case (vfpu_result)
+      fpnew_pkg::NEGINF,
+      fpnew_pkg::NEGNORM,
+      fpnew_pkg::NEGSUBNORM,
+      fpnew_pkg::SNAN: begin
+        vfrsqrt7_o.vf7_e32    = E32_NaN;
+        vfrsqrt7_o.ex_flag.NV = 1'b1;
+      end
+      fpnew_pkg::QNAN: vfrsqrt7_o.vf7_e32 = E32_NaN;
+      fpnew_pkg::NEGZERO: begin
+        vfrsqrt7_o.vf7_e32    = E32_mInf;
+        vfrsqrt7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSZERO: begin
+        vfrsqrt7_o.vf7_e32    = E32_pInf;
+        vfrsqrt7_o.ex_flag.DZ = 1'b1;
+      end
+      fpnew_pkg::POSINF: vfrsqrt7_o.vf7_e32 = 32'd0;
+      fpnew_pkg::POSSUBNORM,
+      fpnew_pkg::POSNORM: begin
+        // Output exponent can be found by
+        // exp_o = (3*B-1-exp_i )/2
+        //       = (3*B+(~exp_i))/2
+        vfrsqrt7_exp_o = E32_3xB + (~vfrsqrt7_exp_i);
+        // dividing by 2
+        vfrsqrt7_o.vf7_e32.e = vfrsqrt7_exp_o[8:1];
+        // Output significand(mantissa) can be found by using lookup table
+        // The address for LUT is found by concatenating LSB of the normalized input exponent and
+        // the six MSBs of the normalized input significand
+        vfrsqrt7_o.vf7_e32.m[22:16] = vfrsqrt7_lut({vfrsqrt7_exp_i[0], vfrsqrt7_i.m[22:17]});
+        // The output sign equals the input sign.
+        vfrsqrt7_o.vf7_e32.s = vfrsqrt7_i.s;
+      end
+      default:;
+    endcase
+    return vfrsqrt7_o;
+  endfunction : vfrsqrt7_fp32
+
+  // vfrsqrt7 result (sew: 64 bit)
+  function automatic vf7_flag_out_e64 vfrsqrt7_fp64(logic [VF_TYPE_SEL_BITS-1:0] vfpu_result, logic [E64_BITS-1:0] operand_a_delay, logic [5:0] leading_zeros_count);
+    vf7_flag_out_e64 vfrsqrt7_o;
+    fp64_t           vfrsqrt7_i;
+
+    logic [EXP_BITS_E64:0] vfrsqrt7_exp_i, vfrsqrt7_exp_o;
+
+    vfrsqrt7_o     = 69'd0;
+    vfrsqrt7_i     = 64'd0;
+    vfrsqrt7_exp_o = 12'd0;
+    vfrsqrt7_exp_i = 12'd0;
+
+    unique case (vfpu_result[6:5])
+    // POSSUBNORM
+    2'b01: begin
+      // As input is subnormal, So
+      // input exponent:
+      // 0 minus the number of leading zeros
+      vfrsqrt7_exp_i = 12'd0 - ({6'd0, leading_zeros_count});
+      // the normalized input significand(mantissa)
+      // is given by shifting the input significand left by
+      // 1 minus the input exponent
+      vfrsqrt7_i.m = operand_a_delay[51:0] << (12'd1 - vfrsqrt7_exp_i);
+    end
+    // POSNORM
+    2'b10: begin
+      vfrsqrt7_exp_i = {1'b0, operand_a_delay[62:52]};
+      vfrsqrt7_i.m   = operand_a_delay[51:0];
+    end
+    default: begin
+      vfrsqrt7_exp_i = 'x;
+      vfrsqrt7_i.m   = 'x;
+    end
+    endcase
+    unique case (vfpu_result)
+       fpnew_pkg::NEGINF,
+       fpnew_pkg::NEGNORM,
+       fpnew_pkg::NEGSUBNORM,
+       fpnew_pkg::SNAN: begin
+         vfrsqrt7_o.vf7_e64    = E64_NaN;
+         vfrsqrt7_o.ex_flag.NV = 1'b1;
+       end
+       fpnew_pkg::QNAN: vfrsqrt7_o.vf7_e64 = E64_NaN;
+       fpnew_pkg::NEGZERO: begin
+         vfrsqrt7_o.vf7_e64    = E64_mInf;
+         vfrsqrt7_o.ex_flag.DZ = 1'b1;
+       end
+       fpnew_pkg::POSZERO: begin
+         vfrsqrt7_o.vf7_e64    = E64_pInf;
+         vfrsqrt7_o.ex_flag.DZ = 1'b1;
+       end
+       fpnew_pkg::POSINF: vfrsqrt7_o.vf7_e64 = 64'd0;
+       fpnew_pkg::POSSUBNORM,
+       fpnew_pkg::POSNORM: begin
+         // Output exponent can be found by
+         // exp_o = (3*B-1-exp_i )/2
+         //       = (3*B+(~exp_i))/2
+         vfrsqrt7_exp_o = E64_3xB +(~vfrsqrt7_exp_i);
+         // dividing by 2
+         vfrsqrt7_o.vf7_e64.e = vfrsqrt7_exp_o[11:1];
+         // Output significand(mantissa) can be found by using lookup table
+         // The address for LUT is found by concatenating LSB of the normalized input exponent and
+         // the six MSBs of the normalized input significand
+         vfrsqrt7_o.vf7_e64.m[51:45] = vfrsqrt7_lut({vfrsqrt7_exp_i [0],vfrsqrt7_i.m[51:46]});
+         // The output sign equals the input sign.
+         vfrsqrt7_o.vf7_e64.s = vfrsqrt7_i.s;
+      end
+      default:;
+    endcase
+    return vfrsqrt7_o;
+  endfunction : vfrsqrt7_fp64
 
 endpackage : ara_pkg

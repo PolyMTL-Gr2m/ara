@@ -3,7 +3,7 @@
 [![ci](https://github.com/pulp-platform/ara/actions/workflows/ci.yml/badge.svg)](https://github.com/pulp-platform/ara/actions/workflows/ci.yml)
 
 Ara is a vector unit working as a coprocessor for the CVA6 core.
-It supports the RISC-V Vector Extension, [version 0.10](https://github.com/riscv/riscv-v-spec/releases/tag/v0.10).
+It supports the RISC-V Vector Extension, [version 1.0](https://github.com/riscv/riscv-v-spec/releases/tag/v1.0).
 
 ## Dependencies
 
@@ -29,7 +29,7 @@ git submodule sync --recursive
 
 ## Toolchain
 
-Ara requires a RISC-V LLVM toolchain capable of understanding the vector extension, version 0.10.x.
+Ara requires a RISC-V LLVM toolchain capable of understanding the vector extension, version 1.0.
 
 To build this toolchain, run the following command in the project's root directory.
 
@@ -171,10 +171,24 @@ cd hardware
 make sim app=${program} ideal_dispatcher=1
 ```
 
-## Publication
+### VCD Dumping
+
+It's possible to dump VCD files for accurate activity-based power analyses. To do so, use the `vcd_dump=1` option to compile the program and to run the simulation:
+
+```bash
+make -C apps bin/${program} vcd_dump=1
+make -C hardware simc app=${program} vcd_dump=1
+```
+
+Currently, the following kernels support automatic VCD dumping: `fmatmul`, `fconv3d`, `fft`, `dwt`, `exp`, `cos`, `log`, `dropout`, `jacobi2d`.
+
+### Linting Flow
+
+We also provide Synopsys Spyglass linting scripts in the hardware/spyglass. Run make lint in the hardware folder, with a specific MemPool configuration, to run the tests associated with the lint_rtl target.
+
+## Publications
 
 If you want to use Ara, you can cite us:
-
 ```
 @Article{Ara2020,
   author = {Matheus Cavalcante and Fabian Schuiki and Florian Zaruba and Michael Schaffner and Luca Benini},
@@ -186,4 +200,15 @@ If you want to use Ara, you can cite us:
   pages  = {530-543},
   doi    = {10.1109/TVLSI.2019.2950087}
 }
+```
+```
+@INPROCEEDINGS{9912071,
+  author={Perotti, Matteo and Cavalcante, Matheus and Wistoff, Nils and Andri, Renzo and Cavigelli, Lukas and Benini, Luca},
+  booktitle={2022 IEEE 33rd International Conference on Application-specific Systems, Architectures and Processors (ASAP)},
+  title={A “New Ara” for Vector Computing: An Open Source Highly Efficient RISC-V V 1.0 Vector Processor Design},
+  year={2022},
+  volume={},
+  number={},
+  pages={43-51},
+  doi={10.1109/ASAP54787.2022.00017}}
 ```

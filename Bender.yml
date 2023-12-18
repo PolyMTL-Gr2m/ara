@@ -10,8 +10,9 @@ package:
 dependencies:
   axi:                { git: "https://github.com/pulp-platform/axi.git",                version: 0.29.1 }
   common_cells:       { git: "https://github.com/pulp-platform/common_cells.git",       version: 1.22.1 }
-  cva6:               { git: "https://github.com/pulp-platform/cva6.git",               rev: acc_port   }
+  cva6:               { git: "https://github.com/pulp-platform/cva6.git",               rev: acc_port_rerebase   }
   tech_cells_generic: { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.1  }
+  apb:                { git: "https://github.com/pulp-platform/apb.git",                version: 0.2.4  }
 
 workspace:
   checkout_dir: "hardware/deps"
@@ -36,12 +37,16 @@ sources:
     - hardware/src/lane/lane_sequencer.sv
     - hardware/src/lane/operand_queue.sv
     - hardware/src/lane/operand_requester.sv
+    - hardware/src/lane/ara_popcnt.sv
     - hardware/src/lane/simd_alu.sv
     - hardware/src/lane/ara_popcnt.sv
     - hardware/src/lane/simd_div.sv
     - hardware/src/lane/simd_mul.sv
     - hardware/src/lane/vector_regfile.sv
+    - hardware/src/lane/power_gating_generic.sv
     - hardware/src/masku/masku.sv
+    - hardware/src/sldu/p2_stride_gen.sv
+    - hardware/src/sldu/sldu_op_dp.sv
     - hardware/src/sldu/sldu.sv
     - hardware/src/vlsu/addrgen.sv
     - hardware/src/vlsu/vldu.sv
@@ -50,6 +55,7 @@ sources:
     - hardware/src/lane/operand_queues_stage.sv
     - hardware/src/lane/valu.sv
     - hardware/src/lane/vmfpu.sv
+    - hardware/src/lane/fixed_p_rounding.sv
     - hardware/src/vlsu/vlsu.sv
     # Level 3
     - hardware/src/lane/vector_fus_stage.sv
@@ -75,3 +81,7 @@ sources:
           files:
             # Level 2
             - hardware/tb/ara_tb_verilator.sv
+
+    - target: spyglass
+      files:
+        - hardware/spyglass/src/ara_soc_wrap.sv

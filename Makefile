@@ -25,7 +25,8 @@ LLVM_INSTALL_DIR        ?= ${INSTALL_DIR}/riscv-llvm
 ISA_SIM_INSTALL_DIR     ?= ${INSTALL_DIR}/riscv-isa-sim
 ISA_SIM_MOD_INSTALL_DIR ?= ${INSTALL_DIR}/riscv-isa-sim-mod
 VERIL_INSTALL_DIR       ?= ${INSTALL_DIR}/verilator
-VERIL_VERSION           ?= v4.226
+VERIL_VERSION           ?= v4.214
+DTC_COMMIT              ?= b6910bec11614980a21e46fbccc35934b671bd81
 
 CMAKE ?= cmake
 
@@ -81,11 +82,11 @@ toolchain-llvm-main: Makefile
 	cd $(ROOT_DIR)/toolchain/riscv-llvm && \
 	$(CMAKE) --build build --target install
 
-toolchain-llvm-newlib: Makefile
+toolchain-llvm-newlib: Makefile toolchain-llvm
 	cd ${ROOT_DIR}/toolchain/newlib && rm -rf build && mkdir -p build && cd build && \
 	../configure --prefix=${LLVM_INSTALL_DIR} \
 	--target=riscv64-unknown-elf \
-	CC_FOR_TARGET="${LLVM_INSTALL_DIR}/bin/clang -march=rv64gc -mabi=lp64d -mno-relax -mcmodel=medany -Wno-error-implicit-function-declaration" \
+	CC_FOR_TARGET="${LLVM_INSTALL_DIR}/bin/clang -march=rv64gc -mabi=lp64d -mno-relax -mcmodel=medany -Wno-error-implicit-function-declaration -Wno-error=int-conversion" \
 	AS_FOR_TARGET=${LLVM_INSTALL_DIR}/bin/llvm-as \
 	AR_FOR_TARGET=${LLVM_INSTALL_DIR}/bin/llvm-ar \
 	LD_FOR_TARGET=${LLVM_INSTALL_DIR}/bin/llvm-ld \
@@ -119,7 +120,7 @@ toolchain-llvm-rt: Makefile toolchain-llvm-main toolchain-llvm-newlib
 	-DLLVM_CONFIG_PATH=$(LLVM_INSTALL_DIR)/bin/llvm-config
 	cd $(ROOT_DIR)/toolchain/riscv-llvm/compiler-rt && \
 	$(CMAKE) --build build --target install && \
-	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/15.0.0/lib
+	ln -s $(LLVM_INSTALL_DIR)/lib/linux $(LLVM_INSTALL_DIR)/lib/clang/16/lib
 
 # Spike
 .PHONY: riscv-isa-sim riscv-isa-sim-mod
@@ -132,9 +133,9 @@ ${ISA_SIM_MOD_INSTALL_DIR}: Makefile patches/0003-riscv-isa-sim-patch ${ISA_SIM_
 	# If there are problems with dynamic linking, use:
 	# make riscv-isa-sim LDFLAGS="-static-libstdc++"
 	# Spike was compiled successfully using gcc and g++ version 7.2.0.
-	cd toolchain/riscv-isa-sim && rm -rf build && mkdir -p build && cd build; \
-	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc; \
-	git stash && git apply ../../../patches/0003-riscv-isa-sim-patch && \
+	cd toolchain/riscv-isa-sim && git stash && git apply ../../patches/0003-riscv-isa-sim-patch && \
+	rm -rf build && mkdir -p build && cd build; \
+	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc && git checkout $(DTC_COMMIT); \
 	make install SETUP_PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) PREFIX=$(ISA_SIM_MOD_INSTALL_DIR) && \
 	PATH=$(ISA_SIM_MOD_INSTALL_DIR)/bin:$$PATH; cd ..; \
 	../configure --prefix=$(ISA_SIM_MOD_INSTALL_DIR) \
@@ -149,7 +150,7 @@ ${ISA_SIM_INSTALL_DIR}: Makefile
 	# make riscv-isa-sim LDFLAGS="-static-libstdc++"
 	# Spike was compiled successfully using gcc and g++ version 7.2.0.
 	cd toolchain/riscv-isa-sim && rm -rf build && mkdir -p build && cd build; \
-	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc; \
+	[ -d dtc ] || git clone https://git.kernel.org/pub/scm/utils/dtc/dtc.git && cd dtc && git checkout $(DTC_COMMIT); \
 	make install SETUP_PREFIX=$(ISA_SIM_INSTALL_DIR) PREFIX=$(ISA_SIM_INSTALL_DIR) && \
 	PATH=$(ISA_SIM_INSTALL_DIR)/bin:$$PATH; cd ..; \
 	../configure --prefix=$(ISA_SIM_INSTALL_DIR) \

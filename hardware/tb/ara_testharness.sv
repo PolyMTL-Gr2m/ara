@@ -14,7 +14,9 @@ module ara_testharness #(
     parameter int unsigned AxiUserWidth = 1,
     parameter int unsigned AxiIdWidth   = 5,
     parameter int unsigned AxiAddrWidth = 64,
-    parameter int unsigned AxiDataWidth = 64*NrLanes/2
+    parameter int unsigned AxiDataWidth = 64*NrLanes/2,
+    // AXI Resp Delay [ps] for gate-level simulation
+    parameter int unsigned AxiRespDelay = 200
   ) (
     input  logic        clk_i,
     input  logic        rst_ni,
@@ -68,10 +70,12 @@ module ara_testharness #(
     .AxiAddrWidth(AxiAddrWidth ),
     .AxiDataWidth(AxiDataWidth ),
     .AxiIdWidth  (AxiIdWidth   ),
-    .AxiUserWidth(AxiUserWidth )
+    .AxiUserWidth(AxiUserWidth ),
+    .AxiRespDelay(AxiRespDelay )
   ) i_ara_soc (
     .clk_i         (clk_i       ),
     .rst_ni        (rst_ni      ),
+    .hw_cnt_en_o   (/* Unused */),
     .exit_o        (exit_o      ),
     .scan_enable_i (1'b0        ),
     .scan_data_i   (1'b0        ),
@@ -104,4 +108,101 @@ module ara_testharness #(
     .pslverr_o(uart_pslverr)
   );
 
+`ifndef TARGET_GATESIM
+
+  /***************
+   *  V_RUNTIME  *
+   ***************/
+
+  // Software runtime measurements are not precise since there is some overhead when the vector
+  // function starts and when it's over. Moreover, the csr value should be retreived.
+  // When the vector function runtime is short, these overhead can compromise the measurement.
+  // This is a way to measure the runtime more precisely.
+  //
+  // The vector runtime counter starts counting up as soon as the first vector instruction is
+  // dispatched to Ara. Then, it will count up forever. When there are no more vector instructions
+  // dispatched AND Ara is idle again, the csr runtime is updated.
+  // If a new vector instruction is dispathced, the runtime will be updated once again as soon as
+  // the previous updating conditions applies again.
+  //
+  // The counter has now a SW enable. This enable allows the hw-counter to start counting when
+  // the start conditions happen.
+  //
+  // This leads to accurate measurements IF:
+  //   1) Every program run contains only a single benchmark to be measured
+  //   2) The SW reads the runtime value when Ara is idle and all the vector instructions are over!
+  // The last point implies that the function should fence() to let all the vector stores finish,
+  // and also depend on the scalar returned value if the last vector instruction is of this type.
+
+  logic [63:0] runtime_cnt_d, runtime_cnt_q;
+  logic [63:0] runtime_buf_d, runtime_buf_q;
+  logic runtime_cnt_en_d, runtime_cnt_en_q;
+  logic	runtime_to_be_updated_d, runtime_to_be_updated_q;
+
+  // The counter can start only if it's enabled. When it's disabled, it will go on counting until
+  // the last vector instruciton is over.
+  logic cnt_en_mask;
+`ifndef IDEAL_DISPATCHER
+  assign cnt_en_mask = i_ara_soc.hw_cnt_en_o[0];
+`else
+  assign cnt_en_mask = 1'b1;
+`endif
+  always_comb begin
+    // Keep the previous value
+    runtime_cnt_en_d = runtime_cnt_en_q;
+    // If disabled
+    if (!runtime_cnt_en_q)
+      // Start only if the software allowed the enable and we detect the first V instruction
+      runtime_cnt_en_d = i_ara_soc.i_system.i_ara.acc_req_i.req_valid & cnt_en_mask;
+    // If enabled
+    if (runtime_cnt_en_q)
+      // Stop counting only if the software disabled the counter and Ara returned idle
+      runtime_cnt_en_d = cnt_en_mask | ~i_ara_soc.i_system.i_ara.ara_idle;
+  end
+
+  // Vector runtime counter
+  always_comb begin
+    runtime_cnt_d = runtime_cnt_q;
+    if (runtime_cnt_en_q) runtime_cnt_d = runtime_cnt_q + 1;
+  end
+
+  // Update logic
+  always_comb begin
+    // The following lines allows for SW management of the runtime.
+    // Disabled since Verilator is not compatible with the `force` statement
+    //// Force the internal runtime CSR to the most updated runtime value
+    //force i_ara_soc.i_ctrl_registers.i_axi_lite_regs.reg_q[31:24] = runtime_buf_q;
+
+    // Keep the previous value
+    runtime_to_be_updated_d = runtime_to_be_updated_q;
+
+    // Assert the update flag upon a new valid vector instruction
+    if (!runtime_to_be_updated_q && i_ara_soc.i_system.i_ara.acc_req_i.req_valid) begin
+      runtime_to_be_updated_d = 1'b1;
+    end
+
+    // Update the internal runtime and reset the update flag
+    if (runtime_to_be_updated_q           &&
+        i_ara_soc.i_system.i_ara.ara_idle &&
+        !i_ara_soc.i_system.i_ara.acc_req_i.req_valid) begin
+      runtime_buf_d = runtime_cnt_q;
+      runtime_to_be_updated_d = 1'b0;
+    end
+  end
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      runtime_cnt_en_q        <= 1'b0;
+      runtime_cnt_q           <= '0;
+      runtime_to_be_updated_q <= '0;
+      runtime_buf_q           <= '0;
+   end else begin
+      runtime_cnt_en_q        <= runtime_cnt_en_d;
+      runtime_cnt_q           <= runtime_cnt_d;
+      runtime_to_be_updated_q <= runtime_to_be_updated_d;
+      runtime_buf_q           <= runtime_buf_d;
+    end
+  end
+
+`endif
 endmodule : ara_testharness

@@ -21,14 +21,27 @@
 # and environment conditions
 
 import sys
+import numpy as np
 
 # Performance extractors: returns problem size and performance (throughput)
 def imatmul(args, cycles):
-  size        = int(args[0])
+  m           = int(args[0])
+  n           = int(args[1])
+  p           = int(args[2])
+  if (m == n and n == p):
+    size = m
+  else:
+    sys.exit('Unimplemented return value for performance function if !(M == N == P) in "' + kernel)
   performance = 2 * size * size * size / cycles
   return [size, performance]
 def fmatmul(args, cycles):
-  size        = int(args[0])
+  m           = int(args[0])
+  n           = int(args[1])
+  p           = int(args[2])
+  if (m == n and n == p):
+    size = m
+  else:
+    sys.exit('Unimplemented return value for performance function if !(M == N == P) in "' + kernel)
   performance = 2 * size * size * size / cycles
   return [size, performance]
 def iconv2d(args, cycles):
@@ -40,19 +53,73 @@ def fconv2d(args, cycles):
   size        = int(args[0])
   filter      = int(args[1])
   performance = 2 * filter * filter * size * size / cycles
-  return [args, performance]
+  return [size, performance]
 def fconv3d(args, cycles):
   size        = int(args[0])
   filter      = int(args[1])
   performance = 2 * 3 * filter * filter * size * size / cycles
   return [size, performance]
+def jacobi2d(args, cycles):
+  size        = int(args[0])
+  trash_0     = args[1]
+  performance = 2 * 5 * (size-1) * (size-1) / cycles
+  return [size, performance]
+def dropout(args, cycles):
+  size        = int(args[0])
+  performance = size / cycles
+  return [size, performance]
+def fft(args, cycles):
+  size        = int(args[0])
+  dtype       = args[1]
+  performance = 10 * size * np.log2(size) / cycles
+  return [size, performance]
+def dwt(args, cycles):
+  size        = int(args[0])
+  k           = 0
+  for den in range(0, int(np.log2(size))):
+    k += 1/(2**den)
+  performance = 3 * k * size / cycles
+  return [size, performance]
+def exp(args, cycles):
+  size        = int(args[0])
+  performance = 30 * size / cycles
+  return [size, performance]
+def softmax(args, cycles):
+  channels    = int(args[0])
+  insize      = int(args[1])
+  performance = 25 * channels * insize / cycles
+  return [insize, performance]
+def pathfinder(args, cycles):
+  num_runs = int(args[0])
+  cols     = int(args[1])
+  rows     = int(args[2])
+  performance = 2 * num_runs * (cols - 1) * (rows - 1) / cycles
+  return [cols, performance]
+def roi_align(args, cycles):
+  batch   = int(args[0])
+  depth   = int(args[1])
+  height  = int(args[2])
+  width   = int(args[3])
+  n_boxes = int(args[4])
+  crop_h  = int(args[5])
+  crop_w  = int(args[6])
+  performance = 9 * batch * depth * n_boxes * crop_h * crop_w / cycles
+  return [depth, performance]
 
 perfExtr = {
-  'imatmul' : imatmul,
-  'fmatmul' : fmatmul,
-  'iconv2d' : iconv2d,
-  'fconv2d' : fconv2d,
-  'fconv3d' : fconv3d,
+  'imatmul'    : imatmul,
+  'fmatmul'    : fmatmul,
+  'iconv2d'    : iconv2d,
+  'fconv2d'    : fconv2d,
+  'fconv3d'    : fconv3d,
+  'jacobi2d'   : jacobi2d,
+  'dropout'    : dropout,
+  'fft'        : fft,
+  'dwt'        : dwt,
+  'exp'        : exp,
+  'softmax'    : softmax,
+  'pathfinder' : pathfinder,
+  'roi_align'  : roi_align,
 }
 
 def main():

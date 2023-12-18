@@ -11,11 +11,17 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     parameter  int           unsigned NrLanes      = 0,                          // Number of parallel vector lanes.
     // Support for floating-point data types
     parameter  fpu_support_e          FPUSupport   = FPUSupportHalfSingleDouble,
+    // External support for vfrec7, vfrsqrt7
+    parameter  fpext_support_e        FPExtSupport = FPExtSupportEnable,
+    // Support for fixed-point data types
+    parameter  fixpt_support_e        FixPtSupport = FixedPointEnable,
     // AXI Interface
     parameter  int           unsigned AxiDataWidth = 32*NrLanes,
     parameter  int           unsigned AxiAddrWidth = 64,
     parameter  int           unsigned AxiUserWidth = 1,
     parameter  int           unsigned AxiIdWidth   = 5,
+    // AXI Resp Delay [ps] for gate-level simulation
+    parameter  int           unsigned AxiRespDelay = 200,
     // Main memory
     parameter  int           unsigned L2NumWords   = 2**20,
     // Dependant parameters. DO NOT CHANGE!
@@ -28,6 +34,7 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     input  logic        clk_i,
     input  logic        rst_ni,
     output logic [63:0] exit_o,
+    output logic [63:0] hw_cnt_en_o,
     // Scan chain
     input  logic        scan_enable_i,
     input  logic        scan_data_i,
@@ -46,6 +53,7 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   `include "axi/assign.svh"
   `include "axi/typedef.svh"
   `include "common_cells/registers.svh"
+  `include "apb/typedef.svh"
 
   //////////////////////
   //  Memory Regions  //
@@ -103,6 +111,9 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   `AXI_LITE_TYPEDEF_ALL(soc_narrow_lite, axi_addr_t, axi_narrow_data_t, axi_narrow_strb_t)
 
   // Buses
+  system_req_t  system_axi_req_spill;
+  system_resp_t system_axi_resp_spill;
+  system_resp_t system_axi_resp_spill_del;
   system_req_t  system_axi_req;
   system_resp_t system_axi_resp;
 
@@ -220,10 +231,12 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     .busy_o      (/* Unused */                  )
   );
 
+`ifndef SPYGLASS
   tc_sram #(
     .NumWords (L2NumWords  ),
     .NumPorts (1           ),
-    .DataWidth(AxiDataWidth)
+    .DataWidth(AxiDataWidth),
+    .SimInit("random")
   ) i_dram (
     .clk_i  (clk_i                                                                      ),
     .rst_ni (rst_ni                                                                     ),
@@ -234,6 +247,9 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     .be_i   (l2_be                                                                      ),
     .rdata_o(l2_rdata                                                                   )
   );
+`else
+  assign l2_rdata = '0;
+`endif
 
   // One-cycle latency
   `FF(l2_rvalid, l2_req, 1'b0);
@@ -242,96 +258,102 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   //  UART  //
   ////////////
 
-  axi2apb_64_32 #(
-    .AXI4_ADDRESS_WIDTH(AxiAddrWidth      ),
-    .AXI4_RDATA_WIDTH  (AxiNarrowDataWidth),
-    .AXI4_WDATA_WIDTH  (AxiNarrowDataWidth),
-    .AXI4_ID_WIDTH     (AxiSocIdWidth     ),
-    .AXI4_USER_WIDTH   (AxiUserWidth      ),
-    .BUFF_DEPTH_SLAVE  (2                 ),
-    .APB_ADDR_WIDTH    (32                )
-  ) i_axi2apb_64_32_uart (
-    .ACLK      (clk_i                                ),
-    .ARESETn   (rst_ni                               ),
-    .test_en_i (1'b0                                 ),
-    .AWID_i    (periph_narrow_axi_req[UART].aw.id    ),
-    .AWADDR_i  (periph_narrow_axi_req[UART].aw.addr  ),
-    .AWLEN_i   (periph_narrow_axi_req[UART].aw.len   ),
-    .AWSIZE_i  (periph_narrow_axi_req[UART].aw.size  ),
-    .AWBURST_i (periph_narrow_axi_req[UART].aw.burst ),
-    .AWLOCK_i  (periph_narrow_axi_req[UART].aw.lock  ),
-    .AWCACHE_i (periph_narrow_axi_req[UART].aw.cache ),
-    .AWPROT_i  (periph_narrow_axi_req[UART].aw.prot  ),
-    .AWREGION_i(periph_narrow_axi_req[UART].aw.region),
-    .AWUSER_i  (periph_narrow_axi_req[UART].aw.user  ),
-    .AWQOS_i   (periph_narrow_axi_req[UART].aw.qos   ),
-    .AWVALID_i (periph_narrow_axi_req[UART].aw_valid ),
-    .AWREADY_o (periph_narrow_axi_resp[UART].aw_ready),
-    .WDATA_i   (periph_narrow_axi_req[UART].w.data   ),
-    .WSTRB_i   (periph_narrow_axi_req[UART].w.strb   ),
-    .WLAST_i   (periph_narrow_axi_req[UART].w.last   ),
-    .WUSER_i   (periph_narrow_axi_req[UART].w.user   ),
-    .WVALID_i  (periph_narrow_axi_req[UART].w_valid  ),
-    .WREADY_o  (periph_narrow_axi_resp[UART].w_ready ),
-    .BID_o     (periph_narrow_axi_resp[UART].b.id    ),
-    .BRESP_o   (periph_narrow_axi_resp[UART].b.resp  ),
-    .BVALID_o  (periph_narrow_axi_resp[UART].b_valid ),
-    .BUSER_o   (periph_narrow_axi_resp[UART].b.user  ),
-    .BREADY_i  (periph_narrow_axi_req[UART].b_ready  ),
-    .ARID_i    (periph_narrow_axi_req[UART].ar.id    ),
-    .ARADDR_i  (periph_narrow_axi_req[UART].ar.addr  ),
-    .ARLEN_i   (periph_narrow_axi_req[UART].ar.len   ),
-    .ARSIZE_i  (periph_narrow_axi_req[UART].ar.size  ),
-    .ARBURST_i (periph_narrow_axi_req[UART].ar.burst ),
-    .ARLOCK_i  (periph_narrow_axi_req[UART].ar.lock  ),
-    .ARCACHE_i (periph_narrow_axi_req[UART].ar.cache ),
-    .ARPROT_i  (periph_narrow_axi_req[UART].ar.prot  ),
-    .ARREGION_i(periph_narrow_axi_req[UART].ar.region),
-    .ARUSER_i  (periph_narrow_axi_req[UART].ar.user  ),
-    .ARQOS_i   (periph_narrow_axi_req[UART].ar.qos   ),
-    .ARVALID_i (periph_narrow_axi_req[UART].ar_valid ),
-    .ARREADY_o (periph_narrow_axi_resp[UART].ar_ready),
-    .RID_o     (periph_narrow_axi_resp[UART].r.id    ),
-    .RDATA_o   (periph_narrow_axi_resp[UART].r.data  ),
-    .RRESP_o   (periph_narrow_axi_resp[UART].r.resp  ),
-    .RLAST_o   (periph_narrow_axi_resp[UART].r.last  ),
-    .RUSER_o   (periph_narrow_axi_resp[UART].r.user  ),
-    .RVALID_o  (periph_narrow_axi_resp[UART].r_valid ),
-    .RREADY_i  (periph_narrow_axi_req[UART].r_ready  ),
-    .PENABLE   (uart_penable_o                       ),
-    .PWRITE    (uart_pwrite_o                        ),
-    .PADDR     (uart_paddr_o                         ),
-    .PSEL      (uart_psel_o                          ),
-    .PWDATA    (uart_pwdata_o                        ),
-    .PRDATA    (uart_prdata_i                        ),
-    .PREADY    (uart_pready_i                        ),
-    .PSLVERR   (uart_pslverr_i                       )
+  `AXI_TYPEDEF_ALL(uart_axi, axi_addr_t, axi_soc_id_t, logic [31:0], logic [3:0], axi_user_t)
+  `AXI_LITE_TYPEDEF_ALL(uart_lite, axi_addr_t, logic [31:0], logic [3:0])
+  `APB_TYPEDEF_ALL(uart_apb, axi_addr_t, logic [31:0], logic [3:0])
+
+  uart_axi_req_t   uart_axi_req;
+  uart_axi_resp_t  uart_axi_resp;
+  uart_lite_req_t  uart_lite_req;
+  uart_lite_resp_t uart_lite_resp;
+  uart_apb_req_t   uart_apb_req;
+  uart_apb_resp_t  uart_apb_resp;
+
+  assign uart_penable_o = uart_apb_req.penable;
+  assign uart_pwrite_o  = uart_apb_req.pwrite;
+  assign uart_paddr_o   = uart_apb_req.paddr;
+  assign uart_psel_o    = uart_apb_req.psel;
+  assign uart_pwdata_o  = uart_apb_req.pwdata;
+  assign uart_apb_resp.prdata  = uart_prdata_i;
+  assign uart_apb_resp.pready  = uart_pready_i;
+  assign uart_apb_resp.pslverr = uart_pslverr_i;
+
+  typedef struct packed {
+    int unsigned idx;
+    axi_addr_t   start_addr;
+    axi_addr_t   end_addr;
+  } uart_apb_rule_t;
+
+  uart_apb_rule_t uart_apb_map = '{idx: 0, start_addr: '0, end_addr: '1};
+
+  axi_lite_to_apb #(
+    .NoApbSlaves     (32'd1           ),
+    .NoRules         (32'd1           ),
+    .AddrWidth       (AxiAddrWidth    ),
+    .DataWidth       (32'd32          ),
+    .PipelineRequest (1'b0            ),
+    .PipelineResponse(1'b0            ),
+    .axi_lite_req_t  (uart_lite_req_t ),
+    .axi_lite_resp_t (uart_lite_resp_t),
+    .apb_req_t       (uart_apb_req_t  ),
+    .apb_resp_t      (uart_apb_resp_t ),
+    .rule_t          (uart_apb_rule_t )
+  ) i_axi_lite_to_apb_uart (
+    .clk_i          (clk_i         ),
+    .rst_ni         (rst_ni        ),
+    .axi_lite_req_i (uart_lite_req ),
+    .axi_lite_resp_o(uart_lite_resp),
+    .apb_req_o      (uart_apb_req  ),
+    .apb_resp_i     (uart_apb_resp ),
+    .addr_map_i     (uart_apb_map  )
+  );
+
+  axi_to_axi_lite #(
+    .AxiAddrWidth   (AxiAddrWidth    ),
+    .AxiDataWidth   (32'd32          ),
+    .AxiIdWidth     (AxiSocIdWidth   ),
+    .AxiUserWidth   (AxiUserWidth    ),
+    .AxiMaxWriteTxns(32'd1           ),
+    .AxiMaxReadTxns (32'd1           ),
+    .FallThrough    (1'b1            ),
+    .full_req_t     (uart_axi_req_t  ),
+    .full_resp_t    (uart_axi_resp_t ),
+    .lite_req_t     (uart_lite_req_t ),
+    .lite_resp_t    (uart_lite_resp_t)
+  ) i_axi_to_axi_lite_uart (
+    .clk_i     (clk_i         ),
+    .rst_ni    (rst_ni        ),
+    .test_i    (1'b0          ),
+    .slv_req_i (uart_axi_req  ),
+    .slv_resp_o(uart_axi_resp ),
+    .mst_req_o (uart_lite_req ),
+    .mst_resp_i(uart_lite_resp)
   );
 
   axi_dw_converter #(
-    .AxiSlvPortDataWidth(AxiWideDataWidth     ),
-    .AxiMstPortDataWidth(AxiNarrowDataWidth   ),
-    .AxiAddrWidth       (AxiAddrWidth         ),
-    .AxiIdWidth         (AxiSocIdWidth        ),
-    .AxiMaxReads        (2                    ),
-    .ar_chan_t          (soc_wide_ar_chan_t   ),
-    .mst_r_chan_t       (soc_narrow_r_chan_t  ),
-    .slv_r_chan_t       (soc_wide_r_chan_t    ),
-    .aw_chan_t          (soc_narrow_aw_chan_t ),
-    .b_chan_t           (soc_wide_b_chan_t    ),
-    .mst_w_chan_t       (soc_narrow_w_chan_t  ),
-    .slv_w_chan_t       (soc_wide_w_chan_t    ),
-    .axi_mst_req_t      (soc_narrow_req_t     ),
-    .axi_mst_resp_t     (soc_narrow_resp_t    ),
-    .axi_slv_req_t      (soc_wide_req_t       ),
-    .axi_slv_resp_t     (soc_wide_resp_t      )
+    .AxiSlvPortDataWidth(AxiWideDataWidth  ),
+    .AxiMstPortDataWidth(32                ),
+    .AxiAddrWidth       (AxiAddrWidth      ),
+    .AxiIdWidth         (AxiSocIdWidth     ),
+    .AxiMaxReads        (1                 ),
+    .ar_chan_t          (soc_wide_ar_chan_t),
+    .mst_r_chan_t       (uart_axi_r_chan_t ),
+    .slv_r_chan_t       (soc_wide_r_chan_t ),
+    .aw_chan_t          (uart_axi_aw_chan_t),
+    .b_chan_t           (soc_wide_b_chan_t ),
+    .mst_w_chan_t       (uart_axi_w_chan_t ),
+    .slv_w_chan_t       (soc_wide_w_chan_t ),
+    .axi_mst_req_t      (uart_axi_req_t    ),
+    .axi_mst_resp_t     (uart_axi_resp_t   ),
+    .axi_slv_req_t      (soc_wide_req_t    ),
+    .axi_slv_resp_t     (soc_wide_resp_t   )
   ) i_axi_slave_uart_dwc (
-    .clk_i     (clk_i                       ),
-    .rst_ni    (rst_ni                      ),
-    .slv_req_i (periph_wide_axi_req[UART]   ),
-    .slv_resp_o(periph_wide_axi_resp[UART]  ),
-    .mst_req_o (periph_narrow_axi_req[UART] ),
-    .mst_resp_i(periph_narrow_axi_resp[UART])
+    .clk_i     (clk_i                     ),
+    .rst_ni    (rst_ni                    ),
+    .slv_req_i (periph_wide_axi_req[UART] ),
+    .slv_resp_o(periph_wide_axi_resp[UART]),
+    .mst_req_o (uart_axi_req              ),
+    .mst_resp_i(uart_axi_resp             )
   );
 
   /////////////////////////
@@ -340,6 +362,8 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
 
   soc_narrow_lite_req_t  axi_lite_ctrl_registers_req;
   soc_narrow_lite_resp_t axi_lite_ctrl_registers_resp;
+
+  logic [63:0] event_trigger;
 
   axi_to_axi_lite #(
     .AxiAddrWidth   (AxiAddrWidth          ),
@@ -375,9 +399,11 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     .rst_ni               (rst_ni                      ),
     .axi_lite_slave_req_i (axi_lite_ctrl_registers_req ),
     .axi_lite_slave_resp_o(axi_lite_ctrl_registers_resp),
+    .hw_cnt_en_o          (hw_cnt_en_o                 ),
     .dram_base_addr_o     (/* Unused */                ),
     .dram_end_addr_o      (/* Unused */                ),
-    .exit_o               (exit_o                      )
+    .exit_o               (exit_o                      ),
+    .event_trigger_o      (event_trigger)
   );
 
   axi_dw_converter #(
@@ -410,6 +436,10 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   //  System  //
   //////////////
 
+  logic [2:0] hart_id;
+
+  assign hart_id = '0;
+
   localparam ariane_pkg::ariane_cfg_t ArianeAraConfig = '{
     RASDepth             : 2,
     BTBEntries           : 32,
@@ -427,7 +457,7 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
     CachedRegionAddrBase : {DRAMBase},
     CachedRegionLength   : {DRAMLength},
     //  cache config
-    Axi64BitCompliant    : 1'b1,
+    AxiCompliant         : 1'b1,
     SwapEndianess        : 1'b0,
     // debug
     DmBaseAddress        : 64'h0,
@@ -438,6 +468,8 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   ara_system #(
     .NrLanes           (NrLanes              ),
     .FPUSupport        (FPUSupport           ),
+    .FPExtSupport      (FPExtSupport         ),
+    .FixPtSupport      (FixPtSupport         ),
     .ArianeCfg         (ArianeAraConfig      ),
     .AxiAddrWidth      (AxiAddrWidth         ),
     .AxiIdWidth        (AxiCoreIdWidth       ),
@@ -468,15 +500,44 @@ module ara_soc import axi_pkg::*; import ara_pkg::*; #(
   ara_system
 `endif
   i_system (
-    .clk_i        (clk_i            ),
-    .rst_ni       (rst_ni           ),
-    .boot_addr_i  (DRAMBase         ), // start fetching from DRAM
-    .scan_enable_i(1'b0             ),
-    .scan_data_i  (1'b0             ),
-    .scan_data_o  (/* Unconnected */),
-    .axi_req_o    (system_axi_req   ),
-    .axi_resp_i   (system_axi_resp  )
+    .clk_i        (clk_i                    ),
+    .rst_ni       (rst_ni                   ),
+    .boot_addr_i  (DRAMBase                 ), // start fetching from DRAM
+    .hart_id_i    (hart_id                  ),
+    .scan_enable_i(1'b0                     ),
+    .scan_data_i  (1'b0                     ),
+    .scan_data_o  (/* Unconnected */        ),
+`ifndef TARGET_GATESIM
+    .axi_req_o    (system_axi_req           ),
+    .axi_resp_i   (system_axi_resp          )
   );
+`else
+    .axi_req_o    (system_axi_req_spill     ),
+    .axi_resp_i   (system_axi_resp_spill_del)
+  );
+`endif
+
+
+`ifdef TARGET_GATESIM
+  assign #(AxiRespDelay*1ps) system_axi_resp_spill_del = system_axi_resp_spill;
+
+  axi_cut #(
+    .ar_chan_t   (system_ar_chan_t     ),
+    .aw_chan_t   (system_aw_chan_t     ),
+    .b_chan_t    (system_b_chan_t      ),
+    .r_chan_t    (system_r_chan_t      ),
+    .w_chan_t    (system_w_chan_t      ),
+    .req_t       (system_req_t         ),
+    .resp_t      (system_resp_t        )
+  ) i_system_cut (
+    .clk_i       (clk_i),
+    .rst_ni      (rst_ni),
+    .slv_req_i   (system_axi_req_spill),
+    .slv_resp_o  (system_axi_resp_spill),
+    .mst_req_o   (system_axi_req),
+    .mst_resp_i  (system_axi_resp)
+  );
+`endif
 
   //////////////////
   //  Assertions  //

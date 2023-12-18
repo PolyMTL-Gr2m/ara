@@ -44,6 +44,41 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Reshuffle the source registers vs when an in-lane operation operates on element with vsew != eew_q[vs]
  - Fix the data target for `.spike` app compilations
  - `make -C apps clean` performs a deeper clean of the temporary object files
+ - Fix riscv-isa-sim patch and bump pointer to riscv-isa-sim submodule
+ - Fix VALU issue_counter initialization for mask logical operations
+ - `vslideup` instructions that have `stride >= vl_q` have no effect
+ - `benchmark.sh` keeps into account the number of lanes during program compilation
+ - Fix typo in `performance.py` related to `fconv2d`
+ - Fix lmul checks on `vs1` for conversion instructions
+ - Fix `eew_vs1` for widening instructions
+ - Fix cleaning of the accumulator after partial reduction in `valu`
+ - De-parametrize FFT on the data-type
+ - New reductions should start only when the previous operation is over
+ - Prevent VMFPU from acknowledging the opqueues when their issue is over
+ - Operand requesters sanitize partial operands during a reduction
+ - Fix load/store-complete signals to CVA6
+ - Remove latches/repeated-signals from `masku`
+ - Reshuffle all the registers of a register group that have `eew_q != eew_d` when `LMUL > 1`
+ - `VLXE` and `VSXE` need to wait that the SlideAddrGenA opreq is free before being issued by the lane sequencer to the operand requester stage
+ - Do not trap instructions with no operands in the main sequencer
+ - Commit a reduction only after a grant from the VRF
+ - Solve duplicate verify function in `roi_align`
+ - Don't let the lanes sample more than once the same instruction when the workload is unbalanced and the instruction stalls in the main sequencer
+ - Don't mute instructions on mask vectors in the lane sequencer when `vl == 0` in that lane
+ - Remove unintentional latches from `valu`, `simd_mul`, `lane_sequencer`
+ - Fix `vxsat` CSR update in `dispatcher`
+ - Fix parameter passing through the hierarchy for fixed point support
+ - Decouple `cmdBuffer` and `dataBuffer` depths in opQueues
+ - Avoid handshaking wrong results in VMFPU
+ - Fix eew reshuffle for mask logical operations
+ - Fix eew reshuffle for `vmv.v.v` operations
+ - Remove timing loop between `vmfpu` and `operand_requesters`
+ - Solve some of the Warnings from SpyGlass run
+ - Fix masku handshake. All the lanes should handshake together in input
+ - Start solving `sldu` counter widths warnings
+ - Fix `vslideup` wrong counter trimming
+ - Reset gating registers before the integer multipliers in `vmfpu`
+ - Fix narrowing for `vnclip` and `vnclipu`
 
 ### Added
 
@@ -69,6 +104,37 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Add support for ideal-dispatcher simulation
  - Add compile-time garbage-collection to strip unused functions out and decrease the memory footprint of the binary
  - Add benchmarking capability with the ideal-dispatcher system + performance plotting. The support is limited to simluation with QuestaSim only
+ - Plot jacobi2d performance
+ - Plot dropout performance
+ - Add FFT benchmark and print its performance
+ - Add DWT benchmark and print its performance
+ - Add fp-exp, fp-cos, fp-log benchmarks from rivec bmark suite + print performance
+ - Ideal Dispatcher tracer now supports strided memory operations
+ - Add Softmax benchmark and print its performance
+ - Add [f]dotproduct apps and benchmarks, and plot their performance
+ - Add a specific script to handle [f]dotproduct performance plotting
+ - Add a script to benchmark all the applications together locally
+ - Add HW cycle counter to better measure runtime cycles with short vectors
+ - Add Pathfinder `app` and `benchmark`, and plot its performance
+ - Add Roi-Align `app` and `benchmark`, and plot its performance
+ - Support for vector mask instructions: `vmsbf`, `vmsof`, `vmsif`, `viota`, `vid`
+ - Add support for vector mask population count and find first set bit instructions: `vcpop.m`, `vfirst.m`
+ - Add Spyglass linting script
+ - Add parametrized support for Fixed-Point math
+ - Add optimized ASM version of exp 64-bit
+ - Add optimized ASM version of `roi_align`
+ - Add support for cache warming before benchmarks
+ - Add support to check the results of the ideal dispatcher runs
+ - Add HW/SW environment for automatic VCD dumping
+ - Support for vector floating-point reciprocal estimate instruction: `vfrec7`
+ - Support for vector floating-point reciprocal square-root estimate instruction: `vfrsqrt7`
+ - Support for vector narrowing floating-point convert instruction: `vfncvt.rod.f.f`
+ - Parametrize `vfrec7`, `vfrsqrt7` and `vfncvt.rod.f.f` support
+ - Add guards in the testbench to successfully compile in post-layout simulations
+ - Add VCD dumping features to `imatmul`
+ - `core_id_i` added to the interface of the system
+ - Clock-gate the system bank macros when not used (VRF, D$, I$)
+ - Spill register on `sldu` input signals to better isolate the unit
 
 ### Changed
 
@@ -93,6 +159,32 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
  - Performance metrics are now calculated by an external performance.py script, instead of during the program simulation, which just prints out the cycle count
  - 7x7 kernel 2dconvs now support arbitrary vector lengths
  - Default con vlen in the config files is now NR_LANES*1024
+ - Optimize jacobi2d in ASM, +align store address
+ - Replace `apps/common/script/datagen.sh` with new input data source-of-truth (`apps/common/default_arguments.mk`) during app compilation
+ - benchmark.sh can now also benchmark just one app at a time via an input argument
+ - Adapt `fdotproduct` to `dotproduct` structure
+ - Pre-calculate next-cycle `aligned_start_address` in `addrgen` for timing reasons
+ - Add `is_reduct` signal to the operand queues, to gate the neutral value filling
+ - The hw-counter can be enabled or disabled via software to work also with an environment with cache warming
+ - The dropout vectors are now explicitly memory aligned
+ - `matmul` generates data offline like all the other benchmarks
+ - Refactor `benchmark.sh` script
+ - Update `LLVM` to `16`. This brings faster compilations and a prototype of auto-vectorization (disabled by default here!)
+ - All the data-gen scripts generate now random data
+ - Patch `riscv-tests` `crt0.S` also before compiling `riscv-tests`
+ - Almost align all the vector/matrix sizes in `benchmark.sh`
+ - Generate data for `fmatmul` at compile time
+ - SIMD multipliers are now power gated
+ - Roll-back to Verilator v4.214
+ - Parametrize `addrgen` queue depth
+ - SIMD-multipliers are now gated singularly depending on VSEW
+ - Optimize `pathfinder` kernel
+ - Optimize `dwt` kernel
+ - Optimize `dotproduct` kernel
+ - Optimize `fft` kernel
+ - Simplify the reduction engine for both `valu` and `vmfpu`, to avoid spurious valid signals to the `sldu`
+ - Fix commit for `dtc` installation (`spike` dependency)
+ - Simplify the datapath of the slide unit. The `sldu` supports only powers of two, and cannot slide and reshuffle at the same time. Non-power-of-two slides are now handled with micro operations.
 
 ## 2.2.0 - 2021-11-02
 

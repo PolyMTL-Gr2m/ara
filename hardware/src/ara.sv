@@ -11,6 +11,10 @@ module ara import ara_pkg::*; #(
     parameter  int           unsigned NrLanes      = 0,                          // Number of parallel vector lanes.
     // Support for floating-point data types
     parameter  fpu_support_e          FPUSupport   = FPUSupportHalfSingleDouble,
+    // External support for vfrec7, vfrsqrt7
+    parameter  fpext_support_e        FPExtSupport = FPExtSupportEnable,
+    // Support for fixed-point data types
+    parameter  fixpt_support_e        FixPtSupport = FixedPointEnable,
     // AXI Interface
     parameter  int           unsigned AxiDataWidth = 0,
     parameter  int           unsigned AxiAddrWidth = 0,
@@ -35,11 +39,7 @@ module ara import ara_pkg::*; #(
     output logic              scan_data_o,
     // Interface with Ariane
     input  accelerator_req_t  acc_req_i,
-    input  logic              acc_req_valid_i,
-    output logic              acc_req_ready_o,
     output accelerator_resp_t acc_resp_o,
-    output logic              acc_resp_valid_o,
-    input  logic              acc_resp_ready_i,
     // AXI interface
     output axi_req_t          axi_req_o,
     input  axi_resp_t         axi_resp_i
@@ -91,11 +91,7 @@ module ara import ara_pkg::*; #(
     .rst_ni            (rst_ni          ),
     // Interface with Ariane
     .acc_req_i         (acc_req_i       ),
-    .acc_req_valid_i   (acc_req_valid_i ),
-    .acc_req_ready_o   (acc_req_ready_o ),
     .acc_resp_o        (acc_resp_o      ),
-    .acc_resp_valid_o  (acc_resp_valid_o),
-    .acc_resp_ready_i  (acc_resp_ready_i),
     // Interface with the sequencer
     .ara_req_o         (ara_req         ),
     .ara_req_valid_o   (ara_req_valid   ),
@@ -145,6 +141,10 @@ module ara import ara_pkg::*; #(
   logic                                        mask_valid_lane;
   logic      [NrLanes-1:0]                     lane_mask_ready;
 
+  // Mask unit scalar result variables
+  elen_t     result_scalar;
+  logic      result_scalar_valid;
+
   ara_sequencer #(.NrLanes(NrLanes)) i_sequencer (
     .clk_i                 (clk_i                    ),
     .rst_ni                (rst_ni                   ),
@@ -166,8 +166,8 @@ module ara import ara_pkg::*; #(
     // Interface with the operand requesters
     .global_hazard_table_o (global_hazard_table      ),
     // Interface with the lane 0
-    .pe_scalar_resp_i      (masku_operand[0][1]      ), // MaskB OpQueue
-    .pe_scalar_resp_valid_i(masku_operand_valid[0][1]), // MaskB OpQueue Valid
+    .pe_scalar_resp_i      (pe_req.op inside{[VCPOP:VFIRST]} ? result_scalar : masku_operand[0][1]), // MaskB OpQueue
+    .pe_scalar_resp_valid_i(pe_req.op inside{[VCPOP:VFIRST]} ? result_scalar_valid : masku_operand_valid[0][1]), // MaskB OpQueue Valid
     .pe_scalar_resp_ready_o(pe_scalar_resp_ready     ),
     // Interface with the address generator
     .addrgen_ack_i         (addrgen_ack              ),
@@ -228,8 +228,10 @@ module ara import ara_pkg::*; #(
 
   for (genvar lane = 0; lane < NrLanes; lane++) begin: gen_lanes
     lane #(
-      .NrLanes   (NrLanes   ),
-      .FPUSupport(FPUSupport)
+      .NrLanes     (NrLanes     ),
+      .FPUSupport  (FPUSupport  ),
+      .FPExtSupport(FPExtSupport),
+      .FixPtSupport(FixPtSupport)
     ) i_lane (
       .clk_i                           (clk_i                               ),
       .rst_ni                          (rst_ni                              ),
@@ -417,6 +419,8 @@ module ara import ara_pkg::*; #(
     .pe_vinsn_running_i      (pe_vinsn_running                ),
     .pe_req_ready_o          (pe_req_ready[NrLanes+OffsetMask]),
     .pe_resp_o               (pe_resp[NrLanes+OffsetMask]     ),
+    .result_scalar_o         (result_scalar                   ),
+    .result_scalar_valid_o   (result_scalar_valid             ),
     // Interface with the lanes
     .masku_operand_i         (masku_operand                   ),
     .masku_operand_valid_i   (masku_operand_valid             ),

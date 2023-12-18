@@ -47,8 +47,12 @@ veril_path     ?= $(abspath $(INSTALL_DIR)/verilator/bin)
 veril_top      ?= ara_tb_verilator
 # Top level module to compile
 top_level      ?= ara_tb
-# QuestaSim Version
-questa_version ?= 2021.2
+# Questa version
+ifeq ($(vcd_dump), 1)
+  questa_version ?= 2019.3
+else
+  questa_version ?= 2021.2
+endif
 # QuestaSim command
 questa_cmd     ?= questa-$(questa_version)
 # QuestaSim arguments
@@ -63,6 +67,11 @@ ifeq ($(ideal_dispatcher), 1)
   vtrace       = $(vtrace_path)/$(app).vtrace
   bender_defs += --define IDEAL_DISPATCHER=1 --define VTRACE="$(vtrace)" --define N_VINSN=$(shell wc -l $(vtrace) | cut -d " " -f 1)
   ideal        = "_ideal"
+endif
+
+ifeq ($(vcd_dump), 1)
+  vcd_path    ?= ../vcd/$(app).vcd
+  bender_defs += --define VCD_DUMP=1 --define VCD_PATH=$(vcd_path)
 endif
 
 # Check if the specified QuestaSim version exists
@@ -93,7 +102,7 @@ vlog_args += -suppress vlog-2583 -suppress vlog-13314 -suppress vlog-13233
 vlog_args += -work $(library)
 
 # Defines
-bender_defs += --define NR_LANES=$(nr_lanes) --define VLEN=$(vlen) --define RVV_ARIANE=1
+bender_defs += --define NR_LANES=$(nr_lanes) --define VLEN=$(vlen) --define ARIANE_ACCELERATOR_PORT=1
 
 # Default target
 all: compile
@@ -123,7 +132,7 @@ $(buildpath)/$(library):
 .PHONY: compile
 compile: dpi lib $(buildpath) bender $(buildpath)/compile_$(config).tcl
 $(buildpath)/compile_$(config).tcl: $(config_file) Makefile ../Bender.yml $(shell find src -type f) $(shell find ../config -type f) $(shell find include -type f) $(shell find tb -type f) $(shell find deps -type f)
-	./bender script vsim --vlog-arg="$(vlog_args)" -t rtl -t asic -t ara_test -t cva6_test $(bender_defs) > $(buildpath)/compile_$(config).tcl
+	./bender script vsim --vlog-arg="$(vlog_args)" -t rtl -t asic -t ara_test -t cva6_test -t cv64a6_imafdcv_sv39 $(bender_defs) > $(buildpath)/compile_$(config).tcl
 	echo "exit" >> $(buildpath)/compile_$(config).tcl
 	cd $(buildpath) && $(questa_cmd) vsim -work $(library) -c -do compile_$(config).tcl
 	# Remove the file if compilation did not succeed
@@ -155,11 +164,13 @@ verilate: $(buildpath) bender $(veril_library)/V$(veril_top)
 
 $(veril_library)/V$(veril_top): $(config_file) Makefile ../Bender.yml $(shell find src -type f) $(shell find ../config -type f) $(shell find include -type f) $(shell find tb -type f) $(shell find deps -type f)
 	rm -rf $(veril_library); mkdir -p $(veril_library)
-	./bender script verilator -t rtl -t ara_test -t cva6_test -t verilator $(bender_defs) > $(veril_library)/bender_script_$(config)
+	./bender script verilator -t rtl -t ara_test -t cva6_test -t cv64a6_imafdcv_sv39 -t verilator $(bender_defs) > $(veril_library)/bender_script_$(config)
 # Verilate the design
 	$(veril_path)/verilator -f $(veril_library)/bender_script_$(config)           \
   -GNrLanes=$(nr_lanes)                                                         \
   -O3                                                                           \
+  -Wno-fatal                                                                    \
+  -Wno-PINCONNECTEMPTY                                                          \
   -Wno-BLKANDNBLK                                                               \
   -Wno-CASEINCOMPLETE                                                           \
   -Wno-CMPCONST                                                                 \
@@ -170,6 +181,7 @@ $(veril_library)/V$(veril_top): $(config_file) Makefile ../Bender.yml $(shell fi
   -Wno-UNSIGNED                                                                 \
   -Wno-WIDTH                                                                    \
   -Wno-WIDTHCONCAT                                                              \
+  -Wall                                                                         \
   --hierarchical                                                                \
   tb/verilator/waiver.vlt                                                       \
   --Mdir $(veril_library)                                                       \
@@ -203,6 +215,17 @@ riscv_tests_simv: $(tests)
 
 $(tests): rv%: $(app_path)/rv%
 	$(veril_library)/V$(veril_top) $(if $(trace),-t,) -l ram,$<,elf &> $(buildpath)/$@.trace
+
+# Lint
+.PHONY: lint spyglass/tmp/files
+
+SNPS_SG ?= spyglass-2022.06
+lint: spyglass/tmp/files spyglass/sdc/func.sdc spyglass/scripts/run_lint.tcl
+	cd spyglass; $(SNPS_SG) sg_shell -tcl scripts/run_lint.tcl
+
+spyglass/tmp/files: $(bender)
+	mkdir -p spyglass/tmp
+	./bender script verilator -t rtl -t spyglass -t cva6_test -t cv64a6_imafdcv_sv39 $(bender_defs) --define SPYGLASS > spyglass/tmp/files
 
 # DPIs
 .PHONY: dpi
