@@ -12,7 +12,6 @@ void TEST_CASE1(void) {
   VLOAD_8(v1, 0xff, 0xf1, 0xf0, 0xff, 0xf1, 0xf0, 0xff, 0xf1, 0xf0, 0xff, 0xf1,
           0xf0);
   VLOAD_8(v2, 0xf0);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2");
   VCMP_U8(1, v3, 0xf0);
 
@@ -20,18 +19,14 @@ void TEST_CASE1(void) {
   VLOAD_16(v1, 0xffff, 0x0301, 0xf1f0, 0xffff, 0x0101, 0xf7f0, 0xffff, 0x0701,
            0xfff0, 0xffff, 0x0101, 0xf1f0);
   VLOAD_16(v2, 0xefff);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2");
   VCMP_U16(2, v3, 0x0100);
-
-  
 
   VSET(12, e32, m1);
   VLOAD_32(v1, 0xffffffff, 0x100ff001, 0xf0f0f0f0, 0xffffffff, 0x100ff001,
            0xf0f0f0f0, 0xffffffff, 0x100ff001, 0xf0f0f0f0, 0xffffffff,
            0x100ff001, 0xf0f0f0f0);
   VLOAD_32(v2, 0x00f010f0);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2");
   VCMP_U32(3, v3, 0x00001000);
 
@@ -41,7 +36,6 @@ void TEST_CASE1(void) {
            0xffffffffffffffff, 0x1000000000000001, 0xf0f0f0f0f0f0f0f0,
            0xffffffffffffffff, 0x1000000000000001, 0xf0f0f0f0f0f0f0f0);
   VLOAD_64(v2, 0xfffffffffffffff7);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2");
   VCMP_U64(4, v3, 0x1000000000000000);
 }
@@ -54,7 +48,6 @@ void TEST_CASE2(void) {
           0xf0);
   VLOAD_8(v2, 0xf0);
   VLOAD_8(v3, 1);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2, v0.t");
   VCMP_U8(5, v3, 0xf0);
 
@@ -64,7 +57,6 @@ void TEST_CASE2(void) {
            0xfff0, 0xffff, 0x0101, 0xf1f0);
   VLOAD_16(v2, 0xefff);
   VLOAD_16(v3, 1);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2, v0.t");
   VCMP_U16(6, v3, 0xe1f0);
 
@@ -75,7 +67,6 @@ void TEST_CASE2(void) {
            0x100ff001, 0xf0f0f0f0);
   VLOAD_32(v2, 0x00f010f0);
   VLOAD_32(v3, 1);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2, v0.t");
   VCMP_U32(7, v3, 0x00001000);
 
@@ -87,7 +78,6 @@ void TEST_CASE2(void) {
            0xffffffffffffffff, 0x1000000000000001, 0xf0f0f0f0f0f0f0f0);
   VLOAD_64(v2, 0xfffffffffffffff7);
   VLOAD_64(v3, 1);
-  VCLEAR(v3);
   asm volatile("vredand.vs v3, v1, v2, v0.t");
   VCMP_U64(8, v3, 0x1000000000000000);
 }
