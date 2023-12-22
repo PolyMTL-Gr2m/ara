@@ -79,7 +79,8 @@ module noc_response_axi import wt_cache_pkg::*; #(
     output logic [AXI_RESP_WIDTH-1:0]              m_axi_bresp,
     output logic                                   m_axi_bvalid,
     input  logic                                   m_axi_bready,
-    output logic                                   previous_trans_complete
+    output logic                                   previous_trans_complete,
+    output logic                                    L2_request_ack
 );
 
 localparam LAST_TRANSFER_FLAG_WIDTH = 1; 
@@ -94,7 +95,6 @@ noc_in_state noc_in_state_f, noc_in_state_next;
 
 // input flit information 
 logic noc_io_go;
-logic L2_request_ack; 
 
 // read data fifo signal 
 logic                                rdata_fifo_ren;
@@ -228,13 +228,13 @@ always_ff@(posedge clk or negedge rst_n) begin
 end 
 
 assign noc_io_go = noc_valid_in && noc_ready_out;
-assign L2_request_ack = (noc_in_state_f == NOC_IN_STATE_HEADER) && (noc_data_in[`MSG_TYPE] == `MSG_TYPE_DATA_ACK);
+assign L2_request_ack = (noc_in_state_f == NOC_IN_STATE_HEADER) && (noc_data_in[`MSG_TYPE] == `MSG_TYPE_DATA_ACK) && noc_io_go;
 
 //state transition
 always_comb begin 
     unique case (noc_in_state_f)
         NOC_IN_STATE_HEADER: begin 
-            if (noc_io_go && (L2_request_ack)) begin 
+            if (L2_request_ack) begin 
                 if ((flit_type == MSG_TYPE_STORE) && ~transaction_fifo_empty) begin 
                     noc_in_state_next = NOC_IN_STATE_STORE_ACK;
                 end 

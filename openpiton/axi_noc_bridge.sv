@@ -266,6 +266,14 @@ logic                                     fifo_rst;
 logic                                     simu_wr_detected; 
 logic                                     read_buffer_full; 
 
+logic outstanding_load_req_d;
+logic outstanding_load_req_q;
+logic outstanding_load_req;
+
+logic outstanding_store_req_d;
+logic outstanding_store_req_q;
+logic outstanding_store_req;
+
 `ifdef ARA_REQ2MEM
     logic [`MSG_DATA_SIZE_WIDTH - 1:0]        pmesh_data_size;
     logic [$clog2(AXI_ADDR_WIDTH) - 1:0]      pmesh_addr;
@@ -289,6 +297,7 @@ logic                                     read_buffer_full;
 `endif
 
     logic previous_trans_complete;
+    logic L2_request_ack;
 
 /******** Where the magic happens ********/
     noc_response_axi #(
@@ -310,7 +319,7 @@ logic                                     read_buffer_full;
           .noc_ready_out(noc_ready_out),
         `ifndef ARA_REQ2MEM 
           .transaction_type_wr_data({last_write_transfer, last_read_transfer, read_size, read_word_select, type_fifo_out}), 
-          .transaction_type_wr((noc_store_done | noc_load_done)),
+          .transaction_type_wr(noc_load_done || noc_store_done),
         `endif
           .m_axi_rdata(m_axi_rdata),
           .m_axi_rresp(m_axi_rresp),
@@ -320,7 +329,8 @@ logic                                     read_buffer_full;
           .m_axi_bresp(m_axi_bresp),
           .m_axi_bvalid(m_axi_bvalid),
           .m_axi_bready(m_axi_bready), 
-          .previous_trans_complete (previous_trans_complete)
+          .previous_trans_complete (previous_trans_complete),
+          .L2_request_ack (L2_request_ack) 
       );
 
 assign m_axi_ruser = 0;
@@ -376,7 +386,7 @@ sync_fifo #(
 );
 
 assign type_fifo_wval = (axi2noc_msg_type_store || axi2noc_msg_type_load) && !type_fifo_full;
-assign type_fifo_ren = (noc_store_done || noc_load_done) && !type_fifo_empty && (last_read_transfer || last_write_transfer);
+assign type_fifo_ren = ((outstanding_load_req && ~outstanding_load_req_d) || (outstanding_store_req && ~outstanding_store_req_d)) && !type_fifo_empty && (last_read_transfer || last_write_transfer);
 assign type_fifo_wdata = (axi2noc_msg_type_store) ? MSG_TYPE_STORE :
                             (axi2noc_msg_type_load) ? MSG_TYPE_LOAD : MSG_TYPE_INVAL;
 
@@ -400,22 +410,22 @@ assign awaddr_fifo_wdata = m_axi_awaddr;
 assign waddr_aligned_with_16B = (type_fifo_out == MSG_TYPE_STORE) ? (~awaddr_buffer_q[3] && ~awaddr_buffer_q[2] && ~awaddr_buffer_q[1] && ~awaddr_buffer_q[0]) &&  (awsize_buffer_q == AX_SIZE_8B): 0;
 
 if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin 
-    assign awaddr_fifo_ren = (noc_store_done && !awaddr_fifo_empty && ((awlen_buffer_q <= 2 && waddr_aligned_with_16B) || (awlen_buffer_q == 1)));
+    assign awaddr_fifo_ren = ((outstanding_store_req && ~outstanding_store_req_d) && !awaddr_fifo_empty && ((awlen_buffer_q <= 2 && waddr_aligned_with_16B) || (awlen_buffer_q == 1)));
     assign write_word_select = (awaddr_buffer_q[3]) ? 1 : 0; 
 
     always_comb begin 
         if (flit_state_f == MSG_STATE_IDLE && !need_split_w_transaction && type_fifo_out == MSG_TYPE_STORE) awaddr_buffer_d = awaddr_fifo_out;
-        else if (noc_store_done && need_split_w_transaction) awaddr_buffer_d =  (awlen_buffer_q >= 2 && waddr_aligned_with_16B ) ? (awaddr_buffer_q + (1 << (awsize_buffer_q + 1))) : (awaddr_buffer_q + (1 << (awsize_buffer_q)));
+        else if ((outstanding_store_req && ~outstanding_store_req_d) && need_split_w_transaction) awaddr_buffer_d =  (awlen_buffer_q >= 2 && waddr_aligned_with_16B ) ? (awaddr_buffer_q + (1 << (awsize_buffer_q + 1))) : (awaddr_buffer_q + (1 << (awsize_buffer_q)));
         else awaddr_buffer_d = awaddr_buffer_q; 
     end 
 end
 else begin 
-    assign awaddr_fifo_ren = (noc_store_done && !awaddr_fifo_empty && (awlen_buffer_q == 1));
+    assign awaddr_fifo_ren = ((outstanding_store_req && ~outstanding_store_req_d) && !awaddr_fifo_empty && (awlen_buffer_q == 1));
     assign write_word_select = 0; // no meaning for 128 bits
 
     always_comb begin 
         if (flit_state_f == MSG_STATE_IDLE && !need_split_w_transaction && type_fifo_out == MSG_TYPE_STORE) awaddr_buffer_d = awaddr_fifo_out;
-        else if (noc_store_done && need_split_w_transaction) awaddr_buffer_d =  awaddr_buffer_q + (1 << (awsize_buffer_q));
+        else if ((outstanding_store_req && ~outstanding_store_req_d) && need_split_w_transaction) awaddr_buffer_d =  awaddr_buffer_q + (1 << (awsize_buffer_q));
         else awaddr_buffer_d = awaddr_buffer_q; 
     end 
 
@@ -457,14 +467,14 @@ if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH)
                 wdata_fifo_ren = (noc_cnt == 0) || noc_store_done;
             end 
             else begin
-                wdata_fifo_ren = noc_store_done ;
+                wdata_fifo_ren = noc_store_done;
             end 
         end 
         else wdata_fifo_ren = 0;
     end 
 else begin 
     always_comb begin 
-        wdata_fifo_ren = noc_store_done ; 
+        wdata_fifo_ren = noc_store_done; 
     end 
 end
 
@@ -487,13 +497,13 @@ sync_fifo #(
 assign awlen_fifo_wval = m_axi_awvalid && m_axi_awready;
 assign awlen_fifo_wdata = m_axi_awlen;
 assign need_split_w_transaction = (awlen_buffer_q > 0);
-assign awlen_fifo_ren = (noc_store_done && !awlen_fifo_empty && last_write_transfer);
+assign awlen_fifo_ren = ((outstanding_store_req && ~outstanding_store_req_d) && !awlen_fifo_empty && last_write_transfer);
 
 if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin 
     assign last_write_transfer = (awlen_buffer_q == 1) || (awlen_buffer_q == 2 && waddr_aligned_with_16B);
     always_comb begin 
         if ((flit_state_f == MSG_STATE_IDLE) && (awlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_STORE)) awlen_buffer_d = awlen_fifo_out + 1; // no beat left, next transaction
-        else if (noc_store_done) awlen_buffer_d = (awlen_buffer_q >= 2 && waddr_aligned_with_16B) ? (awlen_buffer_q - 2) : (awlen_buffer_q - 1);
+        else if (outstanding_store_req && ~outstanding_store_req_d) awlen_buffer_d = (awlen_buffer_q >= 2 && waddr_aligned_with_16B) ? (awlen_buffer_q - 2) : (awlen_buffer_q - 1);
         else awlen_buffer_d = awlen_buffer_q;
     end 
 end 
@@ -502,7 +512,7 @@ else begin
     assign last_write_transfer = (awlen_buffer_q == 1);
     always_comb begin 
         if ((flit_state_f == MSG_STATE_IDLE) && (awlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_STORE)) awlen_buffer_d = awlen_fifo_out + 1; // no beat left, next transaction
-        else if (noc_store_done) awlen_buffer_d = (awlen_buffer_q - 1);
+        else if (outstanding_store_req && ~outstanding_store_req_d) awlen_buffer_d = (awlen_buffer_q - 1);
         else awlen_buffer_d = awlen_buffer_q;
     end 
 end 
@@ -568,13 +578,13 @@ if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin
                 end 
                 else wstrb_fifo_ren = 0;
             end 
-            else wstrb_fifo_ren = noc_store_done;
+            else wstrb_fifo_ren = (outstanding_store_req && ~outstanding_store_req_d);
     end 
 end 
 
 else begin 
     always_comb begin 
-        wstrb_fifo_ren = noc_store_done;
+        wstrb_fifo_ren = (outstanding_store_req && ~outstanding_store_req_d);
     end 
 end 
 
@@ -600,7 +610,7 @@ sync_fifo #(
 assign arlen_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign arlen_fifo_wdata = m_axi_arlen;
 assign need_split_r_transaction = (arlen_buffer_q > 0);
-assign arlen_fifo_ren = (noc_load_done && !arlen_fifo_empty && last_read_transfer); 
+assign arlen_fifo_ren = ((outstanding_load_req && ~outstanding_load_req_d) && !arlen_fifo_empty && last_read_transfer); 
 
 if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin
     assign read_word_select = (araddr_buffer_q[3] == 1) ? 1 : 0; 
@@ -609,7 +619,7 @@ if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin
 
     always_comb begin 
         if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arlen_buffer_d = arlen_fifo_out + 1; // no beat left, next transaction
-        else if (noc_load_done) arlen_buffer_d = (arlen_buffer_q == 1) ? arlen_buffer_q - 1 :
+        else if (outstanding_load_req && ~outstanding_load_req_d)  arlen_buffer_d = (arlen_buffer_q == 1) ? arlen_buffer_q - 1 :
                                                     (arlen_buffer_q >= 2 && !raddr_aligned_with_16B) ? arlen_buffer_q - 1:
                                                     arlen_buffer_q -2;   
         else arlen_buffer_d = arlen_buffer_q;
@@ -622,7 +632,7 @@ else begin
 
     always_comb begin 
         if ((flit_state_f == MSG_STATE_IDLE) && (arlen_buffer_q == 0) && fifo_has_packet && (type_fifo_out == MSG_TYPE_LOAD)) arlen_buffer_d = arlen_fifo_out + 1; // no beat left, next transaction
-        else if (noc_load_done) arlen_buffer_d = arlen_buffer_q - 1;  
+        else if (outstanding_load_req && ~outstanding_load_req_d)  arlen_buffer_d = arlen_buffer_q - 1;  
         else arlen_buffer_d = arlen_buffer_q;
     end 
 end 
@@ -681,12 +691,12 @@ sync_fifo #(
 assign raddr_aligned_with_16B = (type_fifo_out == MSG_TYPE_LOAD) ? ((~araddr_buffer_q[3]) && (~araddr_buffer_q[2]) && (~araddr_buffer_q[1]) && (~araddr_buffer_q[0])) && (arsize_buffer_q == AX_SIZE_8B): 0;  
 assign araddr_fifo_wval = m_axi_arvalid && m_axi_arready;
 assign araddr_fifo_wdata = m_axi_araddr;
-assign araddr_fifo_ren = (noc_load_done && !araddr_fifo_empty && last_read_transfer);
+assign araddr_fifo_ren = ((outstanding_load_req && ~outstanding_load_req_d)  && !araddr_fifo_empty && last_read_transfer);
 
 if (AXI_DATA_WIDTH == MIN_NOC_DATA_WIDTH) begin 
     always_comb begin 
         if (flit_state_f == MSG_STATE_IDLE && !need_split_r_transaction && type_fifo_out == MSG_TYPE_LOAD) araddr_buffer_d = araddr_fifo_out;
-        else if (noc_load_done && need_split_r_transaction ) araddr_buffer_d = (raddr_aligned_with_16B) ? araddr_buffer_q + (1 << (arsize_buffer_q + 1)) : araddr_buffer_q + (1 << (arsize_buffer_q)) ; 
+        else if ((outstanding_load_req && ~outstanding_load_req_d)  && need_split_r_transaction ) araddr_buffer_d = (raddr_aligned_with_16B) ? araddr_buffer_q + (1 << (arsize_buffer_q + 1)) : araddr_buffer_q + (1 << (arsize_buffer_q)) ; 
         else araddr_buffer_d = araddr_buffer_q; 
     end 
 end 
@@ -694,7 +704,7 @@ end
 else begin 
     always_comb begin 
         if (flit_state_f == MSG_STATE_IDLE && !need_split_r_transaction && type_fifo_out == MSG_TYPE_LOAD) araddr_buffer_d = araddr_fifo_out;
-        else if (noc_load_done && need_split_r_transaction ) araddr_buffer_d = araddr_buffer_q + (1 << (arsize_buffer_q)) ; 
+        else if ((outstanding_load_req && ~outstanding_load_req_d)  && need_split_r_transaction ) araddr_buffer_d = araddr_buffer_q + (1 << (arsize_buffer_q)) ; 
         else araddr_buffer_d = araddr_buffer_q; 
     end 
 end 
@@ -712,6 +722,39 @@ assign fifo_has_packet = (type_fifo_out == MSG_TYPE_STORE) ? (!awaddr_fifo_empty
 
 assign noc_store_done = noc_last_data && type_fifo_out == MSG_TYPE_STORE;
 assign noc_load_done = noc_last_header && type_fifo_out == MSG_TYPE_LOAD;
+
+always_ff@(posedge clk) begin 
+    if (!rst_n) begin
+        outstanding_load_req_q <= 0;
+        outstanding_store_req_q <= 0;
+    end else begin
+        outstanding_load_req_q <= outstanding_load_req_d;
+        outstanding_store_req_q <= outstanding_store_req_d;
+    end
+end 
+
+always_comb begin
+    if (noc_load_done) begin
+        outstanding_load_req_d = 1;
+    end else if (L2_request_ack && outstanding_load_req_q) begin
+        outstanding_load_req_d = 0;
+    end else begin
+        outstanding_load_req_d = outstanding_load_req_q;
+    end
+end
+
+always_comb begin
+    if (noc_store_done) begin
+        outstanding_store_req_d = 1;
+    end else if (L2_request_ack && outstanding_store_req_q) begin
+        outstanding_store_req_d = 0;
+    end else begin
+        outstanding_store_req_d = outstanding_store_req_q;
+    end
+end
+
+assign outstanding_load_req = outstanding_load_req_d || outstanding_load_req_q;
+assign outstanding_store_req = outstanding_store_req_d || outstanding_store_req_q;
 
 /* set defaults for the flit */
 always_comb
@@ -809,6 +852,7 @@ begin
     flit_state_next = flit_state_f;
     unique case (flit_state_f)
         MSG_STATE_IDLE: begin
+          if (~(outstanding_load_req || outstanding_store_req)) begin  
           `ifdef ARA_REQ2MEM
             if ((fifo_has_packet && type_fifo_out == MSG_TYPE_STORE))
                 flit_state_next = MSG_STATE_WAIT_STRB;
@@ -818,7 +862,9 @@ begin
             if ((awlen_buffer_q > 0 || arlen_buffer_q > 0) && ((type_fifo_out == MSG_TYPE_STORE) || (type_fifo_out == MSG_TYPE_LOAD)))
                 flit_state_next = MSG_STATE_DEST_CAL;
           `endif 
-            else flit_state_next = flit_state_f;
+          end else begin
+            flit_state_next = flit_state_f;
+          end
         end
       `ifdef ARA_REQ2MEM
         MSG_STATE_WAIT_STRB:begin
