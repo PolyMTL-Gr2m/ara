@@ -204,6 +204,8 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     end: gen_mul
 
     always_comb begin : p_mul
+      // Default assignment
+      result_o = '0;
       r = '0;
       unique case (op)
         // Single-Width integer multiply instructions
@@ -242,6 +244,8 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     end : gen_mul
 
     always_comb begin : p_mul
+      // Default assignment
+      result_o = '0;
       r = '0;
       unique case (op)
         // Single-Width integer multiply instructions
@@ -282,6 +286,8 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
     end : gen_mul
 
     always_comb begin : p_mul
+      // Default assignment
+      result_o = '0;
       r = '0;
       unique case (op)
         // Single-Width integer multiply instructions
