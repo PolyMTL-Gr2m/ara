@@ -1,4 +1,4 @@
-/*// Author : Theo Dupuis
+// Author : Theo Dupuis
 // GR2M - 2022
 // Polytechnique Montreal
 
@@ -9,27 +9,63 @@
 #include "ibsconv2d_tensor32.h"
 #include "runtime.h"
 
-#ifndef SPIKE
-#include "printf.h"
-#endif
+//#ifndef SPIKE
+//#include "printf.h"
+//#endif
 
 
+#include "util.h"
+
+#define UART_BASE 0xFFF0C2C000
+
+#define UART_INTERRUPT_ENABLE UART_BASE + 1
+#define UART_LINE_CONTROL UART_BASE + 3
+#define UART_MODEM_CONTROL UART_BASE + 4
+#define UART_LINE_STATUS UART_BASE + 5
+#define UART_MODEM_STATUS UART_BASE + 6
+#define UART_DLAB_LSB UART_BASE + 0
+#define UART_DLAB_MSB UART_BASE + 1
+
+void write_reg_u8(uintptr_t addr, uint8_t value)
+{
+    volatile uint8_t *loc_addr = (volatile uint8_t *)addr;
+    *loc_addr = value;
+}
+
+void init_uart(uint32_t freq, uint32_t baud)
+{
+    uint32_t divisor = freq / (baud << 4);
+
+    write_reg_u8(UART_INTERRUPT_ENABLE, 0x00); // Disable all interrupts
+    write_reg_u8(UART_LINE_CONTROL, 0x80);     // Enable DLAB (set baud rate divisor)
+    write_reg_u8(UART_DLAB_LSB, divisor);         // divisor (lo byte)
+    write_reg_u8(UART_DLAB_MSB, (divisor >> 8) & 0xFF);  // divisor (hi byte)
+    write_reg_u8(UART_LINE_CONTROL, 0x03);     // 8 bits, no parity, one stop bit
+    write_reg_u8(UART_MODEM_CONTROL, 0x20);    // Autoflow mode
+}
+
+
+
+
+
+#define NR_LANES 4
+#define MULTIRUN
 
 // use to check if the results are correct
 // since we compute the expectude results with
 // scalar code and rolled loops, it had a significant
 // amout of time on simulation
 
-#define VERIF
+//#define VERIF
 
-#define PRECA_MAX	1
-#define PRECW_MAX	1
+#define PRECA_MAX	2
+#define PRECW_MAX	2
 
 #define F_MAX 		7		// Max size of the kernel F x F
-#define C_in 		4		// Number of input input_channels 
-#define C_out		1		// Number of output_channels (or output input_channels C_out)
+#define C_in 		32		// Number of input input_channels 
+#define C_out		4		// Number of output_channels (or output input_channels C_out)
 #define I_MAX 		64		// Max H_in x W_in input size
-#define I_START	8			// Start input size
+#define I_START		64		// Start input size
 
 int8_t i[I_MAX * I_MAX * C_in];
 
@@ -148,12 +184,12 @@ void print_tensor_16_(uint16_t *tensor, uint64_t num_rows, uint64_t num_columns,
 
 
 int main() {
+init_uart(50000000, 115200);
 
 
-
-printf("==============\n");
-printf("= BSCONV2D32 =\n");
-printf("==============\n");
+printf("==============\r\n");
+printf("= ULPCONV2D16 =\r\n");
+printf("==============\r\n");
 
 	/////////////////////////////////
 	// SAME SIZE OUTPUT 64b -> 64b //
@@ -161,25 +197,27 @@ printf("==============\n");
 	
 for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 	for(int64_t precW = PRECW_MAX; precW <= PRECW_MAX; precW++){
-		printf("\n");
-		printf("************\n");
-		printf("*** A%dW%d ***\n", precA, precW);
-		printf("************\n");
+		printf("\r\n");
+		printf("************\r\n");
+		printf("*** A%dW%d ***\r\n", precA, precW);
+		printf("************\r\n");
 
-		printf("\n");
-		printf("Filling the input and filter tensors...\n");
+		printf("\r\n");
+		printf("Filling the input and filter tensors...\r\n");
 
+		start_timer();
 		init_tensor(i, I_MAX, I_MAX, C_in, precA);
 		init_tensor(f, F_MAX, F_MAX, C_in * C_out, precW);
-
-			printf("                                                            done\n");
+		stop_timer();
+		int64_t init_time = get_timer();
+			printf("                                                            done\r\n");
 
 		for(int64_t F = F_MAX ; F <= F_MAX ; F += 2){
-
+			start_timer();
 			int64_t input_channels = C_in; // channel size is fixed for simplicity
 			int64_t output_channels = C_out;
 			int8_t filter[output_channels * F * F * input_channels];
-
+			
 			for(int k = 0; k < output_channels ; k++)
 				for(int z = 0; z < input_channels ; z++)
 					for(int y = 0 ; y < F ; y++)
@@ -187,7 +225,7 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				  			filter[x + F * (y + F * (z + k * input_channels))] = f[x + F_MAX * (y + F_MAX * (z + k * input_channels))];
 			
 			#ifdef VERIF
-			printf("Computing the expected output for this kernel size...\n");
+			printf("Computing the expected output for this kernel size...\r\n");
 			//Compute the expected output
 			int16_t golden_o[(I_MAX - F + 1) * (I_MAX - F + 1) * C_out]; 
 			
@@ -200,33 +238,36 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 			
 			iconv2d_tensor_naive(golden_o, i, f, (I_MAX - F + 1), (I_MAX - F + 1), input_channels, F, output_channels);	
 			
-			printf("                                                            done\n");
+			printf("                                                            done\r\n");
 			#endif	
 			
 			
 			// FILTER TRANSPOSITION INTO NHWC format
 			
 			NCHW_to_NHWC_8b(f, f_nhwc, output_channels, input_channels, F, F);
-	 
-			printf("\nfilter %dx%d \n", F, F);
+
+			stop_timer();
+			int64_t filter_timer = get_timer();
+
+			printf("\nfilter %dx%d \r\n", F, F);
 
 			for(int size = I_START ; size <= I_MAX ; size*=2){
-
+				if (get_hartid()==0){
 				printf("\n");
-				printf("----------------------------------------------------------------\n");
-				printf("Calculating convolution between \n");
-				printf("Input of [1 x %d x %d x %d] and Filters of [%d x %d x %d x %d]  \n", C_in, size,  size, C_out, C_in, F, F);
-				printf("Activation precision of %d and Weights precision of %d  \n", precA, precW);
-				printf("Result (16b) is an output of [1 x %d x %d x %d] \n", C_out, size - F + 1, size - F + 1);
-				printf("----------------------------------------------------------------\n");
-				printf("\n");
+				printf("----------------------------------------------------------------\r\n");
+				printf("Calculating convolution between \r\n");
+				printf("Input of [1 x %d x %d x %d] and Filters of [%d x %d x %d x %d]  \r\n", C_in, size,  size, C_out, C_in, F, F);
+				printf("Activation precision of %d and Weights precision of %d  \r\n", precA, precW);
+				printf("Result (16b) is an output of [1 x %d x %d x %d] \r\n", C_out, size - F + 1, size - F + 1);
+				printf("----------------------------------------------------------------\r\n");
+				printf("\r\n");
 				
 				#ifdef VERIF
-				printf("Formatting data and expected outputs...\n");
+				printf("Formatting data and expected outputs...\r\n");
 				#else
-				printf("Formatting data...\n");
+				printf("Formatting data...\r\n");
 				#endif
-
+				}
 
 				int64_t width = size;
 				int64_t height = size;  
@@ -239,7 +280,7 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				////////////////////////////////////////////////
 				// INPUT, FILTERS AND EXPECTED OUTPUT SLICING //
 				////////////////////////////////////////////////
-
+				start_timer();		
 				for(int z = 0; z < input_channels ; z++)
 					for(int y = 0 ; y < height ; y++)
 						for(int x = 0 ; x < width ; x++)
@@ -256,22 +297,43 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 						}
 						
 				NCHW_to_NHWC_8b(input, i_nhwc, 1, input_channels, height, width);
-				
+				stop_timer();
+				int64_t slicing_timer = get_timer();
 				///////////////////////////
 				// FONCTION TO BE TESTED //
 				///////////////////////////
 				
-				printf("                                                            done\n");
+				printf("                                                            done\r\n");
 				//print_tensor(f, F, F, input_channels);
 				//print_tensor(input, height, width, input_channels);
-				printf("Computing results...\n");
+				printf("Computing results...\r\n");
+
+				#ifdef MULTIRUN
+					start_timer();
+					ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
+					stop_timer();
+					int64_t run1 = get_timer();
+					start_timer();
+					ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
+					stop_timer();
+					int64_t run2 = get_timer();
+					start_timer();
+					ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
+					stop_timer();
+					int64_t run3 = get_timer();
+					start_timer();
+					ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
+					stop_timer();
+					int64_t run4 = get_timer();
 				
+				#else
 				start_timer();
 				
 				ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
 			
 				stop_timer();
-				printf("                                                            done\n");                                
+				#endif
+				printf("                                                            done\r\n");                                
 				
 				//////////////////
 				// VERIFICATION //
@@ -282,14 +344,14 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				NCHW_to_NHWC_16b(golden_output, golden_output_nhwc, 1, C_out, I_MAX - F + 1, I_MAX - F + 1);
 				
 				#ifdef VERIF	
-				printf("Verifying results...\n");
+				printf("Verifying results...\r\n");
 				int error = verify_tensor(output, golden_output, (height - F + 1), (width - F + 1), output_channels);
 				if (error == 0)
-					printf("                                                            done\n");
+					printf("                                                            done\r\n");
 				else
-					printf("   ERROR\n");
+					printf("   ERROR\r\n");
 				#else
-				printf("-- Change macro to add verification step -- \n");
+				//printf("-- Change macro to add verification step -- \r\n");
 				int error = 0;
 				#endif
 				
@@ -302,32 +364,56 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				float utilization = 100 * performance / (256 / (precA * precW)) * NR_LANES; 
 				
 				if (error != 0){
-					 printf("Fail.\n");
-					 printf("OUT NHWC\n");
+					 printf("Fail.\r\n");
+					 printf("OUT NHWC\r\n");
 					 print_tensor_16_(output, (height - F + 1), (width - F + 1), output_channels);
-					 printf("EXPECTED OUT NHWC\n");
+					 printf("EXPECTED OUT NHWC\r\n");
 				    print_tensor_16_(golden_output_nhwc, (height - F + 1), (width - F + 1), output_channels);
-					 printf("EXPECTED OUT\n");
+					 printf("EXPECTED OUT\r\n");
 				    print_tensor_16_(golden_output, (height - F + 1), (width - F + 1), output_channels);
 				}
 				else {
-					 printf("Passed.\n");					 	
-					 printf("The execution took %d cycles.\n", runtime);
-				  	 printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
+					if (get_hartid()==0){
+					 printf("Passed.\r\n");					
+					 #ifdef MULTIRUN
+				     printf("The execution of Run 1 took %d cycles. \r\n", run1);
+					 printf("The execution of Run 2 took %d cycles. \r\n", run2);
+					 printf("The execution of Run 3 took %d cycles. \r\n", run3);
+					 printf("The execution of Run 4 took %d cycles. \r\n", run4);
+					 #else 	
+					 printf("The execution took %d cycles.\r\n", runtime);
+					 #endif
+					 printf("The initialization took %d cycles. \r\n", init_time);
+					 printf("The filter init took %d cycles. \r\n", filter_timer);
+					 printf("The slicing took %d cycles.\r\n",slicing_timer);
+				  	 //printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
+					}
 				  	 #ifdef PERF
-				  	 	printf("The execution of bit-serial packing took %d cycles.\n", runtime_bp);
-				  	 	printf("The execution of conv2d took %d cycles.\n", runtime - runtime_bp);
+				  	 	printf("The execution of bit-serial packing took %d cycles.\r\n", runtime_bp);
+				  	 	printf("The execution of conv2d took %d cycles.\r\n", runtime - runtime_bp);
 				  	 #endif
 				  }
-				}
+
+				//start_timer();
+				//
+				//ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
+			//
+				//stop_timer();
+				//
+				//printf("                                                            done\r\n");  
+				//	int64_t runtime2 = get_timer();
+				//printf("The execution took %d cycles.\r\n", runtime2);
+				}	
 			}
 		}
 	}
 }
-*/
+
+/*
 // Author : Theo Dupuis
 // GR2M - 2022
 // Polytechnique Montreal
+// Modified : Elisabeth Humblet, 2024
 
 #include <stdint.h>
 #include <stdio.h>
@@ -336,19 +422,54 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 #include "ibsconv2d_tensor32.h"
 #include "runtime.h"
 
-#ifndef SPIKE
-#include "printf.h"
-#endif
+//#ifndef SPIKE
+//#include "printf.h"
+//#endif
+
+#include "util.h"
+
+#define UART_BASE 0xFFF0C2C000
+
+#define UART_INTERRUPT_ENABLE UART_BASE + 1
+#define UART_LINE_CONTROL UART_BASE + 3
+#define UART_MODEM_CONTROL UART_BASE + 4
+#define UART_LINE_STATUS UART_BASE + 5
+#define UART_MODEM_STATUS UART_BASE + 6
+#define UART_DLAB_LSB UART_BASE + 0
+#define UART_DLAB_MSB UART_BASE + 1
+
+void write_reg_u8(uintptr_t addr, uint8_t value)
+{
+    volatile uint8_t *loc_addr = (volatile uint8_t *)addr;
+    *loc_addr = value;
+}
+
+void init_uart(uint32_t freq, uint32_t baud)
+{
+    uint32_t divisor = freq / (baud << 4);
+
+    write_reg_u8(UART_INTERRUPT_ENABLE, 0x00); // Disable all interrupts
+    write_reg_u8(UART_LINE_CONTROL, 0x80);     // Enable DLAB (set baud rate divisor)
+    write_reg_u8(UART_DLAB_LSB, divisor);         // divisor (lo byte)
+    write_reg_u8(UART_DLAB_MSB, (divisor >> 8) & 0xFF);  // divisor (hi byte)
+    write_reg_u8(UART_LINE_CONTROL, 0x03);     // 8 bits, no parity, one stop bit
+    write_reg_u8(UART_MODEM_CONTROL, 0x20);    // Autoflow mode
+}
 
 
-#define PRECA	5
-#define PRECW	4
+
+
+
+#define NR_LANES 4
+
+#define PRECA	2
+#define PRECW	2
 
 #define F 			7		// Max size of the kernel F x F
-#define C_in 		128		// Number of input input_channels 
-#define C_out		1		// Number of output_channels (or output input_channels C_out)
-#define I_MAX 		128		// Max H_in x W_in input size
-#define I_START	128		// Start input size
+#define C_in 		32		// Number of input input_channels 
+#define C_out		4		// Number of output_channels (or output input_channels C_out)
+#define I_MAX 		64		// Max H_in x W_in input size
+#define I_START		64		// Start input size
 
 //int8_t i[I_MAX * I_MAX * C_in];
 
@@ -356,50 +477,54 @@ int8_t f[F * F * C_in * C_out];
 
 int16_t o[I_MAX * I_MAX * C_out];
 
-
-
 int main() {
 
+init_uart(50000000, 115200);
 
-
-printf("====================\n");
-printf("= ULPPACK CONV2D16 =\n");
-printf("====================\n");
+printf("====================\r\n");
+printf("= ULPPACK CONV2D16 =\r\n");
+printf("====================\r\n");
+printf("Multicore acceleration\r\n");
+//for(int hart=0;hart<4;hart++){
 
 	for(int precA = PRECA - 1 ; precA < PRECA ; precA ++){
-	for(int precW = 1 ; precW < PRECW ; precW ++){
-
+	for(int precW = PRECW - 1 ; precW < PRECW ; precW ++){
 			for(int size = I_START ; size <= I_MAX ; size *= 2){
 
-				printf("\n");
-				printf("----------------------------------------------------------------\n");
-				printf("Calculating convolution between \n");
-				printf("Input of [1 x %d x %d x %d] and Filters of [%d x %d x %d x %d]  \n", C_in, size,  size, C_out, C_in, F, F);
-				printf("Activation precision of %d and Weights precision of %d  \n", precA, precW);
-				printf("Result (16b) is an output of [1 x %d x %d x %d] \n", C_out, size - F + 1, size - F + 1);
-				printf("----------------------------------------------------------------\n");
-				printf("\n");
+				printf("\r\n");
+				printf("----------------------------------------------------------------\r\n");
+				printf("Calculating convolution between \r\n");
+				printf("Input of [1 x %d x %d x %d] and Filters of [%d x %d x %d x %d]  \r\n", C_in, size,  size, C_out, C_in, F, F);
+				printf("Activation precision of %d and Weights precision of %d  \r\n", precA, precW);
+				printf("Result (16b) is an output of [1 x %d x %d x %d] \r\n", C_out, size - F + 1, size - F + 1);
+				printf("----------------------------------------------------------------\r\n");
+				printf("\r\n");
 
-				printf("Computing results...\n");
+				//printf("Core %d\r\n",hart);
+				printf("Computing results...\r\n");
 				start_timer();
 				
 				ulppack_conv2d(o, o, f, size, size, C_in, F, C_out, precA, precW);
 			
 				stop_timer();
-				printf("                                                            done\n");                                
+				printf("                                                            done\r\n");                                
 				
 				/////////////
 				// METRICS //
 				/////////////
-				
+
 				int64_t runtime = get_timer();
 				
 				float performance = (2.0 * C_out * C_in * F * F * (size - F + 1) * (size - F + 1) )/ runtime;
 				float utilization = 100 * performance / (4 * 2 * NR_LANES); 
-				
-					 printf("Passed.\n");					 	
-					 printf("The execution took %d cycles.\n", runtime);
-				  	 printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
-	}
+
+				//	printf("Passed.\r\n");		
+				if (get_hartid()==0){			 	
+					printf("The execution took %d cycles.\r\n", runtime);
+				//  	 printf("The performance is %f OP/cycle, the utilization is %f  \r\n", performance, utilization);
+				}
+			}
 	}}
+//}
 }
+*/
