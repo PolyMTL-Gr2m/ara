@@ -8,6 +8,7 @@
 
 #include "ibsconv2d_tensor32.h"
 #include "runtime.h"
+#include "cache_metrics.h"
 
 //#ifndef SPIKE
 //#include "printf.h"
@@ -49,7 +50,7 @@ void init_uart(uint32_t freq, uint32_t baud)
 
 
 #define NR_LANES 4
-#define MULTIRUN
+//#define MULTIRUN
 
 // use to check if the results are correct
 // since we compute the expectude results with
@@ -62,7 +63,7 @@ void init_uart(uint32_t freq, uint32_t baud)
 #define PRECW_MAX	2
 
 #define F_MAX 		7		// Max size of the kernel F x F
-#define C_in 		32		// Number of input input_channels 
+#define C_in 		16		// Number of input input_channels 
 #define C_out		4		// Number of output_channels (or output input_channels C_out)
 #define I_MAX 		64		// Max H_in x W_in input size
 #define I_START		64		// Start input size
@@ -183,27 +184,38 @@ void print_tensor_16_(uint16_t *tensor, uint64_t num_rows, uint64_t num_columns,
 
 
 
-int main() {
+int main(int argc, char** argv) {
 init_uart(50000000, 115200);
 
+volatile static uint32_t amo_cnt = 0;
 
+while(argv[0][0] != amo_cnt);
+if(get_hartid()==0){
 printf("==============\r\n");
 printf("= ULPCONV2D16 =\r\n");
 printf("==============\r\n");
-
+}
+ATOMIC_OP(amo_cnt,0, add,w);
 	/////////////////////////////////
 	// SAME SIZE OUTPUT 64b -> 64b //
 	/////////////////////////////////
-	
-for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
-	for(int64_t precW = PRECW_MAX; precW <= PRECW_MAX; precW++){
-		printf("\r\n");
-		printf("************\r\n");
-		printf("*** A%dW%d ***\r\n", precA, precW);
-		printf("************\r\n");
+     
 
-		printf("\r\n");
-		printf("Filling the input and filter tensors...\r\n");
+	
+
+for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){ 
+	for(int64_t precW = PRECW_MAX; precW <= PRECW_MAX; precW++){
+		while(argv[0][0] != amo_cnt);
+		if(get_hartid()==0){
+			printf("\r\n");
+			printf("************\r\n");
+			printf("*** A%dW%d ***\r\n", precA, precW);
+			printf("************\r\n");
+
+			printf("\r\n");
+			printf("Filling the input and filter tensors...\r\n");
+		}
+		ATOMIC_OP(amo_cnt,0,add,w);
 
 		start_timer();
 		init_tensor(i, I_MAX, I_MAX, C_in, precA);
@@ -249,9 +261,10 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 			stop_timer();
 			int64_t filter_timer = get_timer();
 
-			printf("\nfilter %dx%d \r\n", F, F);
+			//printf("\nfilter %dx%d \r\n", F, F);
 
 			for(int size = I_START ; size <= I_MAX ; size*=2){
+				while(argv[0][0] != amo_cnt);
 				if (get_hartid()==0){
 				printf("\n");
 				printf("----------------------------------------------------------------\r\n");
@@ -268,6 +281,7 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				printf("Formatting data...\r\n");
 				#endif
 				}
+				ATOMIC_OP(amo_cnt,0,add,w);
 
 				int64_t width = size;
 				int64_t height = size;  
@@ -327,11 +341,19 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 					int64_t run4 = get_timer();
 				
 				#else
+				for (int core=0;core<4;core++){
+					reset_L2_metrics(core);
+					init_L2_metrics(core);
+				}
+				
 				start_timer();
 				
 				ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
 			
 				stop_timer();
+				for (int core=0;core<4;core++){
+					stop_L2_metrics(core);
+				}
 				#endif
 				printf("                                                            done\r\n");                                
 				
@@ -373,7 +395,8 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				    print_tensor_16_(golden_output, (height - F + 1), (width - F + 1), output_channels);
 				}
 				else {
-					if (get_hartid()==0){
+					while(argv[0][0] != amo_cnt);
+					//if (get_hartid()==0){
 					 printf("Passed.\r\n");					
 					 #ifdef MULTIRUN
 				     printf("The execution of Run 1 took %d cycles. \r\n", run1);
@@ -383,17 +406,22 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 					 #else 	
 					 printf("The execution took %d cycles.\r\n", runtime);
 					 #endif
-					 printf("The initialization took %d cycles. \r\n", init_time);
-					 printf("The filter init took %d cycles. \r\n", filter_timer);
-					 printf("The slicing took %d cycles.\r\n",slicing_timer);
+					 //printf("The initialization took %d cycles. \r\n", init_time);
+					 //printf("The filter init took %d cycles. \r\n", filter_timer);
+					 //printf("The slicing took %d cycles.\r\n",slicing_timer);
 				  	 //printf("The performance is %f OP/cycle, the utilization is %f % \n", performance, utilization);
+					//}
+					for (int core=0;core<4;core++){
+						if(get_hartid()==core){
+						print_L2_metrics(core);
+						}						
 					}
 				  	 #ifdef PERF
 				  	 	printf("The execution of bit-serial packing took %d cycles.\r\n", runtime_bp);
 				  	 	printf("The execution of conv2d took %d cycles.\r\n", runtime - runtime_bp);
 				  	 #endif
 				  }
-
+					ATOMIC_OP(amo_cnt,1,add,w);
 				//start_timer();
 				//
 				//ulppack_conv2d(output, input, f, height, width, input_channels, F, output_channels, precA, precW);
@@ -403,13 +431,13 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 				//printf("                                                            done\r\n");  
 				//	int64_t runtime2 = get_timer();
 				//printf("The execution took %d cycles.\r\n", runtime2);
-				}	
+			}
 			}
 		}
 	}
 }
-
 /*
+
 // Author : Theo Dupuis
 // GR2M - 2022
 // Polytechnique Montreal
@@ -421,6 +449,7 @@ for(int64_t precA = PRECA_MAX; precA <= PRECA_MAX; precA++){
 
 #include "ibsconv2d_tensor32.h"
 #include "runtime.h"
+#include "cache_metrics.h"
 
 //#ifndef SPIKE
 //#include "printf.h"
@@ -487,8 +516,8 @@ printf("====================\r\n");
 printf("Multicore acceleration\r\n");
 //for(int hart=0;hart<4;hart++){
 
-	for(int precA = PRECA - 1 ; precA < PRECA ; precA ++){
-	for(int precW = PRECW - 1 ; precW < PRECW ; precW ++){
+	for(int precA = PRECA ; precA <= PRECA ; precA ++){
+	for(int precW = PRECW ; precW <= PRECW ; precW ++){
 			for(int size = I_START ; size <= I_MAX ; size *= 2){
 
 				printf("\r\n");
@@ -502,11 +531,18 @@ printf("Multicore acceleration\r\n");
 
 				//printf("Core %d\r\n",hart);
 				printf("Computing results...\r\n");
+				for (int core=0;core<4;core++){
+					reset_L2_metrics(core);
+					init_L2_metrics(core);
+				}
 				start_timer();
 				
 				ulppack_conv2d(o, o, f, size, size, C_in, F, C_out, precA, precW);
 			
 				stop_timer();
+				for (int core=0;core<4;core++){
+					stop_L2_metrics(core);
+				}
 				printf("                                                            done\r\n");                                
 				
 				/////////////
@@ -523,6 +559,11 @@ printf("Multicore acceleration\r\n");
 					printf("The execution took %d cycles.\r\n", runtime);
 				//  	 printf("The performance is %f OP/cycle, the utilization is %f  \r\n", performance, utilization);
 				}
+				for (int core=0;core<4;core++){
+					if(get_hartid()==core){
+					print_L2_metrics(core);
+				}
+
 			}
 	}}
 //}
