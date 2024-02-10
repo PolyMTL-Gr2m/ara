@@ -36,7 +36,6 @@ $ARIANE_ROOT/vendor/pulp-platform/common_cells/src/cf_math_pkg.sv
 $ARIANE_ROOT/core/include/instr_tracer_pkg.sv
 $ARIANE_ROOT/core/cvxif_example/include/cvxif_instr_pkg.sv
 $ARIANE_ROOT/core/acc_dispatcher.sv
-// $ARIANE_ROOT/corev_apu/rv_plic/rtl/rv_plic_reg_pkg.sv
 $ARIANE_ROOT/common/local/util/sram.sv
 $ARIANE_ROOT/vendor/pulp-platform/common_cells/src/deprecated/rrarbiter.sv
 $ARIANE_ROOT/vendor/pulp-platform/common_cells/src/deprecated/fifo_v1.sv
@@ -119,10 +118,6 @@ $ARIANE_ROOT/corev_apu/riscv-dbg/src/dm_sba.sv
 $ARIANE_ROOT/corev_apu/riscv-dbg/src/dmi_jtag_tap.sv
 $ARIANE_ROOT/corev_apu/openpiton/riscv_peripherals.sv
 $ARIANE_ROOT/corev_apu/openpiton/ariane_verilog_wrap.sv
-// $ARIANE_ROOT/corev_apu/rv_plic/rtl/rv_plic_target.sv
-// $ARIANE_ROOT/corev_apu/rv_plic/rtl/rv_plic_gateway.sv
-// $ARIANE_ROOT/corev_apu/rv_plic/rtl/plic_regmap.sv
-// $ARIANE_ROOT/corev_apu/rv_plic/rtl/plic_top.sv
 $ARIANE_ROOT/corev_apu/fpga/src/axi2apb/src/axi2apb_wrap.sv
 $ARIANE_ROOT/corev_apu/fpga/src/axi2apb/src/axi2apb.sv
 $ARIANE_ROOT/corev_apu/fpga/src/axi2apb/src/axi2apb_64_32.sv
