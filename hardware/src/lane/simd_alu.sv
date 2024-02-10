@@ -115,7 +115,7 @@ module simd_alu import ara_pkg::*; import rvv_pkg::*; #(
   logic [7:0][ 7:0] popcnt_res_w8;
 
   ara_popcnt i_ara_popcnt (
-    .in_i         ( operand_a_i & operand_b_i),
+    .in_i         ( operand_a_i ),
     .result_o_w64 ( popcnt_res_w64           ),
     .result_o_w32 ( popcnt_res_w32           ),
     .result_o_w16 ( popcnt_res_w16           ),
