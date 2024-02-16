@@ -53,8 +53,8 @@ volatile static uint32_t init_done = 0;
 volatile static uint32_t conv_done = 0;
 volatile static uint32_t input_sync_done = 0;
 
-#define INPUT_MULTICORE      // (Un)comment if multicore processing wants to be done on the input channels
-//#define OUTPUT_MULTICORE       // (Un)comment if multicore processing wants to be done on the output channels
+//#define INPUT_MULTICORE      // (Un)comment if multicore processing wants to be done on the input channels
+#define OUTPUT_MULTICORE       // (Un)comment if multicore processing wants to be done on the output channels
 
 // =============================
 // ==== MACROS DEFINITIONS =====
@@ -65,7 +65,7 @@ volatile static uint32_t input_sync_done = 0;
 #define NR_CORES 4
 
 // ---- Debug ----
-#define VERIF
+//#define VERIF
 
 // ---- Precisions ----
 #define PRECA_MAX 1
@@ -73,23 +73,48 @@ volatile static uint32_t input_sync_done = 0;
 
 // ---- Tensors ----
 #define F_MAX     7             // Max size of the kernel
-#define C_IN      16            // Number of input channels
+#define C_IN      128            // Number of input channels
 #ifdef INPUT_MULTICORE
     #define C_OUT     1             // Number of output channels
 #elifdef OUTPUT_MULTICORE
     #define C_OUT     4
 #endif
-#define I_MAX     16            // Max H_in x W_in input size
-#define I_START   16            // Start input size
+#define I_MAX     128            // Max H_in x W_in input size
+#define I_START   128            // Start input size
 
 int8_t i     [I_MAX * I_MAX * C_IN];
 int8_t f     [F_MAX * F_MAX * C_IN * C_OUT];
 int8_t f_nhwc[F_MAX * F_MAX * C_IN * C_OUT];
 int16_t o    [(I_MAX - F_MAX + 1)*(I_MAX - F_MAX + 1) * C_OUT];
 
+// ===== INIT DEFINES =====
+int64_t precA = PRECA_MAX;
+int64_t precW = PRECW_MAX;
+
+int64_t F = F_MAX;
+int64_t input_channels = C_IN;
+int64_t output_channels = C_OUT;
+int8_t filter[C_OUT * F_MAX * F_MAX * C_IN];
+
+int size = I_START;
+
+int8_t input          [I_START * I_START * C_IN];
+int8_t i_nhwc         [I_START * I_START * C_IN];
+int16_t output        [(I_START - F_MAX + 1) * (I_START - F_MAX + 1) * C_OUT];
+int16_t output_tiling [NR_CORES * (I_START - F_MAX + 1) * (I_START - F_MAX + 1) * C_OUT];
+int16_t golden_output [(I_START - F_MAX + 1) * (I_START - F_MAX + 1) * C_OUT];
+int16_t golden_o      [(I_START - F_MAX + 1) * (I_START - F_MAX + 1) * C_OUT];
+
 // =============================
 // ==== UTILITIES FUNCTIONS ====
 // =============================
+
+int float2decimal (float number){ 
+    int integer = (int) number;
+    float decimal = (number - integer) * 1000;
+    int decimal_int = (int) decimal;
+    return decimal_int;
+}
 
 void iconv2d_tensor_naive(int16_t *o, int8_t *i, int8_t *f, int64_t R, int64_t C, int64_t W, int64_t F, int64_t K) {
 
@@ -112,14 +137,16 @@ void iconv2d_tensor_naive(int16_t *o, int8_t *i, int8_t *f, int64_t R, int64_t C
 }
 
 void NCHW_to_NHWC_8b(int8_t * NCHW_format, int8_t * NHWC_format, int64_t N, int64_t C, int64_t H, int64_t W){
-	for(int k = 0; k < N ; k++)
-		for(int z = 0; z < H ; z++)
-			for(int y = 0 ; y < W ; y++)
-				for(int x = 0 ; x < C ; x++)
-					{
+	for(int k = 0; k < N ; k++){
+		for(int z = 0; z < H ; z++){
+			for(int y = 0 ; y < W ; y++){
+				for(int x = 0 ; x < C ; x++){
 					NHWC_format[x + C * (y + H * (z + k * W))] = NCHW_format[y + H * (z + W * (x + k * C))];
-					}
-				printf("\n");
+				}
+				//printf("\n");
+            }
+        }
+    }
 }
 
 void NCHW_to_NHWC_16b(int16_t * NCHW_format, int16_t * NHWC_format, int64_t N, int64_t C, int64_t H, int64_t W){
@@ -242,7 +269,7 @@ void initialization(int64_t precA, int64_t precW, int64_t F, int64_t input_chann
     #endif
 
     // ==== Transpose filter ====
-    NCHW_to_NHWC_8b(filter, f_nhwc, output_channels, input_channels, F, F);
+    //NCHW_to_NHWC_8b(filter, f_nhwc, output_channels, input_channels, F, F);
 
     // ==== Information ====
     printf("\r\n");
@@ -276,10 +303,9 @@ void initialization(int64_t precA, int64_t precW, int64_t F, int64_t input_chann
     //			#endif
 			}
         }
-        printf("z %d\r\n",z);
     }
 
-    NCHW_to_NHWC_8b(input, i_nhwc, 1, input_channels, height, width);
+    //NCHW_to_NHWC_8b(input, i_nhwc, 1, input_channels, height, width);
     printf("                                              done\r\n");
 
     // ==== INITIALIZATION DONE ====
@@ -385,28 +411,10 @@ int main(int argc, char** argv){
     init_uart(50000000, 115200);
 
     // ===== INIT DEFINES =====
-    int64_t precA = PRECA_MAX;
-    int64_t precW = PRECW_MAX;
-
-    int64_t F = F_MAX;
-    int64_t input_channels = C_IN;
-    int64_t output_channels = C_OUT;
-    int8_t filter[output_channels * F * F * input_channels];
-
-    int size = I_START;
     int64_t width = size;
     int64_t height = size;
 
-    int8_t input          [width * height * input_channels];
-    int8_t i_nhwc         [width * height * input_channels];
-    int16_t output        [(width - F + 1) * (height - F + 1) * output_channels];
-    int16_t output_tiling[NR_CORES * (width - F + 1) * (height - F + 1) * output_channels];
-    int16_t golden_output [(width - F + 1) * (height - F + 1) * output_channels];
-    int16_t golden_o[(I_MAX - F + 1) * (I_MAX - F + 1) * C_OUT];
-
-
     // ===== INITIALIZATION =====
-
     if (argv[0][0] == 0){
         initialization(precA, precW, F, input_channels, output_channels, filter, size, width, height, input, i_nhwc, output, golden_output, golden_o);
     }
@@ -450,6 +458,14 @@ int main(int argc, char** argv){
 
         // ===== METRICS =====
         int64_t runtime = get_timer();
+        float performance = 2.0 * F * F * C_OUT * C_IN * (size - F + 1) * (size - F + 1) * precA * precW / runtime;
+        float utilization = 100 * performance / NR_LANES;  
+
+        int performance_int = (int) performance;
+        int performance_dec = float2decimal(performance);
+
+        int utilization_int = (int) utilization;
+        int utilization_dec = float2decimal(utilization);
 
         if(error != 0){
             printf("Fail.\r\n");
@@ -461,6 +477,7 @@ int main(int argc, char** argv){
         } else {
             printf("Passed.\r\n");
             printf("The execution took %d cycles.\r\n", runtime);
+            printf("The performance is %d.%d OP/cycle, the utilization is %d.%d \r\n", performance_int, performance_dec, utilization_int, utilization_dec);
             print_L2_metrics(argv[0][0]);
         }
     }
