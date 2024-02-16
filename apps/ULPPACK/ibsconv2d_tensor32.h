@@ -46,14 +46,8 @@ void ulppack_conv2d_vec_7x7_A3W3(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, 
 // ACCELERATED WITH VMACSR AND VMULSR
 
 void ulppack_conv2d_vec8_7x7(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
+void ulppack_conv2d_vec8_7x7_tiling(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out, int16_t *o_ptr_part);
 void ulppack_conv2d_vec16_7x7(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
-
-// Multicore versions
-void ulppack_conv2d_vec8_7x7_4cores_loop21(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
-void ulppack_conv2d_vec16_7x7_4cores_loop21(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
-
-void ulppack_conv2d_vec8_7x7_4cores_loop21_221(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
-void ulppack_conv2d_vec16_7x7_4cores_loop21_221(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);
 
 // WIP
 void ulppack_conv2d_vec_3x3(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out);

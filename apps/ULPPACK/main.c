@@ -46,14 +46,26 @@ void init_uart(uint32_t freq, uint32_t baud)
 }
 
 // =============================
+// === MULTICORE DEFINITIONS ===
+// =============================
+
+volatile static uint32_t init_done = 0;
+volatile static uint32_t conv_done = 0;
+volatile static uint32_t input_sync_done = 0;
+
+#define INPUT_MULTICORE      // (Un)comment if multicore processing wants to be done on the input channels
+//#define OUTPUT_MULTICORE       // (Un)comment if multicore processing wants to be done on the output channels
+
+// =============================
 // ==== MACROS DEFINITIONS =====
 // =============================
 
 // ---- Architecture ----
 #define NR_LANES 4
+#define NR_CORES 4
 
 // ---- Debug ----
-//#define VERIF
+#define VERIF
 
 // ---- Precisions ----
 #define PRECA_MAX 1
@@ -62,7 +74,11 @@ void init_uart(uint32_t freq, uint32_t baud)
 // ---- Tensors ----
 #define F_MAX     7             // Max size of the kernel
 #define C_IN      16            // Number of input channels
-#define C_OUT     1             // Number of output channels
+#ifdef INPUT_MULTICORE
+    #define C_OUT     1             // Number of output channels
+#elifdef OUTPUT_MULTICORE
+    #define C_OUT     4
+#endif
 #define I_MAX     16            // Max H_in x W_in input size
 #define I_START   16            // Start input size
 
@@ -70,16 +86,6 @@ int8_t i     [I_MAX * I_MAX * C_IN];
 int8_t f     [F_MAX * F_MAX * C_IN * C_OUT];
 int8_t f_nhwc[F_MAX * F_MAX * C_IN * C_OUT];
 int16_t o    [(I_MAX - F_MAX + 1)*(I_MAX - F_MAX + 1) * C_OUT];
-
-// =============================
-// === MULTICORE DEFINITIONS ===
-// =============================
-
-volatile static uint32_t init_done = 0;
-volatile static uint32_t conv_done = 0;
-
-//#define INPUT_MULTICORE
-#define OUTPUT_MULTICORE
 
 // =============================
 // ==== UTILITIES FUNCTIONS ====
@@ -100,7 +106,7 @@ void iconv2d_tensor_naive(int16_t *o, int8_t *i, int8_t *f, int64_t R, int64_t C
     					for(int fw = 0 ; fw < F ; fw++) {
     						o_[k][r][c] += i_[ch][r+fh][c+fw]*f_[k][ch][fh][fw];
     						if(get_hartid()==0){
-    						printf("k  %d, ch %d, r %d, c %d, fh %d, fw %d\r\n", k, ch, r, c, fh, fw);
+    						printf("k  %d, ch %d, r %d\r\n", k, ch, r);
     						}
     					}
 }
@@ -197,13 +203,20 @@ void initialization(int64_t precA, int64_t precW, int64_t F, int64_t input_chann
     printf("*** A%dW%d ***\r\n", precA, precW);
     printf("************\r\n");
 
+    printf("precA = %d\r\n", precA);
+    printf("precW = %d\r\n", precW);
+    printf("F = %d\r\n", F);
+    printf("input_channels = %d\r\n", input_channels);
+    printf("output_channels = %d\r\n", output_channels);
+
+
 
     // ==== Init tensors ====
     printf("\r\n");
     printf("Filling the input and filter tensors... \r\n");
 
-    init_tensor(i, I_MAX, I_MAX, C_IN, precA);
-    init_tensor(f, F_MAX, F_MAX, C_IN * C_OUT, precW);
+    init_tensor(input, I_MAX, I_MAX, C_IN, precA);
+    init_tensor(filter, F_MAX, F_MAX, C_IN * C_OUT, precW);
 
     printf("                                              done\r\n");
 
@@ -216,17 +229,20 @@ void initialization(int64_t precA, int64_t precW, int64_t F, int64_t input_chann
     #ifdef VERIF
         // ==== Expected output ====
         printf("Computing the expected  output for this kernel size... \r\n");
-        for(int z = 0; z < output_channels ; z++)
-			for(int y = 0 ; y < (I_MAX - F + 1) ; y++)
-				for(int x = 0 ; x < (I_MAX - F + 1) ; x++)
+        for(int z = 0; z < output_channels ; z++){
+			for(int y = 0 ; y < (I_MAX - F + 1) ; y++){
+				for(int x = 0 ; x < (I_MAX - F + 1) ; x++){
 					golden_o[x + (I_MAX - F + 1) * (y + z * (I_MAX - F + 1))] = 0;
+                }
+            }
+        }
         
-        iconv2d_tensor_naive(golden_o, i, f, (I_MAX - F + 1), (I_MAX - F + 1), input_channels, F, output_channels);
+        iconv2d_tensor_naive(golden_o, input, filter, (I_MAX - F + 1), (I_MAX - F + 1), input_channels, F, output_channels);
         printf("                                              done\r\n");        
     #endif
 
     // ==== Transpose filter ====
-    NCHW_to_NHWC_8b(f, f_nhwc, output_channels, input_channels, F, F);
+    NCHW_to_NHWC_8b(filter, f_nhwc, output_channels, input_channels, F, F);
 
     // ==== Information ====
     printf("\r\n");
@@ -250,24 +266,27 @@ void initialization(int64_t precA, int64_t precW, int64_t F, int64_t input_chann
     //        for(int x = 0; x < width; x++)
     //            input[x + width * (y + z * height)] = i[x + I_MAX * (y + z * I_MAX)];
 
-    for(int z = 0; z < output_channels ; z++)
-		for(int y = 0 ; y < (height - F + 1) ; y++)
+    for(int z = 0; z < C_OUT ; z++){
+		for(int y = 0 ; y < (height - F + 1) ; y++){
 			for(int x = 0 ; x < (width - F + 1) ; x++)
 			{
-				o[x + (width - F + 1) * (y + z * (height - F + 1))] = 0;
+				output[x + (width - F + 1) * (y + z * (height - F + 1))] = 0;
     //			#ifdef VERIF
     //			golden_output[x + (width - F + 1) * (y + z * (height - F + 1))] = golden_o[x + (I_MAX - F + 1) * (y + z * (I_MAX - F + 1))];
     //			#endif
 			}
+        }
+        printf("z %d\r\n",z);
+    }
 
-    NCHW_to_NHWC_8b(i, i_nhwc, 1, input_channels, height, width);
+    NCHW_to_NHWC_8b(input, i_nhwc, 1, input_channels, height, width);
     printf("                                              done\r\n");
 
     // ==== INITIALIZATION DONE ====
     ATOMIC_OP(init_done, 1, add, w);
 }
 
-void ulppack_conv2d_msparq(int16_t *o, int8_t *i, int8_t *f, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out, int64_t precA, int64_t precW){
+void ulppack_conv2d_msparq(int16_t *o, int8_t *i, int8_t *f, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out, int64_t precA, int64_t precW, int16_t *o_ptr_part){
     int8_t *i_;
     int16_t *o_;
     int8_t *f_;
@@ -283,7 +302,7 @@ void ulppack_conv2d_msparq(int16_t *o, int8_t *i, int8_t *f, int64_t H_in, int64
                 if (F == 7){
                     if((precA <= 2 && precW < 2) || (precA < 2 && precW <= 2)){
                         #ifdef INPUT_MULTICORE
-                            ulppack_conv2d_vec8_7x7_tiling(o_, i_, f_, H_in, W_in, C_in, F, C_out);
+                            ulppack_conv2d_vec8_7x7_tiling(o_, i_, f_, H_in, W_in, C_in, F, C_out, o_ptr_part);
                         #else 
                             ulppack_conv2d_vec8_7x7(o_, i_, f_, H_in, W_in, C_in, F, C_out);
                         #endif
@@ -312,6 +331,56 @@ void ulppack_conv2d_msparq(int16_t *o, int8_t *i, int8_t *f, int64_t H_in, int64
     ATOMIC_OP(conv_done, 1, add, w);
 }
 
+void ulppack_conv2d_vec8_7x7_tiling(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_ptr, int64_t H_in, int64_t W_in, int64_t C_in, int64_t F, int64_t C_out, int16_t *o_ptr_part){
+	// new C_in to be distributed on 4 cores
+	int64_t partition_size = C_in / 4;  //>> 2;
+    
+    //int16_t o_ptr_part[NR_CORES*(W_in-F+1)*(H_in-F+1)];     // temporary output, now defined outside to be available from all cores
+
+    int8_t *i_ptr_part; //[NR_CORES];
+    int8_t *f_ptr_part; //[NR_CORES];
+    int16_t *o_ptr_part_t;
+
+
+	//for(int t=0;t<NR_CORES;t++){
+
+		//distribute convolution on cores
+		int t = get_hartid();     // Each core computes its own offset
+
+        // new pointers for input sub-part : output channels not taken into account since considered on ulppack_conv2d function
+
+        int64_t i_offset = partition_size * W_in * H_in;
+        int64_t f_offset = partition_size * C_out * F * F;
+        int64_t o_offset = partition_size * (W_in - F + 1) * (H_in - F + 1);
+
+        //if(get_hartid()==t){
+            i_ptr_part = i_ptr + t * i_offset;
+            f_ptr_part = f_ptr + t * f_offset;
+            o_ptr_part_t = o_ptr_part + t * o_offset;
+            ulppack_conv2d_vec8_7x7(o_ptr_part_t, i_ptr_part, f_ptr_part, H_in, W_in, partition_size, F, C_out);
+            //ATOMIC_OP(input_sync_done,1,add,w);
+		//}
+	//}
+
+    // ===================> MAKE SURE ALL OUTPUTS ARE ALREADY COMPUTED 
+    ATOMIC_OP(input_sync_done,1,add,w);
+
+    //while(input_sync_done != 4);
+    //while(conv_done < 4);
+
+	//add temporary outputs together, done by core 0
+    if(get_hartid() == 0){
+        for(int t=0;t<NR_CORES;t++){
+	    	for(int w=0;w<W_in-F+1;w++){
+	    		for(int h=0;h<H_in-F+1;h++){
+	    			o_ptr[w*(H_in-F+1)+h] += o_ptr_part[t * (W_in-F+1) * (H_in-F+1) + w*(H_in-F+1)*(W_in-F+1)+h];  
+	    		}
+	    	}
+	    }
+        print_tensor_16_(o_ptr_part,W_in-F+1,H_in-F+1,4);
+    }
+}
+
 int main(int argc, char** argv){
     init_uart(50000000, 115200);
 
@@ -330,8 +399,9 @@ int main(int argc, char** argv){
 
     int8_t input          [width * height * input_channels];
     int8_t i_nhwc         [width * height * input_channels];
-    int16_t output        [width * height * output_channels];
-    int16_t golden_output [(width - F + 1) * (width - F + 1) * output_channels];
+    int16_t output        [(width - F + 1) * (height - F + 1) * output_channels];
+    int16_t output_tiling[NR_CORES * (width - F + 1) * (height - F + 1) * output_channels];
+    int16_t golden_output [(width - F + 1) * (height - F + 1) * output_channels];
     int16_t golden_o[(I_MAX - F + 1) * (I_MAX - F + 1) * C_OUT];
 
 
@@ -352,7 +422,7 @@ int main(int argc, char** argv){
 
     // --- Timer and convolution ---
     start_timer();
-    ulppack_conv2d_msparq(o, i, f, height, width, input_channels, F, output_channels, precA, precW);
+    ulppack_conv2d_msparq(output, input, filter, height, width, input_channels, F, output_channels, precA, precW, output_tiling);
     stop_timer();
 
     // --- Wait for end of convolution ---
@@ -369,7 +439,7 @@ int main(int argc, char** argv){
 
         #ifdef VERIF
             printf("Verifying results...\r\n");
-            int error = verify_tensor(o, golden_o, (height - F + 1), (width - F + 1), output_channels);
+            int error = verify_tensor(output, golden_o, (height - F + 1), (width - F + 1), output_channels);
             if (error == 0)
                 printf("                                              done\r\n");
             else 
@@ -384,7 +454,7 @@ int main(int argc, char** argv){
         if(error != 0){
             printf("Fail.\r\n");
             printf("Output NHWC\r\n");
-            print_tensor_16_(o, (height - F + 1), (width - F + 1), output_channels);
+            print_tensor_16_(output, (height - F + 1), (width - F + 1), output_channels);
             printf("=========================================\r\n");
             printf("Expected output\r\n");
             print_tensor_16_(golden_o, (height - F + 1), (width - F + 1), output_channels);
