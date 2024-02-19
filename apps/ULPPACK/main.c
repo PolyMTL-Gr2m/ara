@@ -368,42 +368,37 @@ void ulppack_conv2d_vec8_7x7_tiling(int16_t * o_ptr, int8_t *i_ptr, int8_t *f_pt
     int16_t *o_ptr_part_t;
 
 
-	//for(int t=0;t<NR_CORES;t++){
 
-		//distribute convolution on cores
-		int t = get_hartid();     // Each core computes its own offset
+	//distribute convolution on cores
+	int t = get_hartid();     // Each core computes its own offset
 
-        // new pointers for input sub-part : output channels not taken into account since considered on ulppack_conv2d function
+    // new pointers for input sub-part : output channels not taken into account since considered on ulppack_conv2d function
 
-        int64_t i_offset = partition_size * W_in * H_in;
-        int64_t f_offset = partition_size * C_out * F * F;
-        int64_t o_offset = partition_size * (W_in - F + 1) * (H_in - F + 1);
+    int64_t o_W = (W_in - F + 1);
+    int64_t o_H = (H_in - F + 1);
 
-        //if(get_hartid()==t){
-            i_ptr_part = i_ptr + t * i_offset;
-            f_ptr_part = f_ptr + t * f_offset;
-            o_ptr_part_t = o_ptr_part + t * o_offset;
-            ulppack_conv2d_vec8_7x7(o_ptr_part_t, i_ptr_part, f_ptr_part, H_in, W_in, partition_size, F, C_out);
-            //ATOMIC_OP(input_sync_done,1,add,w);
-		//}
-	//}
+    int64_t i_offset = partition_size * W_in * H_in;
+    int64_t f_offset = partition_size * C_out * F * F;
+    int64_t o_offset = o_W * o_H * C_out;
+
+    i_ptr_part = i_ptr + t * i_offset;
+    f_ptr_part = f_ptr + t * f_offset;
+    o_ptr_part_t = o_ptr_part + t * o_offset;
+    ulppack_conv2d_vec8_7x7(o_ptr_part_t, i_ptr_part, f_ptr_part, H_in, W_in, partition_size, F, C_out);
 
     // ===================> MAKE SURE ALL OUTPUTS ARE ALREADY COMPUTED 
     ATOMIC_OP(input_sync_done,1,add,w);
-
-    //while(input_sync_done != 4);
-    //while(conv_done < 4);
+    while(input_sync_done != 4);
 
 	//add temporary outputs together, done by core 0
     if(get_hartid() == 0){
-        for(int t=0;t<NR_CORES;t++){
-	    	for(int w=0;w<W_in-F+1;w++){
-	    		for(int h=0;h<H_in-F+1;h++){
-	    			o_ptr[w*(H_in-F+1)+h] += o_ptr_part[t * (W_in-F+1) * (H_in-F+1) + w*(H_in-F+1)*(W_in-F+1)+h];  
+        for(int t = 0; t < NR_CORES; t++){
+	    	for(int w = 0; w < o_W; w++){
+	    		for(int h = 0; h < o_H; h++){
+	    			o_ptr[w * o_H + h] += o_ptr_part[t * o_offset + w * o_H + h];  
 	    		}
 	    	}
 	    }
-        print_tensor_16_(o_ptr_part,W_in-F+1,H_in-F+1,4);
     }
 }
 
