@@ -100,12 +100,12 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
       assign reg_ena = stage_ready[i];
 
       // Generate the pipeline
-      `FFL(valid_q[i], valid_d[i], reg_ena, '0)
-      `FFL(opa_q[i], opa_d[i], reg_ena, '0)
-      `FFL(opb_q[i], opb_d[i], reg_ena, '0)
-      `FFL(opc_q[i], opc_d[i], reg_ena, '0)
-      `FFL(op_q[i], op_d[i], reg_ena, ara_op_e'('0))
-      `FFL(mask_q[i], mask_d[i], reg_ena, '0)
+      `FFL(valid_q[i], valid_d[i], reg_ena, '0, clk_i, rst_ni)
+      `FFL(opa_q[i], opa_d[i], reg_ena, '0, clk_i, rst_ni)
+      `FFL(opb_q[i], opb_d[i], reg_ena, '0, clk_i, rst_ni)
+      `FFL(opc_q[i], opc_d[i], reg_ena, '0, clk_i, rst_ni)
+      `FFL(op_q[i], op_d[i], reg_ena, ara_op_e'('0), clk_i, rst_ni)
+      `FFL(mask_q[i], mask_d[i], reg_ena, '0, clk_i, rst_ni)
     end : gen_pipeline_stages
   end
 

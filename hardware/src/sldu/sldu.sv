@@ -85,8 +85,8 @@ module sldu import ara_pkg::*; import rvv_pkg::*; #(
   assign vinsn_queue_full = (vinsn_queue_q.commit_cnt == VInsnQueueDepth);
 
   // Do we have a vector instruction ready to be issued?
-  `FF(vinsn_issue_q, vinsn_queue_d.vinsn[vinsn_queue_d.issue_pnt], '0)
-  `FF(vinsn_issue_valid_q, vinsn_queue_d.issue_cnt != '0, 1'b0)
+  `FF(vinsn_issue_q, vinsn_queue_d.vinsn[vinsn_queue_d.issue_pnt], '0, clk_i, rst_ni)
+  `FF(vinsn_issue_valid_q, vinsn_queue_d.issue_cnt != '0, 1'b0, clk_i, rst_ni)
 
   // Do we have a vector instruction with results being committed?
   pe_req_t vinsn_commit;

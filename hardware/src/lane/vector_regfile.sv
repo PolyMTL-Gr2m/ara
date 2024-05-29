@@ -65,7 +65,7 @@ module vector_regfile import ara_pkg::*; #(
     // Clock gate
     logic vrf_clk;
     logic sram_active_q;
-    `FF(sram_active_q, req_i[bank], 1'b0)
+    `FF(sram_active_q, req_i[bank], 1'b0, clk_i, rst_ni)
 
     tc_clk_gating i_vrf_ckg (
       .clk_i    (clk_i                       ),

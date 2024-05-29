@@ -59,11 +59,11 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   vxsat_e vxsat_d, vxsat_q;
   vxrm_t  vxrm_d, vxrm_q;
 
-  `FF(vstart_q, vstart_d, '0)
-  `FF(vl_q, vl_d, '0)
-  `FF(vtype_q, vtype_d, '{vill: 1'b1, default: '0})
-  `FF(vxsat_q, vxsat_d, '0)
-  `FF(vxrm_q, vxrm_d, '0)
+  `FF(vstart_q, vstart_d, '0, clk_i, rst_ni)
+  `FF(vl_q, vl_d, '0, clk_i, rst_ni)
+  `FF(vtype_q, vtype_d, '{vill: 1'b1, default: '0}, clk_i, rst_ni)
+  `FF(vxsat_q, vxsat_d, '0, clk_i, rst_ni)
+  `FF(vxrm_q, vxrm_d, '0, clk_i, rst_ni)
   // Converts between the internal representation of `vtype_t` and the full XLEN-bit CSR.
   function automatic riscv::xlen_t xlen_vtype(vtype_t vtype);
     xlen_vtype = {vtype.vill, {riscv::XLEN-9{1'b0}}, vtype.vma, vtype.vta, vtype.vsew,
@@ -211,8 +211,8 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
   // Pipeline the VLSU's load and store complete signals, for timing reasons
   logic load_complete_q;
   logic store_complete_q;
-  `FF(load_complete_q, load_complete_i, 1'b0)
-  `FF(store_complete_q, store_complete_i, 1'b0)
+  `FF(load_complete_q, load_complete_i, 1'b0, clk_i, rst_ni)
+  `FF(store_complete_q, store_complete_i, 1'b0, clk_i, rst_ni)
 
   // NP2 Slide support
   logic is_stride_np2;
