@@ -244,6 +244,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
       unique case (op)
         // Single-Width integer multiply instructions
         VMUL: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0];
+        VMULSR: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0] >> 8;
         VSMUL: if (FixPtSupport == FixedPointEnable) begin
           unique case (vxrm)
             2'b00: for (int b=0; b<4; b++) r[b] = mul_res.w32[b][14];
@@ -260,6 +261,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         // Single-Width integer multiply-add instructions
         VMACC,
         VMADD: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = mul_res.w32[l][15:0] + opc.w16[l];
+        VMACCSR: for (int l = 0; l < 4; l++) result_o[16*l +: 16] = (mul_res.w32[l][15:0] >> 8) + opc.w16[l];
         VNMSAC,
         VNMSUB: for (int l = 0; l < 4; l++) begin
             result_o[16*l +: 16] = -mul_res.w32[l][15:0] + opc.w16[l];
@@ -281,6 +283,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
       unique case (op)
         // Single-Width integer multiply instructions
         VMUL: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0];
+        VMULSR: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0] >> 4;
         VSMUL: if (FixPtSupport == FixedPointEnable) begin
           unique case (vxrm)
             2'b00: for (int b=0; b<8; b++) r[b] = mul_res.w16[b][6];
@@ -297,6 +300,7 @@ module simd_mul import ara_pkg::*; import rvv_pkg::*; #(
         // Single-Width integer multiply-add instructions
         VMACC,
         VMADD: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = mul_res.w16[l][7:0] + opc.w8[l];
+        VMACCSR: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = (mul_res.w16[l][7:0] >> 4) + opc.w8[l];
         VNMSAC,
         VNMSUB: for (int l = 0; l < 8; l++) result_o[8*l +: 8] = -mul_res.w16[l][7:0] + opc.w8[l];
         default: result_o = '0;

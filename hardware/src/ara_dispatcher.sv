@@ -1420,6 +1420,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // Multiply instructions
                   6'b100100: ara_req_d.op = ara_pkg::VMULHU;
                   6'b100101: ara_req_d.op = ara_pkg::VMUL;
+                  6'b101000: ara_req_d.op = ara_pkg::VMULSR;
                   6'b100110: ara_req_d.op = ara_pkg::VMULHSU;
                   6'b100111: ara_req_d.op = ara_pkg::VMULH;
                   // Multiply-Add instructions
@@ -1437,6 +1438,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   end
                   6'b101101: begin
                     ara_req_d.op        = ara_pkg::VMACC;
+                    ara_req_d.use_vd_op = 1'b1;
+                  end
+                   6'b101110: begin
+                    ara_req_d.op        = ara_pkg::VMACCSR;
                     ara_req_d.use_vd_op = 1'b1;
                   end
                   6'b101111: begin
@@ -1652,6 +1657,7 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   // Multiply instructions
                   6'b100100: ara_req_d.op = ara_pkg::VMULHU;
                   6'b100101: ara_req_d.op = ara_pkg::VMUL;
+                  6'b101000: ara_req_d.op = ara_pkg::VMULSR;
                   6'b100110: ara_req_d.op = ara_pkg::VMULHSU;
                   6'b100111: ara_req_d.op = ara_pkg::VMULH;
                   // Multiply-Add instructions
@@ -1669,6 +1675,10 @@ module ara_dispatcher import ara_pkg::*; import rvv_pkg::*; #(
                   end
                   6'b101101: begin
                     ara_req_d.op        = ara_pkg::VMACC;
+                    ara_req_d.use_vd_op = 1'b1;
+                  end
+                  6'b101110: begin
+                    ara_req_d.op        = ara_pkg::VMACCSR;
                     ara_req_d.use_vd_op = 1'b1;
                   end
                   6'b101111: begin
